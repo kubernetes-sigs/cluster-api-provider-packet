@@ -1,0 +1,9 @@
+apiVersion: packet.cluster.k8s.io/v1alpha1
+kind: PacketMachineProviderStatus
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: packetmachineproviderstatus-sample
+spec:
+  # Add fields here
+  foo: bar
