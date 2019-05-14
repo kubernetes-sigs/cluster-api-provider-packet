@@ -18,12 +18,17 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/packethost/cluster-api-provider-packet/pkg/apis"
-	"github.com/packethost/cluster-api-provider-packet/pkg/controller"
-	"github.com/packethost/cluster-api-provider-packet/pkg/webhook"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/cluster"
+	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine"
+	clusterapis "sigs.k8s.io/cluster-api/pkg/apis"
+	"sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
+	"sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset"
+	capicluster "sigs.k8s.io/cluster-api/pkg/controller/cluster"
+	capimachine "sigs.k8s.io/cluster-api/pkg/controller/machine"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
@@ -31,54 +36,59 @@ import (
 )
 
 func main() {
-	var metricsAddr string
-	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	cfg := config.GetConfigOrDie()
+	if cfg == nil {
+		panic(fmt.Errorf("GetConfigOrDie didn't die"))
+	}
+
 	flag.Parse()
+	log := logf.Log.WithName("packet-controller-manager")
 	logf.SetLogger(logf.ZapLogger(false))
-	log := logf.Log.WithName("entrypoint")
+	entryLog := log.WithName("entrypoint")
 
-	// Get a config to talk to the apiserver
-	log.Info("setting up client for manager")
-	cfg, err := config.GetConfig()
+	// Setup a Manager
+	mgr, err := manager.New(cfg, manager.Options{})
 	if err != nil {
-		log.Error(err, "unable to set up client config")
+		entryLog.Error(err, "unable to set up overall controller manager")
 		os.Exit(1)
 	}
 
-	// Create a new Cmd to provide shared dependencies and start components
-	log.Info("setting up manager")
-	mgr, err := manager.New(cfg, manager.Options{MetricsBindAddress: metricsAddr})
+	cs, err := clientset.NewForConfig(cfg)
 	if err != nil {
-		log.Error(err, "unable to set up overall controller manager")
-		os.Exit(1)
+		panic(err)
 	}
 
-	log.Info("Registering Components.")
+	clusterActuator, err := cluster.NewActuator(cluster.ActuatorParams{
+		ClustersGetter: cs.ClusterV1alpha1(),
+	})
+	if err != nil {
+		panic(err)
+	}
 
-	// Setup Scheme for all resources
-	log.Info("setting up scheme")
+	machineActuator, err := machine.NewActuator(machine.ActuatorParams{
+		MachinesGetter: cs.ClusterV1alpha1(),
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	// Register our cluster deployer (the interface is in clusterctl and we define the Deployer interface on the actuator)
+	common.RegisterClusterProvisioner("packet", clusterActuator)
+
 	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
-		log.Error(err, "unable add APIs to scheme")
-		os.Exit(1)
+		panic(err)
 	}
 
-	// Setup all Controllers
-	log.Info("Setting up controller")
-	if err := controller.AddToManager(mgr); err != nil {
-		log.Error(err, "unable to register controllers to the manager")
-		os.Exit(1)
+	if err := clusterapis.AddToScheme(mgr.GetScheme()); err != nil {
+		panic(err)
 	}
 
-	log.Info("setting up webhooks")
-	if err := webhook.AddToManager(mgr); err != nil {
-		log.Error(err, "unable to register webhooks to the manager")
-		os.Exit(1)
-	}
+	capimachine.AddWithActuator(mgr, machineActuator)
 
-	// Start the Cmd
-	log.Info("Starting the Cmd.")
+	capicluster.AddWithActuator(mgr, clusterActuator)
+
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
-		log.Error(err, "unable to run the manager")
+		entryLog.Error(err, "unable to run manager")
 		os.Exit(1)
 	}
 }
