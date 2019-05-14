@@ -179,7 +179,7 @@ spec:
               fieldPath: metadata.namespace
         - name: SECRET_NAME
           value: cluster-api-provider-packet-webhook-server-secret
-        image: IMAGE_URL
+        image: packethost/cluster-api-provider-packet:latest
         imagePullPolicy: Always
         name: manager
         ports:

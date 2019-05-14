@@ -24,7 +24,7 @@ import (
 	"github.com/packethost/cluster-api-provider-packet/pkg/apis"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/cluster"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine"
-        "k8s.io/klog"
+	"k8s.io/klog"
 	clusterapis "sigs.k8s.io/cluster-api/pkg/apis"
 	"sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
 	"sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset"
