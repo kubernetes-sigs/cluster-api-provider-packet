@@ -24,6 +24,7 @@ import (
 	"github.com/packethost/cluster-api-provider-packet/pkg/apis"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/cluster"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine"
+        "k8s.io/klog"
 	clusterapis "sigs.k8s.io/cluster-api/pkg/apis"
 	"sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
 	"sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset"
@@ -36,18 +37,22 @@ import (
 )
 
 func main() {
+	klog.InitFlags(nil)
+
 	cfg := config.GetConfigOrDie()
 	if cfg == nil {
 		panic(fmt.Errorf("GetConfigOrDie didn't die"))
 	}
 
+	metricsAddr := flag.String("metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.Parse()
+
 	log := logf.Log.WithName("packet-controller-manager")
 	logf.SetLogger(logf.ZapLogger(false))
 	entryLog := log.WithName("entrypoint")
 
 	// Setup a Manager
-	mgr, err := manager.New(cfg, manager.Options{})
+	mgr, err := manager.New(cfg, manager.Options{MetricsBindAddress: *metricsAddr})
 	if err != nil {
 		entryLog.Error(err, "unable to set up overall controller manager")
 		os.Exit(1)
