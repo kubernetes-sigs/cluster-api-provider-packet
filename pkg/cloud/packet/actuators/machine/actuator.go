@@ -53,24 +53,48 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 
 // Create creates a machine and is invoked by the Machine Controller
 func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
+	if cluster == nil {
+		return fmt.Errorf("cannot create machine in nil cluster")
+	}
+	if machine == nil {
+		return fmt.Errorf("cannot create nil machine")
+	}
 	log.Printf("Creating machine %v for cluster %v.", machine.Name, cluster.Name)
 	return fmt.Errorf("TODO: Not yet implemented")
 }
 
 // Delete deletes a machine and is invoked by the Machine Controller
 func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
+	if cluster == nil {
+		return fmt.Errorf("cannot delete machine in nil cluster")
+	}
+	if machine == nil {
+		return fmt.Errorf("cannot delete nil machine")
+	}
 	log.Printf("Deleting machine %v for cluster %v.", machine.Name, cluster.Name)
 	return fmt.Errorf("TODO: Not yet implemented")
 }
 
 // Update updates a machine and is invoked by the Machine Controller
 func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
+	if cluster == nil {
+		return fmt.Errorf("cannot update machine in nil cluster")
+	}
+	if machine == nil {
+		return fmt.Errorf("cannot update nil machine")
+	}
 	log.Printf("Updating machine %v for cluster %v.", machine.Name, cluster.Name)
 	return fmt.Errorf("TODO: Not yet implemented")
 }
 
 // Exists test for the existance of a machine and is invoked by the Machine Controller
 func (a *Actuator) Exists(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) (bool, error) {
+	if cluster == nil {
+		return false, fmt.Errorf("cannot check if machine exists in nil cluster")
+	}
+	if machine == nil {
+		return false, fmt.Errorf("cannot check if nil machine exists")
+	}
 	log.Printf("Checking if machine %v for cluster %v exists.", machine.Name, cluster.Name)
 	return false, fmt.Errorf("TODO: Not yet implemented")
 }
@@ -81,12 +105,24 @@ func (a *Actuator) Exists(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 // GetIP returns IP address of the machine in the cluster.
 func (a *Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
+	if cluster == nil {
+		return "", fmt.Errorf("cannot get IP of machine in nil cluster")
+	}
+	if machine == nil {
+		return "", fmt.Errorf("cannot get IP of process nil machine")
+	}
 	log.Printf("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
 	return "", fmt.Errorf("TODO: Not yet implemented")
 }
 
 // GetKubeConfig gets a kubeconfig from the master.
 func (a *Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
+	if cluster == nil {
+		return "", fmt.Errorf("cannot get kubeconfig for nil cluster")
+	}
+	if master == nil {
+		return "", fmt.Errorf("cannot get kubeconfig for nil master")
+	}
 	log.Printf("Getting IP of machine %v for cluster %v.", master.Name, cluster.Name)
 	return "", fmt.Errorf("TODO: Not yet implemented")
 }
