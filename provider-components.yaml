@@ -21,6 +21,7 @@ rules:
   - get
   - list
   - watch
+  - update
 - apiGroups:
   - cluster.k8s.io
   resources:

@@ -25,7 +25,7 @@ import (
 )
 
 // Add RBAC rules to access cluster-api resources
-//+kubebuilder:rbac:groups=cluster.k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
+//+kubebuilder:rbac:groups=cluster.k8s.io,resources=clusters;clusters/status,verbs=get;list;watch;update
 
 // Actuator is responsible for performing cluster reconciliation
 type Actuator struct {
