@@ -256,7 +256,7 @@ spec:
         - name: SECRET_NAME
           value: cluster-api-provider-packet-webhook-server-secret
         image: packethost/cluster-api-provider-packet:latest
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         name: manager
         ports:
         - containerPort: 9876
