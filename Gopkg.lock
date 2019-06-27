@@ -296,6 +296,13 @@
   version = "v1.5.0"
 
 [[projects]]
+  digest = "1:3a3637219ce1ded78e79dc7819bad62763fd2918e94f55158490134b9e12a77c"
+  name = "github.com/packethost/packngo"
+  packages = ["."]
+  pruneopts = "T"
+  revision = "1343be729ca20b6995673cefc97ec82f87b5b57d"
+
+[[projects]]
   digest = "1:e5d0bd87abc2781d14e274807a470acd180f0499f8bf5bb18606e9ec22ad9de9"
   name = "github.com/pborman/uuid"
   packages = ["."]
@@ -796,6 +803,17 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:bb5c30b32c2d6dad1235d515597917e85543794cacace1d274bc78d78cd67cc4"
+  name = "k8s.io/cluster-bootstrap"
+  packages = [
+    "token/api",
+    "token/util",
+  ]
+  pruneopts = "T"
+  revision = "cd8eb24ea488465e76316449b52f483dd505d7c3"
+
+[[projects]]
+  branch = "master"
   digest = "1:a534a64598f728983416a018cc9fa4e440fb515c0d959d6c6b013894717c1ee1"
   name = "k8s.io/code-generator"
   packages = [
@@ -854,6 +872,7 @@
     "pkg/apis",
     "pkg/apis/cluster/common",
     "pkg/apis/cluster/v1alpha1",
+    "pkg/cert",
     "pkg/client/clientset_generated/clientset",
     "pkg/client/clientset_generated/clientset/scheme",
     "pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1",
@@ -956,7 +975,9 @@
     "github.com/emicklei/go-restful",
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",
+    "github.com/packethost/packngo",
     "golang.org/x/net/context",
+    "gopkg.in/yaml.v2",
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/runtime",
@@ -965,11 +986,14 @@
     "k8s.io/client-go/kubernetes/scheme",
     "k8s.io/client-go/plugin/pkg/client/auth/gcp",
     "k8s.io/client-go/rest",
+    "k8s.io/cluster-bootstrap/token/util",
     "k8s.io/code-generator/cmd/client-gen",
     "k8s.io/code-generator/cmd/deepcopy-gen",
+    "k8s.io/klog",
     "sigs.k8s.io/cluster-api/pkg/apis",
     "sigs.k8s.io/cluster-api/pkg/apis/cluster/common",
     "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1",
+    "sigs.k8s.io/cluster-api/pkg/cert",
     "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset",
     "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1",
     "sigs.k8s.io/cluster-api/pkg/controller/cluster",
