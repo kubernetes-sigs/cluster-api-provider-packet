@@ -1,19 +1,24 @@
+.PHONY: deps test manager run install deploy manifests generate fmt vet run
 
 # Image URL to use all building/pushing image targets
 IMG ?= packethost/cluster-api-provider-packet:latest
 
 all: test manager
 
+# deps
+deps:
+	dep ensure
+
 # Run tests
-test: generate fmt vet manifests
+test: deps generate fmt vet manifests
 	go test ./pkg/... ./cmd/... -coverprofile cover.out
 
 # Build manager binary
-manager: generate fmt vet
+manager: deps generate fmt vet
 	go build -o bin/manager github.com/packethost/cluster-api-provider-packet/cmd/manager
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: generate fmt vet
+run: deps generate fmt vet
 	go run ./cmd/manager/main.go
 
 # Install CRDs into a cluster
@@ -56,3 +61,6 @@ docker-build: test
 # Push the docker image
 docker-push:
 	docker push ${IMG}
+
+image-name:
+	@echo ${IMG}
