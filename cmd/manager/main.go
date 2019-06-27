@@ -18,12 +18,12 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 
 	"github.com/packethost/cluster-api-provider-packet/pkg/apis"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/cluster"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine"
+	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine/machineconfig"
 	"k8s.io/klog"
 	clusterapis "sigs.k8s.io/cluster-api/pkg/apis"
 	"sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
@@ -36,12 +36,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 )
 
+var (
+	machineSetupConfig = flag.String("config", "/etc/machineconfig/machines_config.yaml", "path to the machine setup config")
+)
+
 func main() {
 	klog.InitFlags(nil)
 
 	cfg := config.GetConfigOrDie()
 	if cfg == nil {
-		panic(fmt.Errorf("GetConfigOrDie didn't die"))
+		klog.Fatalf("GetConfigOrDie didn't die")
 	}
 
 	metricsAddr := flag.String("metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -60,32 +64,38 @@ func main() {
 
 	cs, err := clientset.NewForConfig(cfg)
 	if err != nil {
-		panic(err)
+		klog.Fatalf(err.Error())
 	}
 
 	clusterActuator, err := cluster.NewActuator(cluster.ActuatorParams{
 		ClustersGetter: cs.ClusterV1alpha1(),
 	})
 	if err != nil {
-		panic(err)
+		klog.Fatalf(err.Error())
+	}
+
+	// get our config file, create a getter for it, and pass it on
+	getter, err := machineconfig.NewFileGetter(*machineSetupConfig)
+	if err != nil {
+		klog.Fatalf(err.Error())
 	}
 
 	machineActuator, err := machine.NewActuator(machine.ActuatorParams{
-		MachinesGetter: cs.ClusterV1alpha1(),
+		MachineConfigGetter: getter,
 	})
 	if err != nil {
-		panic(err)
+		klog.Fatalf(err.Error())
 	}
 
 	// Register our cluster deployer (the interface is in clusterctl and we define the Deployer interface on the actuator)
 	common.RegisterClusterProvisioner("packet", clusterActuator)
 
 	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
-		panic(err)
+		klog.Fatalf(err.Error())
 	}
 
 	if err := clusterapis.AddToScheme(mgr.GetScheme()); err != nil {
-		panic(err)
+		klog.Fatalf(err.Error())
 	}
 
 	capimachine.AddWithActuator(mgr, machineActuator)

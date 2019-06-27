@@ -40,7 +40,8 @@ type ActuatorParams struct {
 func NewActuator(params ActuatorParams) (*Actuator, error) {
 	return &Actuator{
 		clustersGetter: params.ClustersGetter,
-	}, nil}
+	}, nil
+}
 
 // Reconcile reconciles a cluster and is invoked by the Cluster Controller
 func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
