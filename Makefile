@@ -3,7 +3,7 @@
 # Image URL to use all building/pushing image targets
 IMG ?= packethost/cluster-api-provider-packet:latest
 
-all: test manager
+all: test manager clusterctl
 
 # deps
 deps:
@@ -16,6 +16,10 @@ test: deps generate fmt vet manifests
 # Build manager binary
 manager: deps generate fmt vet
 	go build -o bin/manager github.com/packethost/cluster-api-provider-packet/cmd/manager
+
+# Build clusterctl binary
+clusterctl: deps generate fmt vet
+	go build -o bin/clusterctl github.com/packethost/cluster-api-provider-packet/cmd/clusterctl
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: deps generate fmt vet
