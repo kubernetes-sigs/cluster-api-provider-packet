@@ -1,7 +1,40 @@
-.PHONY: deps test manager run install deploy manifests generate fmt vet run
+.PHONY: deps test manager clusterctl run install deploy manifests generate fmt vet run
+
+# BUILDARCH is the host architecture
+# ARCH is the target architecture
+# we need to keep track of them separately
+BUILDARCH ?= $(shell uname -m)
+BUILDOS ?= $(shell uname -s | tr A-Z a-z)
+
+# canonicalized names for host architecture
+ifeq ($(BUILDARCH),aarch64)
+        BUILDARCH=arm64
+endif
+ifeq ($(BUILDARCH),x86_64)
+        BUILDARCH=amd64
+endif
+
+# unless otherwise set, I am building for my own architecture, i.e. not cross-compiling
+ARCH ?= $(BUILDARCH)
+
+# canonicalized names for target architecture
+ifeq ($(ARCH),aarch64)
+        override ARCH=arm64
+endif
+ifeq ($(ARCH),x86_64)
+    override ARCH=amd64
+endif
+
+# unless otherwise set, I am building for my own OS, i.e. not cross-compiling
+OS ?= $(BUILDOS)
+
 
 # Image URL to use all building/pushing image targets
 IMG ?= packethost/cluster-api-provider-packet:latest
+PROVIDERYAML ?= provider-components.yaml
+CLUSTERCTL ?= bin/clusterctl-$(OS)-$(ARCH)
+MANAGER ?= bin/manager-$(OS)-$(ARCH)
+KUBECTL ?= kubectl
 
 all: test manager clusterctl
 
@@ -14,12 +47,14 @@ test: deps generate fmt vet manifests
 	go test ./pkg/... ./cmd/... -coverprofile cover.out
 
 # Build manager binary
-manager: deps generate fmt vet
-	go build -o bin/manager github.com/packethost/cluster-api-provider-packet/cmd/manager
+manager: $(MANAGER)
+$(MANAGER): deps generate fmt vet
+	GOOS=$(OS) GOARCH=$(ARCH) go build -o $@ github.com/packethost/cluster-api-provider-packet/cmd/manager
 
 # Build clusterctl binary
-clusterctl: deps generate fmt vet
-	go build -o bin/clusterctl github.com/packethost/cluster-api-provider-packet/cmd/clusterctl
+clusterctl: $(CLUSTERCTL)
+$(CLUSTERCTL): deps generate fmt vet
+	GOOS=$(OS) GOARCH=$(ARCH) go build -o $@ github.com/packethost/cluster-api-provider-packet/cmd/clusterctl
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: deps generate fmt vet
@@ -34,11 +69,12 @@ deploy: manifests
 	cat provider-components.yaml | kubectl apply -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
-manifests:
+manifests: $(PROVIDERYAML)
+$(PROVIDERYAML):
 	go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go all
-	kustomize build config/default/ > provider-components.yaml
-	echo "---" >> provider-components.yaml
-	kustomize build vendor/sigs.k8s.io/cluster-api/config/default/ >> provider-components.yaml
+	$(KUBECTL) kustomize vendor/sigs.k8s.io/cluster-api/config/default/ > $(PROVIDERYAML)
+	echo "---" >> $(PROVIDERYAML)
+	$(KUBECTL) kustomize config/ >> $(PROVIDERYAML)
 
 
 # Run go fmt against code

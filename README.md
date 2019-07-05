@@ -12,6 +12,7 @@ To use the cluster-api to deploy a Kubernetes cluster to Packet, you need the fo
 * A Packet project ID
 * The `clusterctl` binary from this repository.
 * A Kubernetes cluster - the "bootstrap cluster" - that will deploy and manage the cluster on Packet. 
+* `kubectl` - not absolutely required, but hard to interact with a cluster without it
 
 For the bootstrap cluster, any cluster is just fine for this, including [k3s](https://k3s.io), [k3d](https://github.com/rancher/k3d) and [kind](https://github.com/kubernetes-sigs/kind).
 
@@ -24,8 +25,20 @@ You have two choices for the bootstrap cluster:
 
 To deploy a cluster:
 
-1. Create the config files you need, specifically `cluster.yaml`, `machines.yaml`, `provider-components.yaml`, `addons.yaml`. Samples of these are provided by default in [examples/packet/](./examples/packet/). The simplest way to get started is to run `./generate-yaml.sh`, which will create those and place them in [out/packet/](./out/packet).
-1. Run `clusterctl` with the appropriate command. 
+1. Create a project in Packet, using one of: the [API](https://www.packet.com/developers/api/), one of the many [SDKs](https://www.packet.com/developers/libraries/), the [CLI](https://github.com/packethost/packet-cli) or the [Web UI](https://app.packet.net).
+1. Create an API key for the project.
+1. Save the project ID and API key as the following environment variables:
+   * `PACKET_PROJECT_ID`
+   * `PACKET_API_KEY`
+1. Create the config files you need via `./generate-yaml.sh`. This will generate the following files in [out/packet](./out/packet):
+   * `cluster.yaml`
+   * `machines.yaml`
+   * `provider-components.yaml`
+   * `addons.yaml` 
+1. If desired, edit the following files:
+   * `cluster.yaml` - to change parameters or settings, including network CIDRs
+   * `machines.yaml` - to change parameters or settings, including machine types and quantity
+1. Run `clusterctl` with the appropriate command.
 
 ```sh
 ./bin/clusterctl create cluster \
@@ -42,27 +55,34 @@ Run `clusterctl create cluster --help` for more options, for example to use an e
 `clusterctl` will do the folloiwng:
 
 1. Connect to your bootstrap cluster either via:
-   * create a new one using [kind](https://github.com/kubernetes-sigs/kind)
-   * connect using the provided kubeconfig
-1. Deploy the `cluster-api-controller` and `packet-manager`
+   * creating a new one using [kind](https://github.com/kubernetes-sigs/kind)
+   * connecting using the provided kubeconfig
+1. Deploy the provider components in `provider-components.yaml`
+1. Update the secret in the cluster with your credentials based on the environment variables set earlier
 1. Create a master node on Packet, download the `kubeconfig` file
 1. Connect to the master and deploy the controllers
 1. Create worker nodes
 1. Deploy add-on components, e.g. the [packet cloud-controller-manager](https://github.com/packethost/packet-ccm) and the [packet cloud storage interface provider](https://github.com/packethost/csi-packet)
-1. If a new `kind` cluster was created, terminate the `kind` cluster
+1. If a new bootstrap cluster was created, terminate it
 
 
 ### Deploying Manually
 
-If you want to deploy manually, rather than using `clusterctl`, do the following. This assumes that you have generated the yaml files as required.
+If you _really_ want to deploy manually, rather than using `clusterctl`, do the following. This assumes that you have generated the yaml files as required.
 
 1. Ensure you have a cluster running
+1. Edit the `provider-components.yaml` to update the secret at the very end with the real values for the project ID and API key
 1. Deploy the manager controller: `kubectl apply -f provider-components.yaml`
 1. Deploy the cluster: `kubectl apply -f cluster.yaml`
 1. Deploy the machines: `kubectl apply -f machines.yaml`
 1. Deploy the addons: `kubectl apply -f addons.yaml`
 
-Note that this method will _not_ pivot the control from the bootstrap cluster to the newly started cluster, unlike using `clustertctl`.
+Note that, unlike `clusterctl`, this method will not take care of the following:
+
+* create a bootstrap cluster
+* inject the actual secret values
+* pivot the control from the bootstrap cluster to the newly started cluster
+* remove the bootstrap cluster
 
 ## Components
 
@@ -78,11 +98,14 @@ The components deployed via the `yaml` files are the following:
   * packet-ccm `Deployment`
   * csi-packet `Deployment` and 'DaemonSet`
 * `provider-components.yaml` - contains
-  * `manager` binary, in a `Deployment`, whose control loop ensures the necessary cluster and machines are deployed and running
+  * [Custom Resource Definitions (CRD)](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) for the cluster API resources
+  * all of the necessary `ClusterRole`, `ClusterRoleBinding`, `ServiceAccount` to run the controllers
+  * Packet-specific `manager` binary, in a `StatefulSet`, whose control loop manages the `Cluster` and `MachineDeployment` resources, and creates, updates or removes `Machine` resources
+  * Cluster-API-generic `controller` binary, in a `StatefulSet`, whose control loop manages the `Machine` resources
 
-As a general rule, you should deploy a single control plane node as a `Machine`, and the worker nodes as a `MachineDeployment`. Because the worker nodes are a `MachineDeployment`, the cluster-api manager keeps track of the cound. If one disappears, it ensures that a new one is deployed to take its place.
+As of this writing, the Packet cluster-api provider control plane supports only one master node. Thus, you should deploy a single control plane node as a `Machine`, and the worker nodes as a `MachineDeployment`. This is the default provided by `generate-yaml.sh`. Because the worker nodes are a `MachineDeployment`, the cluster-api manager keeps track of the count. If one disappears, it ensures that a new one is deployed to take its place.
 
-
+In the future, we will add high-availability, enabling multiple masters and worker nodes.
 
 ## How It Works
 
@@ -111,7 +134,15 @@ The actual machines are deployed using `kubeadm`. The deployment process uses th
 
 ## Building
 
-To build the provider binary, simply do:
+There are multiple components that can be built. For normal operation, you just need to download the `clusterctl` binary and yaml files and run them. This section describes how to build components.
+
+The following are the requirements for building:
+
+* [go](https://golang.org), v1.11 or higher
+* [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/), v1.14 or higher (we are working on removing this requirement)
+* Make
+
+To build all of the components:
 
 ```
 make
@@ -122,6 +153,14 @@ This will leave you with:
 * the controller binary as `bin/manager` for the OS and architecture on which you are running
 * the cluster control CLI binary as `bin/clusterctl` for the OS and architecture on which you are running
 * the config file to deploy to your bootstrap cluster as `provider-components.yaml`
+
+You can build for a different OS or architecture by setting `OS` and `ARCH`. For example:
+
+```
+make OS=windows
+make OS=linux ARCH=arm64
+make ARCH=s390x
+```
 
 To build the OCI image for the controller:
 
@@ -145,4 +184,14 @@ To see the name of the docker image that would be built, run:
 ```
 make image-name
 ```
+
+To build individual components, call its target:
+
+```
+make manager
+make clusterctl
+make manifests
+```
+
+As always with `make`, you can force the rebuilding of a component with `make -B <target>`.
 
