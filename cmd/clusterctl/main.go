@@ -17,7 +17,11 @@ limitations under the License.
 package main
 
 import (
+	"flag"
+
+	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine"
+	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine/machineconfig"
 	"k8s.io/klog"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/cmd"
 	"sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
@@ -25,10 +29,32 @@ import (
 
 func main() {
 	var err error
-	m, err := machine.NewActuator(machine.ActuatorParams{})
+
+	machineSetupConfig := flag.String("config", "/etc/machineconfig/machine_configs.yaml", "path to the machine setup config")
+	flag.Parse()
+
+	// get our config file, create a getter for it, and pass it on
+	getter, err := machineconfig.NewFileGetter(*machineSetupConfig)
+	if err != nil {
+		klog.Fatalf(err.Error())
+	}
+
+	// get a packet client
+	client, err := packet.GetClient()
+	if err != nil {
+		klog.Fatalf("unable to get Packet client: %v", err)
+	}
+
+	machineActuator, err := machine.NewActuator(machine.ActuatorParams{
+		MachineConfigGetter: getter,
+		Client:              client,
+	})
+	if err != nil {
+		klog.Fatalf(err.Error())
+	}
 	if err != nil {
 		klog.Fatalf("Error creating cluster provisioner for packet : %v", err)
 	}
-	common.RegisterClusterProvisioner("packet", m)
+	common.RegisterClusterProvisioner("packet", machineActuator)
 	cmd.Execute()
 }

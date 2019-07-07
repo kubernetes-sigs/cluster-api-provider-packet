@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 
 	packetconfigv1 "github.com/packethost/cluster-api-provider-packet/pkg/apis/packet/v1alpha1"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
@@ -33,10 +32,9 @@ import (
 )
 
 const (
-	ProviderName    = "packet"
-	apiTokenVarName = "PACKET_API_TOKEN"
-	machineUIDTag   = "cluster-api-provider-packet:machine-uid"
-	clusterIDTag    = "cluster-api-provider-packet:cluster-id"
+	ProviderName  = "packet"
+	machineUIDTag = "cluster-api-provider-packet:machine-uid"
+	clusterIDTag  = "cluster-api-provider-packet:cluster-id"
 )
 
 // Add RBAC rules to access cluster-api resources
@@ -55,6 +53,7 @@ type Actuator struct {
 // ActuatorParams holds parameter information for Actuator
 type ActuatorParams struct {
 	MachineConfigGetter machineconfig.Getter
+	Client              *packet.PacketClient
 }
 
 // NewActuator creates a new Actuator
@@ -65,7 +64,7 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 		return nil, fmt.Errorf("unable to generate bootstrap token: %v", err)
 	}
 	return &Actuator{
-		packetClient:        getPacketClient(),
+		packetClient:        params.Client,
 		machineConfigGetter: params.MachineConfigGetter,
 		token:               token,
 	}, nil
@@ -259,14 +258,6 @@ func machineProviderFromProviderConfig(providerConfig clusterv1.ProviderSpec) (*
 		return nil, err
 	}
 	return &config, nil
-}
-
-func getPacketClient() *packet.PacketClient {
-	token := os.Getenv(apiTokenVarName)
-	if token == "" {
-		log.Fatalf("env var %s is required", apiTokenVarName)
-	}
-	return packet.NewClient(token)
 }
 
 func itemInList(list []string, item string) bool {

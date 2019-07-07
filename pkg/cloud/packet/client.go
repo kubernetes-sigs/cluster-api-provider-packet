@@ -1,8 +1,15 @@
 package packet
 
 import (
-	"github.com/packethost/packngo"
+	"fmt"
+	"os"
 	"strings"
+
+	"github.com/packethost/packngo"
+)
+
+const (
+	apiTokenVarName = "PACKET_API_TOKEN"
 )
 
 type PacketClient struct {
@@ -18,4 +25,12 @@ func NewClient(packetAPIKey string) *PacketClient {
 	}
 
 	return nil
+}
+
+func GetClient() (*PacketClient, error) {
+	token := os.Getenv(apiTokenVarName)
+	if token == "" {
+		return nil, fmt.Errorf("env var %s is required", apiTokenVarName)
+	}
+	return NewClient(token), nil
 }

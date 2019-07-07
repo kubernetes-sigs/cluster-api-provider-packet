@@ -21,6 +21,7 @@ import (
 	"os"
 
 	"github.com/packethost/cluster-api-provider-packet/pkg/apis"
+	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/cluster"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine/machineconfig"
@@ -36,10 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 )
 
-var (
-	machineSetupConfig = flag.String("config", "/etc/machineconfig/machine_configs.yaml", "path to the machine setup config")
-)
-
 func main() {
 	klog.InitFlags(nil)
 
@@ -49,6 +46,8 @@ func main() {
 	}
 
 	metricsAddr := flag.String("metrics-addr", ":8080", "The address the metric endpoint binds to.")
+
+	machineSetupConfig := flag.String("config", "/etc/machineconfig/machine_configs.yaml", "path to the machine setup config")
 	flag.Parse()
 
 	log := logf.Log.WithName("packet-controller-manager")
@@ -67,6 +66,12 @@ func main() {
 		klog.Fatalf(err.Error())
 	}
 
+	// get a packet client
+	client, err := packet.GetClient()
+	if err != nil {
+		klog.Fatalf("unable to get Packet client: %v", err)
+	}
+
 	clusterActuator, err := cluster.NewActuator(cluster.ActuatorParams{
 		ClustersGetter: cs.ClusterV1alpha1(),
 	})
@@ -82,6 +87,7 @@ func main() {
 
 	machineActuator, err := machine.NewActuator(machine.ActuatorParams{
 		MachineConfigGetter: getter,
+		Client:              client,
 	})
 	if err != nil {
 		klog.Fatalf(err.Error())
