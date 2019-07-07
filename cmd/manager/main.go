@@ -37,7 +37,7 @@ import (
 )
 
 var (
-	machineSetupConfig = flag.String("config", "/etc/machineconfig/machines_config.yaml", "path to the machine setup config")
+	machineSetupConfig = flag.String("config", "/etc/machineconfig/machine_configs.yaml", "path to the machine setup config")
 )
 
 func main() {
