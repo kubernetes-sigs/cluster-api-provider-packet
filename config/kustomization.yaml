@@ -15,3 +15,8 @@ bases:
 
 patches:
 - default/manager_image_patch.yaml
+
+configMapGenerator:
+- name: machine-setup
+  files:
+  - "./default/machine_configs.yaml"
