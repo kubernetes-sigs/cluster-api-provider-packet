@@ -60,6 +60,9 @@ spec:
         - mountPath: /home/.packet
           name: credentials
           readOnly: true
+        - mountPath: /etc/machineconfig
+          name: configs
+          readOnly: true
         resources:
           limits:
             cpu: 100m
@@ -69,6 +72,9 @@ spec:
             memory: 20Mi
       terminationGracePeriodSeconds: 10
       volumes:
+      - name: configs
+        configMap:
+          name: machine-setup
       - name: credentials
         secret:
           secretName: credentials

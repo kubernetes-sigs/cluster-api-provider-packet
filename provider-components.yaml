@@ -1556,8 +1556,14 @@ spec:
         - mountPath: /home/.packet
           name: credentials
           readOnly: true
+        - mountPath: /etc/machineconfig
+          name: configs
+          readOnly: true
       terminationGracePeriodSeconds: 10
       volumes:
+      - configMap:
+          name: cluster-api-provider-packet-machine-setup-5gk8b945bg
+        name: configs
       - name: credentials
         secret:
           secretName: cluster-api-provider-packet-credentials
