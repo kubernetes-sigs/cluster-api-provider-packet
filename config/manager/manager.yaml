@@ -56,10 +56,17 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: PACKET_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: credentials
+              key: apiKey
+        - name: PACKET_PROJECT_ID
+          valueFrom:
+            secretKeyRef:
+              name: credentials
+              key: projectID
         volumeMounts:
-        - mountPath: /home/.packet
-          name: credentials
-          readOnly: true
         - mountPath: /etc/machineconfig
           name: configs
           readOnly: true
@@ -75,9 +82,6 @@ spec:
       - name: configs
         configMap:
           name: machine-setup
-      - name: credentials
-        secret:
-          secretName: credentials
 ---
 apiVersion: v1
 kind: Secret

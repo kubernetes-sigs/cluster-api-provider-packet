@@ -1542,6 +1542,16 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: PACKET_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: apiKey
+              name: cluster-api-provider-packet-credentials
+        - name: PACKET_PROJECT_ID
+          valueFrom:
+            secretKeyRef:
+              key: projectID
+              name: cluster-api-provider-packet-credentials
         image: packethost/cluster-api-provider-packet:latest
         imagePullPolicy: IfNotPresent
         name: manager
@@ -1553,9 +1563,6 @@ spec:
             cpu: 100m
             memory: 20Mi
         volumeMounts:
-        - mountPath: /home/.packet
-          name: credentials
-          readOnly: true
         - mountPath: /etc/machineconfig
           name: configs
           readOnly: true
@@ -1564,6 +1571,3 @@ spec:
       - configMap:
           name: cluster-api-provider-packet-machine-setup-5gk8b945bg
         name: configs
-      - name: credentials
-        secret:
-          secretName: cluster-api-provider-packet-credentials
