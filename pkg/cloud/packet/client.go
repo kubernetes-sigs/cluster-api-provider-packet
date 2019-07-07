@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	apiTokenVarName = "PACKET_API_TOKEN"
+	apiTokenVarName = "PACKET_API_KEY"
 )
 
 type PacketClient struct {
