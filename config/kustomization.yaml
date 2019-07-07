@@ -14,4 +14,4 @@ bases:
 - ./manager
 
 patches:
-- manager_image_patch.yaml
+- default/manager_image_patch.yaml
