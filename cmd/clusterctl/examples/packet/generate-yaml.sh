@@ -18,6 +18,30 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+doexitdir() {
+	echo "Cannot determine working directory. generate-yaml.sh must be run from the Packet cluster-api provider repository root, or the examples/packet directory."
+	exit 1
+}
+
+# we might be executed from the same dir as the templates, or from the root dir of the repository
+# we have a symlink in the root dir for convenience
+case $PWD in
+*cluster-api-provider-packet)
+	if [ -d "cmd/clusterctl/examples/packet" ]; then
+		BASEDIR="./cmd/clusterctl/examples/packet"
+	else
+		doexitdir
+	fi
+	;;
+*cmd/clusterctl/examples/packet)
+	BASEDIR="."
+	;;
+*)
+	doexitdir
+	;;
+esac
+
+
 # Generate a somewhat unique cluster name. This only needs to be unique per project.
 RANDOM_STRING=$(head -c5 < <(LC_ALL=C tr -dc 'a-zA-Z0-9' < /dev/urandom) | tr '[:upper:]' '[:lower:]')
 # Human friendly cluster name, limited to 6 characters
@@ -27,13 +51,13 @@ CLUSTER_NAME=${CLUSTER_NAME:-${GENERATED_CLUSTER_NAME}}
 
 FACILITY="${FACILITY:-ewr1}"
 
-OUTPUT_DIR=out
+OUTPUT_DIR=out/packet
 
-MACHINE_TEMPLATE_FILE=machines.yaml.template
+MACHINE_TEMPLATE_FILE=${BASEDIR}/machines.yaml.template
 MACHINE_GENERATED_FILE=${OUTPUT_DIR}/machines.yaml
-CLUSTER_TEMPLATE_FILE=cluster.yaml.template
+CLUSTER_TEMPLATE_FILE=${BASEDIR}/cluster.yaml.template
 CLUSTER_GENERATED_FILE=${OUTPUT_DIR}/cluster.yaml
-ADDON_TEMPLATE_FILE=addons.yaml.template
+ADDON_TEMPLATE_FILE=${BASEDIR}/addons.yaml.template
 ADDON_GENERATED_FILE=${OUTPUT_DIR}/addons.yaml
 
 SSH_PRIVATE_FILE=${OUTPUT_DIR}/id_rsa
@@ -88,6 +112,7 @@ if [ $OVERWRITE -ne 1 ] && [ -f $ADDON_GENERATED_FILE ]; then
   exit 1
 fi
 
+PACKET_PROJECT_ID="${PACKET_PROJECT_ID:-}"
 if [ -n "$PACKET_PROJECT_ID" ]; then
   echo "Must specify the Packet project ID as PACKET_PROJECTID"
   exit 1
@@ -95,6 +120,7 @@ fi
 
 mkdir -p ${OUTPUT_DIR}
 
+SSH_KEY=${SSH_KEY:-}
 if [ -n "$SSH_KEY" ]; then
   if [ ! -e "$SSH_KEY" ]; then
     echo "ssh key file $SSH_KEY does not exist" >&2
