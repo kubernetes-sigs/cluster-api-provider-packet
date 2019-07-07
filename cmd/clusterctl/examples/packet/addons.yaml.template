@@ -1,0 +1,25 @@
+# Note: kubectl apply the generated file after the cluster is provisioned
+# todo: csi and ccm here!!
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: standard
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: kubernetes.io/gce-pd
+parameters:
+  type: pd-standard
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingress-controller-config
+  namespace: kube-system
+data:
+  gce.conf: |
+    [global]
+    token-url = nil
+    network = default
+    project-id = $GCLOUD_PROJECT
+    node-tags = $CLUSTER_NAME-worker

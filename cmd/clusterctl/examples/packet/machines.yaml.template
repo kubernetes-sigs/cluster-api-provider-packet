@@ -1,0 +1,50 @@
+items:
+- apiVersion: "cluster.k8s.io/v1alpha1"
+  kind: Machine
+  metadata:
+    generateName: packet-master-
+    labels:
+      cluster.k8s.io/cluster-name: $CLUSTER_NAME
+      set: master
+  spec:
+    providerSpec:
+      value:
+        apiVersion: "packetprovider/v1alpha1"
+        kind: "PacketMachineProviderSpec"
+        roles:
+        - Master
+        OS: ubuntu_18_04
+        facility:
+        - $FACILITY
+        machineType: t2.small
+        billingCycle: hourly
+        projectID: $PROJECT_ID
+        sshKeys:
+        - $SSH_KEY
+    versions:
+      kubelet: 1.14.3
+      controlPlane: 1.14.3
+- apiVersion: "cluster.k8s.io/v1alpha1"
+  kind: Machine
+  metadata:
+    generateName: packet-node-
+    labels:
+      cluster.k8s.io/cluster-name: $CLUSTER_NAME
+      set: node
+  spec:
+    providerSpec:
+      value:
+        apiVersion: "packetprovider/v1alpha1"
+        kind: "PacketMachineProviderSpec"
+        roles:
+        - Node
+        OS: ubuntu_18_04
+        facility:
+        - $FACILITY
+        machineType: t2.small
+        billingCycle: hourly
+        projectID: $PROJECT_ID
+        sshKeys:
+        - $SSH_KEY
+    versions:
+      kubelet: 1.14.3

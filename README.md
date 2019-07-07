@@ -27,9 +27,13 @@ To deploy a cluster:
 
 1. Create a project in Packet, using one of: the [API](https://www.packet.com/developers/api/), one of the many [SDKs](https://www.packet.com/developers/libraries/), the [CLI](https://github.com/packethost/packet-cli) or the [Web UI](https://app.packet.net).
 1. Create an API key for the project.
-1. Save the project ID and API key as the following environment variables:
-   * `PACKET_PROJECT_ID`
-   * `PACKET_API_KEY`
+1. Set the required environment variables:
+   * `PACKET_PROJECT_ID` - Packet project ID
+   * `PACKET_API_KEY` - Packet API key
+1. (Optional) Set the optional environment variables:
+   *  `CLUSTER_NAME` - The created cluster will have this name. If not set, it will generate one for you.
+   *  `FACILITY` - The Packet facility where you wantto deploy the cluster. If not set, it will default to `ewr1`.
+   *  `SSH_KEY` - The path to an ssh public key to place on all of the machines. If not set, it will use whichever ssh keys are defined for your project.
 1. Create the config files you need via `./generate-yaml.sh`. This will generate the following files in [out/packet](./out/packet):
    * `cluster.yaml`
    * `machines.yaml`

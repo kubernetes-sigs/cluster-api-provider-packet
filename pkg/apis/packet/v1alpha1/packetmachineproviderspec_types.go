@@ -23,18 +23,6 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// PacketMachineProviderSpecSpec defines the desired state of PacketMachineProviderSpec
-type PacketMachineProviderSpecSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-}
-
-// PacketMachineProviderSpecStatus defines the observed state of PacketMachineProviderSpec
-type PacketMachineProviderSpecStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-}
-
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -44,8 +32,13 @@ type PacketMachineProviderSpec struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   PacketMachineProviderSpecSpec   `json:"spec,omitempty"`
-	Status PacketMachineProviderSpecStatus `json:"status,omitempty"`
+	Roles        []MachineRole `json:"roles,omitempty"`
+	Facility     []string      `json:"facility,omitempty"`
+	OS           string        `json:"OS,omitempty"`
+	ProjectID    string        `json:"projectID,omitempty"`
+	BillingCycle string        `json:"billingCycle,omitempty"`
+	MachineType  string        `json:"machineType"`
+	SshKeys      []string      `json:"sshKeys,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -56,6 +49,31 @@ type PacketMachineProviderSpecList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []PacketMachineProviderSpec `json:"items"`
 }
+
+// what software and configuration will be used when provisioning and managing
+// the Machine. A single Machine may have more than one role, and the list and
+// definitions of supported roles is expected to evolve over time.
+//
+// Currently, only two roles are supported: Master and Node. In the future, we
+// expect user needs to drive the evolution and granularity of these roles,
+// with new additions accommodating common cluster patterns, like dedicated
+// etcd Machines.
+//
+//                 +-----------------------+------------------------+
+//                 | Master present        | Master absent          |
+// +---------------+-----------------------+------------------------|
+// | Node present: | Install control plane | Join the cluster as    |
+// |               | and be schedulable    | just a node            |
+// |---------------+-----------------------+------------------------|
+// | Node absent:  | Install control plane | Invalid configuration  |
+// |               | and be unschedulable  |                        |
+// +---------------+-----------------------+------------------------+
+type MachineRole string
+
+const (
+	MasterRole MachineRole = "Master"
+	NodeRole   MachineRole = "Node"
+)
 
 func init() {
 	SchemeBuilder.Register(&PacketMachineProviderSpec{}, &PacketMachineProviderSpecList{})

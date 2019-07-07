@@ -4,9 +4,9 @@ metadata:
   creationTimestamp: null
   labels:
     controller-tools.k8s.io: "1.0"
-  name: packetmachineproviderspecs.packet.cluster.k8s.io
+  name: packetmachineproviderspecs.packetprovider.k8s.io
 spec:
-  group: packet.cluster.k8s.io
+  group: packetprovider.k8s.io
   names:
     kind: PacketMachineProviderSpec
     plural: packetmachineproviderspecs
@@ -26,10 +26,30 @@ spec:
           type: string
         metadata:
           type: object
-        spec:
-          type: object
-        status:
-          type: object
+        roles:
+          items:
+            type: string
+          type: array
+        OS:
+          description: The name of the OS to be installed on the machine.
+          type: string
+        billingCycle:
+          description: The billing cycle to use for the machine.
+          type: string
+        projectID:
+          type: string
+        machineType:
+          type: string
+        facility:
+          description: List of facilities where to run the machine.
+          items:
+            type: string
+          type: array
+        sshKeys:
+          description: List of ssh public keys to install on machine
+          items:
+            type: string
+          type: array
   version: v1alpha1
 status:
   acceptedNames:

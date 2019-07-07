@@ -4,9 +4,9 @@ metadata:
   creationTimestamp: null
   labels:
     controller-tools.k8s.io: "1.0"
-  name: packetclusterproviderstatuses.packet.cluster.k8s.io
+  name: packetclusterproviderstatuses.packetprovider.k8s.io
 spec:
-  group: packet.cluster.k8s.io
+  group: packetprovider.k8s.io
   names:
     kind: PacketClusterProviderStatus
     plural: packetclusterproviderstatuses
