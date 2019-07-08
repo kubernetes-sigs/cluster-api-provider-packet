@@ -6,8 +6,8 @@ import (
 	"io/ioutil"
 	"os"
 
-	yaml "gopkg.in/yaml.v2"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
+	"sigs.k8s.io/yaml"
 )
 
 type Getter interface {
