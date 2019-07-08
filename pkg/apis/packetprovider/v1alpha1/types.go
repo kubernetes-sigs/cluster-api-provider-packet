@@ -9,7 +9,7 @@ import (
 type PacketMachineProviderConfig struct {
 	metav1.TypeMeta `json:",inline"`
 
-	ProjectID    string   `json:"projectid"`
+	ProjectID    string   `json:"projectID"`
 	Facilities   []string `json:"facilities"`
 	InstanceType string   `json:"instanceType"`
 	Tags         []string `json:"tags,omitempty"`
