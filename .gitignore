@@ -25,3 +25,6 @@ bin
 
 tmp/
 out/
+
+# debugging
+__debug_bin
