@@ -113,7 +113,7 @@ if [ $OVERWRITE -ne 1 ] && [ -f $ADDON_GENERATED_FILE ]; then
 fi
 
 PACKET_PROJECT_ID="${PACKET_PROJECT_ID:-}"
-if [ -n "$PACKET_PROJECT_ID" ]; then
+if [ -z "$PACKET_PROJECT_ID" ]; then
   echo "Must specify the Packet project ID as PACKET_PROJECTID"
   exit 1
 fi
