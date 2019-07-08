@@ -1,8 +1,10 @@
+apiVersion: "cluster.k8s.io/v1alpha1"
+kind: MachineList
 items:
 - apiVersion: "cluster.k8s.io/v1alpha1"
   kind: Machine
   metadata:
-    generateName: packet-master-
+    name: packet-master-0
     labels:
       cluster.k8s.io/cluster-name: $CLUSTER_NAME
       set: master
@@ -27,7 +29,7 @@ items:
 - apiVersion: "cluster.k8s.io/v1alpha1"
   kind: Machine
   metadata:
-    generateName: packet-node-
+    name: packet-node-0
     labels:
       cluster.k8s.io/cluster-name: $CLUSTER_NAME
       set: node
