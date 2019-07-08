@@ -13,5 +13,6 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager github.com/pack
 # Copy the controller-manager into a thin image
 FROM alpine:3.10
 WORKDIR /
+RUN apk --update add ca-certificates
 COPY --from=builder /go/src/github.com/packethost/cluster-api-provider-packet/manager .
 ENTRYPOINT ["/manager"]
