@@ -25,10 +25,10 @@ import (
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine/machineconfig"
 	"github.com/packethost/packngo"
-	yaml "gopkg.in/yaml.v2"
 	tokenUtil "k8s.io/cluster-bootstrap/token/util"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	"sigs.k8s.io/cluster-api/pkg/cert"
+	"sigs.k8s.io/yaml"
 )
 
 const (
