@@ -34,9 +34,9 @@ type PacketMachineProviderSpec struct {
 
 	Roles        []MachineRole `json:"roles,omitempty"`
 	Facility     []string      `json:"facility,omitempty"`
-	OS           string        `json:"OS,omitempty"`
-	ProjectID    string        `json:"projectID,omitempty"`
-	BillingCycle string        `json:"billingCycle,omitempty"`
+	OS           string        `json:"OS"`
+	ProjectID    string        `json:"projectID"`
+	BillingCycle string        `json:"billingCycle"`
 	MachineType  string        `json:"machineType"`
 	SshKeys      []string      `json:"sshKeys,omitempty"`
 }
