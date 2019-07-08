@@ -1,7 +1,12 @@
 items:
 - machineParams:
-    - image: ubuntu_18_04
+  - image: ubuntu_18_04
+    versions:
       kubelet: 1.14.3
+  - image: ubuntu_18_04
+    versions:
+      kubelet: 1.14.3
+      controlPlane: 1.14.3
   userdata: |
     set -e
     set -x
