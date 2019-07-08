@@ -17,7 +17,7 @@ limitations under the License.
 package apis
 
 import (
-	"github.com/packethost/cluster-api-provider-packet/pkg/apis/packet/v1alpha1"
+	"github.com/packethost/cluster-api-provider-packet/pkg/apis/packetprovider/v1alpha1"
 )
 
 func init() {

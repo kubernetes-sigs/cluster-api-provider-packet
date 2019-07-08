@@ -14,42 +14,40 @@ spec:
   validation:
     openAPIV3Schema:
       properties:
+        OS:
+          type: string
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
             of an object. Servers should convert recognized schemas to the latest
             internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
           type: string
+        billingCycle:
+          type: string
+        facility:
+          items:
+            type: string
+          type: array
         kind:
           description: 'Kind is a string value representing the REST resource this
             object represents. Servers may infer this from the endpoint the client
             submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
           type: string
+        machineType:
+          type: string
         metadata:
           type: object
+        projectID:
+          type: string
         roles:
           items:
             type: string
           type: array
-        OS:
-          description: The name of the OS to be installed on the machine.
-          type: string
-        billingCycle:
-          description: The billing cycle to use for the machine.
-          type: string
-        projectID:
-          type: string
-        machineType:
-          type: string
-        facility:
-          description: List of facilities where to run the machine.
-          items:
-            type: string
-          type: array
         sshKeys:
-          description: List of ssh public keys to install on machine
           items:
             type: string
           type: array
+      required:
+      - machineType
   version: v1alpha1
 status:
   acceptedNames:

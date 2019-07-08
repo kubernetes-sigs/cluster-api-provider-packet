@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"log"
 
-	packetconfigv1 "github.com/packethost/cluster-api-provider-packet/pkg/apis/packet/v1alpha1"
+	packetconfigv1 "github.com/packethost/cluster-api-provider-packet/pkg/apis/packetprovider/v1alpha1"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine/machineconfig"
 	"github.com/packethost/packngo"
