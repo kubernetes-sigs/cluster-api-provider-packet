@@ -21,7 +21,7 @@ limitations under the License.
 // +k8s:deepcopy-gen=package,register
 // +k8s:conversion-gen=github.com/packethost/cluster-api-provider-packet/pkg/apis/packet
 // +k8s:defaulter-gen=TypeMeta
-// +groupName=packet.cluster.k8s.io
+// +groupName=packetprovider.k8s.io
 package v1alpha1
 
 import (
@@ -31,7 +31,7 @@ import (
 
 var (
 	// SchemeGroupVersion is group version used to register these objects
-	SchemeGroupVersion = schema.GroupVersion{Group: "packet.cluster.k8s.io", Version: "v1alpha1"}
+	SchemeGroupVersion = schema.GroupVersion{Group: "packetprovider.k8s.io", Version: "v1alpha1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
 	SchemeBuilder = &scheme.Builder{GroupVersion: SchemeGroupVersion}

@@ -1,4 +1,4 @@
-apiVersion: packet.cluster.k8s.io/v1alpha1
+apiVersion: packetprovider.k8s.io/v1alpha1
 kind: PacketClusterProviderStatus
 metadata:
   labels:

@@ -19,5 +19,5 @@ limitations under the License.
 // +k8s:deepcopy-gen=package,register
 // +k8s:conversion-gen=github.com/packethost/cluster-api-provider-packet/pkg/apis/packet
 // +k8s:defaulter-gen=TypeMeta
-// +groupName=packet.cluster.k8s.io
+// +groupName=packetprovider.k8s.io
 package v1alpha1
