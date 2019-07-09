@@ -41,13 +41,17 @@ func (p *PacketClient) GetDevice(machine *clusterv1.Machine) (*packngo.Device, e
 	if err != nil {
 		return nil, fmt.Errorf("Failed to process config for providerSpec: %v", err)
 	}
-	devices, _, err := p.Devices.List(c.ProjectID, nil)
+	tag := util.GenerateMachineTag(string(machine.UID))
+	return p.GetDeviceByTags(c.ProjectID, []string{tag})
+}
+func (p *PacketClient) GetDeviceByTags(project string, tags []string) (*packngo.Device, error) {
+	devices, _, err := p.Devices.List(project, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Error retrieving devices: %v", err)
 	}
-	tag := util.GenerateMachineTag(string(machine.UID))
+	// returns the first one that matches all of the tags
 	for _, device := range devices {
-		if util.ItemInList(device.Tags, tag) {
+		if util.ItemsInList(device.Tags, tags) {
 			return &device, nil
 		}
 	}
