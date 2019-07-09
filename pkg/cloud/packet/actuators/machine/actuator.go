@@ -80,6 +80,11 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	if err != nil {
 		return fmt.Errorf("Unable to read providerSpec from machine config: %v", err)
 	}
+
+	tags := []string{
+		util.GenerateMachineTag(string(machine.UID)),
+		util.GenerateClusterTag(string(cluster.Name)),
+	}
 	// generate userdata from the template
 	// first we need to find the correct userdata
 	userdataTmpl, err := a.machineConfigGetter.GetUserdata(machineConfig.OS, machine.Spec.Versions)
@@ -101,6 +106,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		}
 		caCert = caCertAndKey.Certificate
 		caKey = caCertAndKey.PrivateKey
+		tags = append(tags, util.MasterTag)
 	} else {
 		coreClient, err := a.deployer.CoreV1Client(cluster)
 		if err != nil {
@@ -111,6 +117,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		if err != nil {
 			return fmt.Errorf("failed to create or save new bootstrap token: %v", err)
 		}
+		tags = append(tags, util.WorkerTag)
 	}
 
 	userdata, err := parseUserdata(userdataTmpl, role, cluster, machine, machineConfig.OS, token, caCert, caKey, a.controlPort)
@@ -120,17 +127,14 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	log.Printf("Creating machine %v for cluster %v.", machine.Name, cluster.Name)
 	serverCreateOpts := &packngo.DeviceCreateRequest{
-		Hostname:     machine.Spec.Name,
+		Hostname:     machine.Name,
 		UserData:     userdata,
 		ProjectID:    machineConfig.ProjectID,
 		Facility:     machineConfig.Facilities,
 		BillingCycle: machineConfig.BillingCycle,
 		Plan:         machineConfig.InstanceType,
 		OS:           machineConfig.OS,
-		Tags: []string{
-			util.GenerateMachineTag(string(machine.UID)),
-			util.GenerateClusterTag(string(cluster.Name)),
-		},
+		Tags:         tags,
 	}
 
 	_, _, err = a.packetClient.Devices.Create(serverCreateOpts)
@@ -196,44 +200,6 @@ func (a *Actuator) Exists(ctx context.Context, cluster *clusterv1.Cluster, machi
 	}
 
 	return true, nil
-}
-
-// The Machine Actuator interface must implement GetIP and GetKubeConfig functions as a workaround for issues
-// cluster-api#158 (https://github.com/kubernetes-sigs/cluster-api/issues/158) and cluster-api#160
-// (https://github.com/kubernetes-sigs/cluster-api/issues/160).
-
-// GetIP returns IP address of the machine in the cluster.
-func (a *Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
-	if cluster == nil {
-		return "", fmt.Errorf("cannot get IP of machine in nil cluster")
-	}
-	if machine == nil {
-		return "", fmt.Errorf("cannot get IP of process nil machine")
-	}
-	log.Printf("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
-	device, err := a.packetClient.GetDevice(machine)
-	if err != nil {
-		return "", fmt.Errorf("error retrieving machine status %s: %v", machine.UID, err)
-	}
-	if device == nil {
-		return "", fmt.Errorf("machine does not exist: %s", machine.UID)
-	}
-	// TODO: validate that this address exists, so we don't hit nil pointer
-	// TODO: check which address to return
-	// TODO: check address format (cidr, subnet, etc.)
-	return device.Network[0].Address, nil
-}
-
-// GetKubeConfig gets a kubeconfig from the master.
-func (a *Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
-	if cluster == nil {
-		return "", fmt.Errorf("cannot get kubeconfig for nil cluster")
-	}
-	if master == nil {
-		return "", fmt.Errorf("cannot get kubeconfig for nil master")
-	}
-	log.Printf("Getting IP of machine %v for cluster %v.", master.Name, cluster.Name)
-	return "", fmt.Errorf("TODO: Not yet implemented")
 }
 
 func (a *Actuator) get(machine *clusterv1.Machine) (*packngo.Device, error) {
