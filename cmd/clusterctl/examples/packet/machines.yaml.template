@@ -18,7 +18,7 @@ items:
         OS: ubuntu_18_04
         facility:
         - $FACILITY
-        machineType: t2.small
+        machineType: c1.small.x86
         billingCycle: hourly
         projectID: $PROJECT_ID
         sshKeys:
@@ -43,7 +43,7 @@ items:
         OS: ubuntu_18_04
         facility:
         - $FACILITY
-        machineType: t2.small
+        machineType: c1.small.x86
         billingCycle: hourly
         projectID: $PROJECT_ID
         sshKeys:
