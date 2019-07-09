@@ -21,6 +21,8 @@ import (
 	"log"
 
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
+	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/util"
+	"github.com/packethost/packngo"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -47,21 +49,38 @@ func New(params Params) *Deployer {
 	}
 }
 
-// GetIP returns IP address of the machine in the cluster.
+// GetIP returns IP address of the machine in the cluster. If no machine is given, find the IP for the cluster itself, i.e. the master
 func (d *Deployer) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
 	if cluster == nil {
 		return "", fmt.Errorf("cannot get IP of machine in nil cluster")
 	}
-	if machine == nil {
-		return "", fmt.Errorf("cannot get IP of process nil machine")
+	var (
+		device     *packngo.Device
+		err        error
+		machineRef string
+	)
+	if machine != nil {
+		log.Printf("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
+		machineRef = string(machine.UID)
+		device, err = d.client.GetDevice(machine)
+	} else {
+		log.Printf("Getting IP of any master machine for cluster %v.", cluster.Name)
+		machineRef = fmt.Sprintf("master for cluster %s", cluster.Name)
+		tags := []string{
+			util.GenerateClusterTag(string(cluster.Name)),
+			util.MasterTag,
+		}
+		c, err := util.ClusterProviderFromProviderConfig(cluster.Spec.ProviderSpec)
+		if err != nil {
+			return "", fmt.Errorf("unable to unpack cluster provider: %v", err)
+		}
+		device, err = d.client.GetDeviceByTags(c.ProjectID, tags)
 	}
-	log.Printf("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
-	device, err := d.client.GetDevice(machine)
 	if err != nil {
-		return "", fmt.Errorf("error retrieving machine status %s: %v", machine.UID, err)
+		return "", fmt.Errorf("error retrieving machine status %s: %v", machineRef, err)
 	}
 	if device == nil {
-		return "", fmt.Errorf("machine does not exist: %s", machine.UID)
+		return "", fmt.Errorf("machine does not exist: %s", machineRef)
 	}
 	// TODO: validate that this address exists, so we don't hit nil pointer
 	// TODO: check which address to return
