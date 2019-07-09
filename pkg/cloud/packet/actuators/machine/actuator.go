@@ -20,21 +20,21 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
-	packetconfigv1 "github.com/packethost/cluster-api-provider-packet/pkg/apis/packetprovider/v1alpha1"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine/machineconfig"
+	ca "github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/ca"
+	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/deployer"
+	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/util"
+	"github.com/packethost/cluster-api-provider-packet/pkg/tokens"
 	"github.com/packethost/packngo"
-	tokenUtil "k8s.io/cluster-bootstrap/token/util"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
-	"sigs.k8s.io/cluster-api/pkg/cert"
-	"sigs.k8s.io/yaml"
 )
 
 const (
-	ProviderName  = "packet"
-	machineUIDTag = "cluster-api-provider-packet:machine-uid"
-	clusterIDTag  = "cluster-api-provider-packet:cluster-id"
+	ProviderName    = "packet"
+	defaultTokenTTL = 10 * time.Minute
 )
 
 // Add RBAC rules to access cluster-api resources
@@ -46,27 +46,22 @@ const (
 type Actuator struct {
 	packetClient        *packet.PacketClient
 	machineConfigGetter machineconfig.Getter
-	token               string
-	ca                  *cert.CertificateAuthority
+	deployer            *deployer.Deployer
 }
 
 // ActuatorParams holds parameter information for Actuator
 type ActuatorParams struct {
 	MachineConfigGetter machineconfig.Getter
 	Client              *packet.PacketClient
+	Deployer            *deployer.Deployer
 }
 
 // NewActuator creates a new Actuator
 func NewActuator(params ActuatorParams) (*Actuator, error) {
-	// generate a new bootstrap token
-	token, err := tokenUtil.GenerateBootstrapToken()
-	if err != nil {
-		return nil, fmt.Errorf("unable to generate bootstrap token: %v", err)
-	}
 	return &Actuator{
 		packetClient:        params.Client,
 		machineConfigGetter: params.MachineConfigGetter,
-		token:               token,
+		deployer:            params.Deployer,
 	}, nil
 }
 
@@ -78,21 +73,44 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	if machine == nil {
 		return fmt.Errorf("cannot create nil machine")
 	}
-	config, err := machineProviderFromProviderConfig(machine.Spec.ProviderSpec)
+	machineConfig, err := util.MachineProviderFromProviderConfig(machine.Spec.ProviderSpec)
 	if err != nil {
 		return fmt.Errorf("Unable to read providerSpec from machine config: %v", err)
 	}
 	// generate userdata from the template
 	// first we need to find the correct userdata
-	userdataTmpl, err := a.machineConfigGetter.GetUserdata(config.OS, machine.Spec.Versions)
+	userdataTmpl, err := a.machineConfigGetter.GetUserdata(machineConfig.OS, machine.Spec.Versions)
 	if err != nil {
 		return fmt.Errorf("Unable to read userdata: %v", err)
 	}
-	role := "node"
+	var (
+		token  = ""
+		role   = "node"
+		caCert []byte
+		caKey  []byte
+	)
 	if machine.Spec.Versions.ControlPlane != "" {
 		role = "master"
+		// generate a cluster CA cert and key
+		caCertAndKey, err := ca.GenerateCertAndKey(cluster.Name, "")
+		if err != nil {
+			return fmt.Errorf("unable to generate CA cert and key: %v", err)
+		}
+		caCert = caCertAndKey.Certificate
+		caKey = caCertAndKey.PrivateKey
+	} else {
+		coreClient, err := a.deployer.CoreV1Client(cluster)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve corev1 client for cluster %q: %v", cluster.Name, err)
+		}
+		// generate a new bootstrap token, then save it as valid
+		token, err = tokens.NewBootstrap(coreClient, defaultTokenTTL)
+		if err != nil {
+			return fmt.Errorf("failed to create or save new bootstrap token: %v", err)
+		}
 	}
-	userdata, err := parseUserdata(userdataTmpl, role, cluster, machine, config.OS, a.token, a.ca.Certificate, a.ca.PrivateKey)
+
+	userdata, err := parseUserdata(userdataTmpl, role, cluster, machine, machineConfig.OS, token, caCert, caKey)
 	if err != nil {
 		return fmt.Errorf("Unable to generate userdata: %v", err)
 	}
@@ -101,14 +119,14 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	serverCreateOpts := &packngo.DeviceCreateRequest{
 		Hostname:     machine.Spec.Name,
 		UserData:     userdata,
-		ProjectID:    config.ProjectID,
-		Facility:     config.Facilities,
-		BillingCycle: config.BillingCycle,
-		Plan:         config.InstanceType,
-		OS:           config.OS,
+		ProjectID:    machineConfig.ProjectID,
+		Facility:     machineConfig.Facilities,
+		BillingCycle: machineConfig.BillingCycle,
+		Plan:         machineConfig.InstanceType,
+		OS:           machineConfig.OS,
 		Tags: []string{
-			generateMachineTag(string(machine.UID)),
-			generateClusterTag(string(cluster.Name)),
+			util.GenerateMachineTag(string(machine.UID)),
+			util.GenerateClusterTag(string(cluster.Name)),
 		},
 	}
 
@@ -129,7 +147,7 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("cannot delete nil machine")
 	}
 	log.Printf("Deleting machine %v for cluster %v.", machine.Name, cluster.Name)
-	device, err := a.getPacketDevice(machine)
+	device, err := a.packetClient.GetDevice(machine)
 	if err != nil {
 		return fmt.Errorf("error retrieving machine status %s: %v", machine.UID, err)
 	}
@@ -166,7 +184,7 @@ func (a *Actuator) Exists(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return false, fmt.Errorf("cannot check if nil machine exists")
 	}
 	log.Printf("Checking if machine %v for cluster %v exists.", machine.Name, cluster.Name)
-	device, err := a.getPacketDevice(machine)
+	device, err := a.packetClient.GetDevice(machine)
 	if err != nil {
 		return false, fmt.Errorf("error retrieving machine status %s: %v", machine.UID, err)
 	}
@@ -190,7 +208,7 @@ func (a *Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine)
 		return "", fmt.Errorf("cannot get IP of process nil machine")
 	}
 	log.Printf("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
-	device, err := a.getPacketDevice(machine)
+	device, err := a.packetClient.GetDevice(machine)
 	if err != nil {
 		return "", fmt.Errorf("error retrieving machine status %s: %v", machine.UID, err)
 	}
@@ -216,7 +234,7 @@ func (a *Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.M
 }
 
 func (a *Actuator) get(machine *clusterv1.Machine) (*packngo.Device, error) {
-	device, err := a.getPacketDevice(machine)
+	device, err := a.packetClient.GetDevice(machine)
 	if err != nil {
 		return nil, err
 	}
@@ -225,46 +243,4 @@ func (a *Actuator) get(machine *clusterv1.Machine) (*packngo.Device, error) {
 	}
 
 	return nil, fmt.Errorf("Device %s not found", machine.UID)
-}
-
-func (a *Actuator) getPacketDevice(machine *clusterv1.Machine) (*packngo.Device, error) {
-	c, err := machineProviderFromProviderConfig(machine.Spec.ProviderSpec)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to process config for providerSpec: %v", err)
-	}
-
-	devices, _, err := a.packetClient.Devices.List(c.ProjectID, nil)
-	if err != nil {
-		return nil, fmt.Errorf("Error retrieving devices: %v", err)
-	}
-	tag := generateMachineTag(string(machine.UID))
-	for _, device := range devices {
-		if itemInList(device.Tags, tag) {
-			return &device, nil
-		}
-	}
-	return nil, nil
-}
-
-func generateMachineTag(ID string) string {
-	return fmt.Sprintf("%s:%s", machineUIDTag, ID)
-}
-func generateClusterTag(ID string) string {
-	return fmt.Sprintf("%s:%s", clusterIDTag, ID)
-}
-func machineProviderFromProviderConfig(providerConfig clusterv1.ProviderSpec) (*packetconfigv1.PacketMachineProviderConfig, error) {
-	var config packetconfigv1.PacketMachineProviderConfig
-	if err := yaml.Unmarshal(providerConfig.Value.Raw, &config); err != nil {
-		return nil, err
-	}
-	return &config, nil
-}
-
-func itemInList(list []string, item string) bool {
-	for _, elm := range list {
-		if elm == item {
-			return true
-		}
-	}
-	return false
 }
