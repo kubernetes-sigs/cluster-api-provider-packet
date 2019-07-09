@@ -25,6 +25,7 @@ import (
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/cluster"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine/machineconfig"
+	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/deployer"
 	"k8s.io/klog"
 	clusterapis "sigs.k8s.io/cluster-api/pkg/apis"
 	"sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
@@ -71,6 +72,10 @@ func main() {
 	if err != nil {
 		klog.Fatalf("unable to get Packet client: %v", err)
 	}
+	// get a deployer, which is needed at various stages
+	deployer := deployer.New(deployer.Params{
+		Client: client,
+	})
 
 	clusterActuator, err := cluster.NewActuator(cluster.ActuatorParams{
 		ClustersGetter: cs.ClusterV1alpha1(),
@@ -88,6 +93,7 @@ func main() {
 	machineActuator, err := machine.NewActuator(machine.ActuatorParams{
 		MachineConfigGetter: getter,
 		Client:              client,
+		Deployer:            deployer,
 	})
 	if err != nil {
 		klog.Fatalf(err.Error())

@@ -20,8 +20,7 @@ import (
 	"flag"
 
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
-	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine"
-	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine/machineconfig"
+	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/deployer"
 	"k8s.io/klog"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/cmd"
 	"sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
@@ -30,14 +29,7 @@ import (
 func main() {
 	var err error
 
-	machineSetupConfig := flag.String("config", "/etc/machineconfig/machine_configs.yaml", "path to the machine setup config")
 	flag.Parse()
-
-	// get our config file, create a getter for it, and pass it on
-	getter, err := machineconfig.NewFileGetter(*machineSetupConfig)
-	if err != nil {
-		klog.Fatalf(err.Error())
-	}
 
 	// get a packet client
 	client, err := packet.GetClient()
@@ -45,16 +37,11 @@ func main() {
 		klog.Fatalf("unable to get Packet client: %v", err)
 	}
 
-	machineActuator, err := machine.NewActuator(machine.ActuatorParams{
-		MachineConfigGetter: getter,
-		Client:              client,
+	// get a deployer, which is needed at various stages
+	deployer := deployer.New(deployer.Params{
+		Client: client,
 	})
-	if err != nil {
-		klog.Fatalf(err.Error())
-	}
-	if err != nil {
-		klog.Fatalf("Error creating cluster provisioner for packet : %v", err)
-	}
-	common.RegisterClusterProvisioner("packet", machineActuator)
+
+	common.RegisterClusterProvisioner("packet", deployer)
 	cmd.Execute()
 }
