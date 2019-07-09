@@ -38,6 +38,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 )
 
+const (
+	controlPort = 6443
+)
+
 func main() {
 	klog.InitFlags(nil)
 
@@ -75,6 +79,7 @@ func main() {
 	// get a deployer, which is needed at various stages
 	deployer := deployer.New(deployer.Params{
 		Client: client,
+		Port:   controlPort,
 	})
 
 	clusterActuator, err := cluster.NewActuator(cluster.ActuatorParams{

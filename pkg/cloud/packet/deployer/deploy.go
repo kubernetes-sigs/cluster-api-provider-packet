@@ -29,18 +29,21 @@ import (
 
 // Deployer satisfies the ProviderDeployer(https://github.com/kubernetes-sigs/cluster-api/blob/master/cmd/clusterctl/clusterdeployer/clusterdeployer.go) interface.
 type Deployer struct {
-	client *packet.PacketClient
+	client      *packet.PacketClient
+	ControlPort int
 }
 
 // Params is used to create a new deployer.
 type Params struct {
 	Client *packet.PacketClient
+	Port   int
 }
 
 // New returns a new Deployer.
 func New(params Params) *Deployer {
 	return &Deployer{
-		client: params.Client,
+		client:      params.Client,
+		ControlPort: params.Port,
 	}
 }
 
@@ -84,7 +87,7 @@ func (d *Deployer) CoreV1Client(cluster *clusterv1.Cluster) (corev1.CoreV1Interf
 		return nil, fmt.Errorf("failed to retrieve controlplane (GetIP): %+v", err)
 	}
 
-	controlPlaneURL := fmt.Sprintf("https://%s:6443", controlPlaneDNSName)
+	controlPlaneURL := fmt.Sprintf("https://%s:%d", controlPlaneDNSName, d.ControlPort)
 
 	kubeConfig, err := d.GetKubeConfig(cluster, nil)
 	if err != nil {

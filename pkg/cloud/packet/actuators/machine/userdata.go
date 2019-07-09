@@ -22,9 +22,10 @@ type userdataParams struct {
 	CACertificate  string
 	CAPrivateKey   string
 	Role           string
+	Port           int
 }
 
-func parseUserdata(userdata, role string, cluster *clusterv1.Cluster, machine *clusterv1.Machine, image, token string, caCertificate, caKey []byte) (string, error) {
+func parseUserdata(userdata, role string, cluster *clusterv1.Cluster, machine *clusterv1.Machine, image, token string, caCertificate, caKey []byte, port int) (string, error) {
 	params := userdataParams{
 		Cluster:       cluster,
 		Machine:       machine,
@@ -34,6 +35,7 @@ func parseUserdata(userdata, role string, cluster *clusterv1.Cluster, machine *c
 		CACertificate: base64.StdEncoding.EncodeToString(caCertificate),
 		CAPrivateKey:  base64.StdEncoding.EncodeToString(caKey),
 		Role:          role,
+		Port:          port,
 	}
 	vars := masterEnvironmentVariables
 	if role == "node" {

@@ -47,6 +47,7 @@ type Actuator struct {
 	packetClient        *packet.PacketClient
 	machineConfigGetter machineconfig.Getter
 	deployer            *deployer.Deployer
+	controlPort         int
 }
 
 // ActuatorParams holds parameter information for Actuator
@@ -54,6 +55,7 @@ type ActuatorParams struct {
 	MachineConfigGetter machineconfig.Getter
 	Client              *packet.PacketClient
 	Deployer            *deployer.Deployer
+	ControlPort         int
 }
 
 // NewActuator creates a new Actuator
@@ -62,6 +64,7 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 		packetClient:        params.Client,
 		machineConfigGetter: params.MachineConfigGetter,
 		deployer:            params.Deployer,
+		controlPort:         params.ControlPort,
 	}, nil
 }
 
@@ -110,7 +113,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		}
 	}
 
-	userdata, err := parseUserdata(userdataTmpl, role, cluster, machine, machineConfig.OS, token, caCert, caKey)
+	userdata, err := parseUserdata(userdataTmpl, role, cluster, machine, machineConfig.OS, token, caCert, caKey, a.controlPort)
 	if err != nil {
 		return fmt.Errorf("Unable to generate userdata: %v", err)
 	}
