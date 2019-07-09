@@ -13,4 +13,4 @@ spec:
       value:
         apiVersion: "packetprovider/v1alpha1"
         kind: "PacketClusterProviderSpec"
-        project: "$PROJECT_ID"
+        projectID: "$PROJECT_ID"
