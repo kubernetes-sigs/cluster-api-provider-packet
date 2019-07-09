@@ -10,8 +10,8 @@ type PacketMachineProviderConfig struct {
 	metav1.TypeMeta `json:",inline"`
 
 	ProjectID    string   `json:"projectID"`
-	Facilities   []string `json:"facilities"`
-	InstanceType string   `json:"instanceType"`
+	Facilities   []string `json:"facility"`
+	InstanceType string   `json:"machineType"`
 	Tags         []string `json:"tags,omitempty"`
 	OS           string   `json:"os,omitempty"`
 	BillingCycle string   `json:"billingCycle,omitempty"`
