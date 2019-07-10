@@ -102,7 +102,7 @@ func (d *Deployer) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.M
 	if master == nil {
 		return "", fmt.Errorf("cannot get kubeconfig for nil master")
 	}
-	log.Printf("Getting IP of machine %v for cluster %v.", master.Name, cluster.Name)
+	log.Printf("Getting KubeConfig of machine %v for cluster %v.", master.Name, cluster.Name)
 	return "", fmt.Errorf("TODO: Not yet implemented")
 }
 
