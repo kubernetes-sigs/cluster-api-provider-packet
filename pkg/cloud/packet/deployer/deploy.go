@@ -19,14 +19,20 @@ package deployer
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/util"
+	"github.com/packethost/cluster-api-provider-packet/pkg/tokens"
 	"github.com/packethost/packngo"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
+)
+
+const (
+	defaultTokenTTL = 10 * time.Minute
 )
 
 // Deployer satisfies the ProviderDeployer(https://github.com/kubernetes-sigs/cluster-api/blob/master/cmd/clusterctl/clusterdeployer/clusterdeployer.go) interface.
@@ -122,4 +128,17 @@ func (d *Deployer) CoreV1Client(cluster *clusterv1.Cluster) (corev1.CoreV1Interf
 	}
 
 	return corev1.NewForConfig(clientConfig)
+}
+
+func (d *Deployer) NewBootstrapToken(cluster *clusterv1.Cluster) (string, error) {
+	coreClient, err := d.CoreV1Client(cluster)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve corev1 client: %v", err)
+	}
+	// generate a new bootstrap token, then save it as valid
+	token, err := tokens.NewBootstrap(coreClient, defaultTokenTTL)
+	if err != nil {
+		return "", fmt.Errorf("failed to create or save new bootstrap token: %v", err)
+	}
+	return token, nil
 }

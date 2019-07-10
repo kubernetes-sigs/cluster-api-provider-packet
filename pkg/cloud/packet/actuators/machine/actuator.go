@@ -21,21 +21,18 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine/machineconfig"
 	ca "github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/ca"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/deployer"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/util"
-	"github.com/packethost/cluster-api-provider-packet/pkg/tokens"
 	"github.com/packethost/packngo"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
 const (
-	ProviderName    = "packet"
-	defaultTokenTTL = 10 * time.Minute
+	ProviderName = "packet"
 )
 
 // Add RBAC rules to access cluster-api resources
@@ -109,14 +106,9 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		caKey = caCertAndKey.PrivateKey
 		tags = append(tags, util.MasterTag)
 	} else {
-		coreClient, err := a.deployer.CoreV1Client(cluster)
+		token, err = a.deployer.NewBootstrapToken(cluster)
 		if err != nil {
-			return fmt.Errorf("failed to retrieve corev1 client for cluster %q: %v", cluster.Name, err)
-		}
-		// generate a new bootstrap token, then save it as valid
-		token, err = tokens.NewBootstrap(coreClient, defaultTokenTTL)
-		if err != nil {
-			return fmt.Errorf("failed to create or save new bootstrap token: %v", err)
+			return fmt.Errorf("failed to create and save token for cluster %q: %v", cluster.Name, err)
 		}
 		tags = append(tags, util.WorkerTag)
 	}
