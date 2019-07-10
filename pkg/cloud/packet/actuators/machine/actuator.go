@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
@@ -178,8 +179,40 @@ func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machi
 	if machine == nil {
 		return fmt.Errorf("cannot update nil machine")
 	}
+	c, err := util.ClusterProviderFromProviderConfig(cluster.Spec.ProviderSpec)
+	if err != nil {
+		return fmt.Errorf("unable to unpack cluster provider: %v", err)
+	}
+
 	log.Printf("Updating machine %v for cluster %v.", machine.Name, cluster.Name)
-	return fmt.Errorf("TODO: Not yet implemented")
+	// how to update the machine:
+	// - get the current parameters of the machine from the API
+	// - check if anything immutable has changed, in which case we return an error
+	// - check if anything mutable has changed, in which case we update the instance
+	device, err := a.packetClient.GetDevice(machine)
+	if err != nil {
+		return fmt.Errorf("error retrieving machine status %s: %v", machine.UID, err)
+	}
+	if device == nil {
+		return fmt.Errorf("received nil machine")
+	}
+	// check immutable
+	if err := changedImmutable(c.ProjectID, device, machine); err != nil {
+		return err
+	}
+	// check mutable
+	update, err := changedMutable(c.ProjectID, device, machine)
+	if err != nil {
+		return fmt.Errorf("error checking changed mutable information: %v", err)
+	}
+	if update != nil {
+		_, _, err := a.packetClient.Devices.Update(device.ID, update)
+		if err != nil {
+			return fmt.Errorf("failed to update device %s: %v", device.Hostname, err)
+		}
+	}
+
+	return nil
 }
 
 // Exists test for the existance of a machine and is invoked by the Machine Controller
@@ -212,4 +245,51 @@ func (a *Actuator) get(machine *clusterv1.Machine) (*packngo.Device, error) {
 	}
 
 	return nil, fmt.Errorf("Device %s not found", machine.UID)
+}
+
+func changedImmutable(projectID string, device *packngo.Device, machine *clusterv1.Machine) error {
+	errors := []string{}
+	machineConfig, err := util.MachineProviderFromProviderConfig(machine.Spec.ProviderSpec)
+	if err != nil {
+		return fmt.Errorf("Unable to read providerSpec from machine config: %v", err)
+	}
+	// immutable: Facility, MachineType, ProjectID, OS, BillingCycle
+	facility := device.Facility.Code
+	if !util.ItemInList(machineConfig.Facilities, facility) {
+		errors = append(errors, "Facility")
+	}
+	if device.Plan.Name != machineConfig.InstanceType {
+		errors = append(errors, "MachineType")
+	}
+	if projectID != machineConfig.ProjectID {
+		errors = append(errors, "ProjectID")
+	}
+	// it could be indicated in one of several ways
+	if device.OS.Slug != machineConfig.OS && device.OS.Name != machineConfig.OS {
+		errors = append(errors, "OS")
+	}
+	if device.BillingCycle != machineConfig.BillingCycle {
+		errors = append(errors, "BillingCycle")
+	}
+	if len(errors) > 0 {
+		return fmt.Errorf("attempted to change immutable characteristics: %s", strings.Join(errors, ","))
+	}
+	return nil
+}
+func changedMutable(projectID string, device *packngo.Device, machine *clusterv1.Machine) (*packngo.DeviceUpdateRequest, error) {
+	update := packngo.DeviceUpdateRequest{}
+	updated := false
+	// mutable: Hostname (machine.Name), Roles, SshKeys
+	if device.Hostname != machine.Name {
+		// copy it to get a clean pointer
+		newName := machine.Name
+		update.Hostname = &newName
+		updated = true
+	}
+	if updated {
+		return &update, nil
+	}
+	// Roles and SshKeys affect the userdata, which we would update
+	// TODO: Update userdata based on Roles and SshKeys
+	return nil, nil
 }
