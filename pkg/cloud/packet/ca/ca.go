@@ -1,12 +1,10 @@
 package ca
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/pem"
 	"fmt"
 	"math/big"
 	"net"
@@ -16,13 +14,8 @@ import (
 	"sigs.k8s.io/cluster-api/pkg/cert"
 )
 
-const (
-	rsaBits = 2048
-	oneYear = 365 * 24 * time.Hour
-)
-
-// Generate a key and cert
-func Generate(cn, hosts string) ([]byte, *rsa.PrivateKey, error) {
+// GenerateSelfSigned generate a self-signed key and cert
+func GenerateSelfSigned(cn, hosts string) ([]byte, *rsa.PrivateKey, error) {
 	if hosts == "" && cn == "" {
 		return nil, nil, fmt.Errorf("must specify at least one hostname/IP or CN")
 	}
@@ -39,7 +32,7 @@ func Generate(cn, hosts string) ([]byte, *rsa.PrivateKey, error) {
 	notAfter := notBefore.Add(oneYear)
 
 	subject := pkix.Name{
-		Organization: []string{"Zededa"},
+		Organization: []string{"Packet"},
 	}
 	if cn != "" {
 		subject.CommonName = cn
@@ -68,14 +61,14 @@ func Generate(cn, hosts string) ([]byte, *rsa.PrivateKey, error) {
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privKey.PublicKey, privKey)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create certificate: %v", err)
+		return nil, nil, fmt.Errorf("failed to create CA certificate: %v", err)
 	}
 	return derBytes, privKey, nil
 }
 
-// GenerateCertAndKey generate a cert and key and then place it in the appropriate format for sigs.k8s.io/cluster-api/pkg/cert.CertificateAuthority
-func GenerateCertAndKey(cn, hosts string) (*cert.CertificateAuthority, error) {
-	certificate, key, err := Generate(cn, hosts)
+// GenerateSelfSignedCertAndKey generate a self-signed cert and key and then place it in the appropriate format for sigs.k8s.io/cluster-api/pkg/cert.CertificateAuthority
+func GenerateSelfSignedCertAndKey(cn, hosts string) (*cert.CertificateAuthority, error) {
+	certificate, key, err := GenerateSelfSigned(cn, hosts)
 	if err != nil {
 		return nil, err
 	}
@@ -84,22 +77,4 @@ func GenerateCertAndKey(cn, hosts string) (*cert.CertificateAuthority, error) {
 		PrivateKey:  PemEncodeKey(key),
 	}
 	return &ca, nil
-}
-
-// PemEncodeCert take certificate DER bytes and PEM encode them
-func PemEncodeCert(cert []byte) []byte {
-	out := &bytes.Buffer{}
-	pem.Encode(out, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
-	b := make([]byte, out.Len())
-	copy(b, out.Bytes())
-	return b
-}
-
-// PemEncodeKey take an RSA private key and PEM encode it
-func PemEncodeKey(key *rsa.PrivateKey) []byte {
-	out := &bytes.Buffer{}
-	pem.Encode(out, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
-	b := make([]byte, out.Len())
-	copy(b, out.Bytes())
-	return b
 }

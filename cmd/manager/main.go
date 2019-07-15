@@ -84,6 +84,7 @@ func main() {
 
 	clusterActuator, err := cluster.NewActuator(cluster.ActuatorParams{
 		ClustersGetter: cs.ClusterV1alpha1(),
+		Deployer:       deployer,
 	})
 	if err != nil {
 		klog.Fatalf(err.Error())
