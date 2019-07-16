@@ -199,3 +199,7 @@ make manifests
 
 As always with `make`, you can force the rebuilding of a component with `make -B <target>`.
 
+## References
+
+* [kubeadm yaml api](https://godoc.org/k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta2)
+
