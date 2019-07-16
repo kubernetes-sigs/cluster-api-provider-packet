@@ -3,12 +3,12 @@ items:
   - image: ubuntu_18_04
     versions:
       kubelet: 1.14.3
-    containerRuntime: docker-ce=18.03.1~ce~3-0~ubuntu
+    containerRuntime: docker-ce=5:18.09.7~3-0~ubuntu-bionic
   - image: ubuntu_18_04
     versions:
       kubelet: 1.14.3
       controlPlane: 1.14.3
-    containerRuntime: docker-ce=18.03.1~ce~3-0~ubuntu
+    containerRuntime: docker-ce=5:18.09.7~3-0~ubuntu-bionic
   userdata: |
     set -e
     set -x
@@ -156,6 +156,9 @@ items:
     EOF
   
       install_custom_ca
+      
+      # running with swap is not supported
+      swapoff -a
       kubeadm init --config /etc/kubernetes/kubeadm_config.yaml
       # Apply Weave CNI
       for tries in $(seq 1 60); do

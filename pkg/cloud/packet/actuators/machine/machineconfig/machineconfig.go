@@ -94,7 +94,7 @@ func findMatchingConfig(configs *configList, params *ConfigParams) (*config, str
 				continue
 			}
 			matchingConfigs = append(matchingConfigs, conf)
-			containerRuntime = params.ContainerRuntime
+			containerRuntime = validParams.ContainerRuntime
 		}
 	}
 

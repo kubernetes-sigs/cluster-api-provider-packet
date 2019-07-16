@@ -96,6 +96,9 @@ func (d *Deployer) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine)
 	if device == nil {
 		return "", fmt.Errorf("machine does not exist: %s", machineRef)
 	}
+	if device.Network == nil || len(device.Network) == 0 || device.Network[0].Address == "" {
+		return "", fmt.Errorf("machine does not yet have an IP address: %s", machineRef)
+	}
 	// TODO: validate that this address exists, so we don't hit nil pointer
 	// TODO: check which address to return
 	// TODO: check address format (cidr, subnet, etc.)
