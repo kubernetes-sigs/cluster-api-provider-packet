@@ -164,7 +164,7 @@ func (d *Deployer) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.M
 		Clusters: map[string]*clientcmdapi.Cluster{
 			clusterName: {
 				Server:                   server,
-				CertificateAuthorityData: ca.PemEncodeCert(caCertKey.Certificate),
+				CertificateAuthorityData: caCertKey.Certificate,
 			},
 		},
 		Contexts: map[string]*clientcmdapi.Context{
