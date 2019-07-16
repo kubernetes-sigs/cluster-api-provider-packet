@@ -85,7 +85,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	}
 	// generate userdata from the template
 	// first we need to find the correct userdata
-	userdataTmpl, err := a.machineConfigGetter.GetUserdata(machineConfig.OS, machine.Spec.Versions)
+	userdataTmpl, containerRuntime, err := a.machineConfigGetter.GetUserdata(machineConfig.OS, machine.Spec.Versions)
 	if err != nil {
 		return fmt.Errorf("Unable to read userdata: %v", err)
 	}
@@ -116,7 +116,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		tags = append(tags, util.WorkerTag)
 	}
 
-	userdata, err := parseUserdata(userdataTmpl, role, cluster, machine, machineConfig.OS, token, caCert, caKey, a.controlPort)
+	userdata, err := parseUserdata(userdataTmpl, role, cluster, machine, machineConfig.OS, token, caCert, caKey, a.controlPort, containerRuntime)
 	if err != nil {
 		return fmt.Errorf("Unable to generate userdata: %v", err)
 	}

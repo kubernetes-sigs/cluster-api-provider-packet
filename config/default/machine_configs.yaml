@@ -3,10 +3,12 @@ items:
   - image: ubuntu_18_04
     versions:
       kubelet: 1.14.3
+    containerRuntime: docker-ce=18.03.1~ce~3-0~ubuntu
   - image: ubuntu_18_04
     versions:
       kubelet: 1.14.3
       controlPlane: 1.14.3
+    containerRuntime: docker-ce=18.03.1~ce~3-0~ubuntu
   userdata: |
     set -e
     set -x
@@ -14,9 +16,10 @@ items:
     ARCH=amd64
   
     # Obtain server IP addresses.
-    HOSTNAME=$(curl -s https://metadata.packet.net/2009-04-04/meta-data/hostname)
-    PRIVATEIP=$(curl -s https://metadata.packet.net/2009-04-04/meta-data/local-ipv4)
-    PUBLICIP=$(curl -s https://metadata.packet.net/2009-04-04/meta-data/public-ipv4)
+    METADATA="https://metadata.packet.net/2009-04-04/meta-data"
+    HOSTNAME=$(curl -s ${METADATA}/hostname)
+    PRIVATEIP=$(curl -s ${METADATA}/local-ipv4)
+    PUBLICIP=$(curl -s ${METADATA}/public-ipv4)
 
     CA_CERT_DIR=/etc/kubernetes/pki
   
@@ -60,14 +63,7 @@ items:
            $(lsb_release -cs) \
            stable"
   
-        export CR_PKG=''
-        if [ -n "$CR_VERSION" ]; then
-            export CR_PKG="$CR_PACKAGE=$CR_VERSION"
-        else
-            export CR_PKG="$CR_PACKAGE"
-        fi
-  
-        apt-get install -y ${CR_PKG}
+        apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" ${CR_PACKAGE}
         echo 'DOCKER_OPTS="--iptables=false --ip-masq=false"' > /etc/default/docker
         systemctl daemon-reload
         systemctl enable docker
@@ -131,26 +127,32 @@ items:
       # Set up kubeadm config file to pass parameters to kubeadm init.
       touch /etc/kubernetes/kubeadm_config.yaml
       cat > /etc/kubernetes/kubeadm_config.yaml <<EOF
-      apiVersion: kubeadm.k8s.io/v1alpha1
-      kind: MasterConfiguration
-      kubernetesVersion: v${CONTROL_PLANE_VERSION}
-      token: ${TOKEN}
-      api:
-        advertiseAddress: ${PUBLICIP}
-        bindPort: ${PORT}
-      networking:
-        serviceSubnet: ${SERVICE_CIDR}
-        podSubnet: ${POD_CIDR}
-      controllerManagerExtraArgs:
+    apiVersion: kubeadm.k8s.io/v1beta1
+    kind: InitConfiguration
+    localApiEndpoint:
+      advertiseAddress: ${PUBLICIP}
+      bindPort: ${PORT}
+    nodeRegistration:
+      name: ${PUBLICIP}
+    ---
+    apiVersion: kubeadm.k8s.io/v1beta1
+    kind: ClusterConfiguration
+    certificatesDir: ${CA_CERT_DIR}
+    kubernetesVersion: v${CONTROL_PLANE_VERSION}
+    networking:
+      serviceSubnet: ${SERVICE_CIDR}
+      podSubnet: ${POD_CIDR}
+    controllerManager:
+      extraArgs:
         cluster-cidr: ${POD_CIDR}
         service-cluster-ip-range: ${SERVICE_CIDR}
         allocate-node-cidrs: "true"
-      apiServerCertSANs:
-      - ${PUBLICIP}
-      - ${PRIVATEIP}
-      - ${HOSTNAME}
-      - 127.0.0.1
-      certificatesDir: ${CA_CERT_DIR}
+    apiServer:
+      certSANs:
+        - ${PUBLICIP}
+        - ${PRIVATEIP}
+        - ${HOSTNAME}
+        - 127.0.0.1
     EOF
   
       install_custom_ca

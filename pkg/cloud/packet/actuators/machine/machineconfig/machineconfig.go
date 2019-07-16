@@ -11,7 +11,8 @@ import (
 )
 
 type Getter interface {
-	GetUserdata(string, clusterv1.MachineVersionInfo) (string, error)
+	// GetUserdata given a requested OS and machine version info, get: userdata, container runtime package with optional version, error
+	GetUserdata(string, clusterv1.MachineVersionInfo) (string, string, error)
 }
 
 // config is a single machine setup config that has userdata and parameters such as image name.
@@ -30,6 +31,8 @@ type configList struct {
 type ConfigParams struct {
 	Image    string                       `json:"image"`
 	Versions clusterv1.MachineVersionInfo `json:"versions"`
+	// ContainerRuntime is a the name of the container runtime package to install, if any
+	ContainerRuntime string `json:"containerRuntime"`
 }
 
 type GetterFile struct {
@@ -37,30 +40,30 @@ type GetterFile struct {
 }
 
 // GetUserdata gets the userdata for the given machine spec, or an error if none is found
-func (g *GetterFile) GetUserdata(image string, versions clusterv1.MachineVersionInfo) (string, error) {
+func (g *GetterFile) GetUserdata(image string, versions clusterv1.MachineVersionInfo) (string, string, error) {
 	if image == "" {
-		return "", fmt.Errorf("invalid empty image requested")
+		return "", "", fmt.Errorf("invalid empty image requested")
 	}
 	f, err := os.Open(g.path)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer f.Close()
 	c, err := loadConfigs(f)
 	if err != nil {
-		return "", fmt.Errorf("unable to load configs from file %s: %v", g.path, err)
+		return "", "", fmt.Errorf("unable to load configs from file %s: %v", g.path, err)
 	}
 	// now find the config we want
 	params := &ConfigParams{
 		Image:    image,
 		Versions: versions,
 	}
-	config, err := findMatchingConfig(c, params)
+	config, containerRuntime, err := findMatchingConfig(c, params)
 	if err != nil {
-		return "", fmt.Errorf("unable to find matching config: %v", err)
+		return "", "", fmt.Errorf("unable to find matching config: %v", err)
 	}
 
-	return config.Userdata, nil
+	return config.Userdata, containerRuntime, nil
 
 }
 
@@ -79,8 +82,9 @@ func loadConfigs(reader io.Reader) (*configList, error) {
 	return c, nil
 }
 
-func findMatchingConfig(configs *configList, params *ConfigParams) (*config, error) {
+func findMatchingConfig(configs *configList, params *ConfigParams) (*config, string, error) {
 	matchingConfigs := make([]config, 0)
+	containerRuntime := ""
 	for _, conf := range configs.Items {
 		for _, validParams := range conf.Params {
 			if params.Image != validParams.Image {
@@ -90,14 +94,15 @@ func findMatchingConfig(configs *configList, params *ConfigParams) (*config, err
 				continue
 			}
 			matchingConfigs = append(matchingConfigs, conf)
+			containerRuntime = params.ContainerRuntime
 		}
 	}
 
 	if len(matchingConfigs) == 1 {
-		return &matchingConfigs[0], nil
+		return &matchingConfigs[0], containerRuntime, nil
 	}
 
-	return nil, fmt.Errorf("could not find setup configs for params %#v", params)
+	return nil, "", fmt.Errorf("could not find setup configs for params %#v", params)
 }
 
 func NewFileGetter(p string) (*GetterFile, error) {

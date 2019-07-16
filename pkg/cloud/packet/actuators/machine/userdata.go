@@ -18,14 +18,13 @@ type userdataParams struct {
 	PodCIDR        string
 	ServiceCIDR    string
 	CRPackage      string
-	CRVersion      string
 	CACertificate  string
 	CAPrivateKey   string
 	Role           string
 	Port           int
 }
 
-func parseUserdata(userdata, role string, cluster *clusterv1.Cluster, machine *clusterv1.Machine, image, token string, caCertificate, caKey []byte, port int) (string, error) {
+func parseUserdata(userdata, role string, cluster *clusterv1.Cluster, machine *clusterv1.Machine, image, token string, caCertificate, caKey []byte, port int, containerRuntime string) (string, error) {
 	params := userdataParams{
 		Cluster:       cluster,
 		Machine:       machine,
@@ -36,6 +35,7 @@ func parseUserdata(userdata, role string, cluster *clusterv1.Cluster, machine *c
 		CAPrivateKey:  base64.StdEncoding.EncodeToString(caKey),
 		Role:          role,
 		Port:          port,
+		CRPackage:     containerRuntime,
 	}
 	vars := masterEnvironmentVariables
 	if role == "node" {
@@ -83,6 +83,7 @@ SERVICE_CIDR={{ .ServiceCIDR }}
 MASTER_CA_CERTIFICATE={{ .CACertificate }}
 MASTER_CA_PRIVATE_KEY={{ .CAPrivateKey }}
 ROLE={{ .Role }}
+CR_PACKAGE={{ .CRPackage }}
 `
 	// nodeEnvironmentVariables is the environment variables template for worker instances.
 	nodeEnvironmentVariables = `#!/bin/bash
@@ -95,5 +96,6 @@ CLUSTER_DNS_DOMAIN={{ .Cluster.Spec.ClusterNetwork.ServiceDomain }}
 POD_CIDR={{ .PodCIDR }}
 SERVICE_CIDR={{ .ServiceCIDR }}
 ROLE={{ .Role }}
+CR_PACKAGE={{ .CRPackage }}
 `
 )
