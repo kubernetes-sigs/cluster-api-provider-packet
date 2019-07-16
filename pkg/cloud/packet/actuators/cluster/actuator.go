@@ -54,7 +54,7 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	log.Printf("Reconciling cluster %v.", cluster.Name)
 	// ensure that we have a CA cert/key and save it
 	if _, ok := a.deployer.Certs[cluster.Name]; !ok {
-		caCertAndKey, err := ca.GenerateSelfSignedCertAndKey(cluster.Name, "")
+		caCertAndKey, err := ca.GenerateCACertAndKey(cluster.Name, "")
 		if err != nil {
 			return fmt.Errorf("unable to generate CA cert and key: %v", err)
 		}

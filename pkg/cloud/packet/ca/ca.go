@@ -14,8 +14,8 @@ import (
 	"sigs.k8s.io/cluster-api/pkg/cert"
 )
 
-// GenerateSelfSigned generate a self-signed key and cert
-func GenerateSelfSigned(cn, hosts string) ([]byte, *rsa.PrivateKey, error) {
+// GenerateCA generate a self-signed key and cert
+func GenerateCA(cn, hosts string) ([]byte, *rsa.PrivateKey, error) {
 	if hosts == "" && cn == "" {
 		return nil, nil, fmt.Errorf("must specify at least one hostname/IP or CN")
 	}
@@ -68,9 +68,9 @@ func GenerateSelfSigned(cn, hosts string) ([]byte, *rsa.PrivateKey, error) {
 	return derBytes, privKey, nil
 }
 
-// GenerateSelfSignedCertAndKey generate a self-signed cert and key and then place it in the appropriate format for sigs.k8s.io/cluster-api/pkg/cert.CertificateAuthority
-func GenerateSelfSignedCertAndKey(cn, hosts string) (*cert.CertificateAuthority, error) {
-	certificate, key, err := GenerateSelfSigned(cn, hosts)
+// GenerateCACertAndKey generate a self-signed cert and key and then place it in the appropriate format for sigs.k8s.io/cluster-api/pkg/cert.CertificateAuthority
+func GenerateCACertAndKey(cn, hosts string) (*cert.CertificateAuthority, error) {
+	certificate, key, err := GenerateCA(cn, hosts)
 	if err != nil {
 		return nil, err
 	}
