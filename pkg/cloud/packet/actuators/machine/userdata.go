@@ -39,6 +39,10 @@ func parseUserdata(userdata, role string, cluster *clusterv1.Cluster, machine *c
 	}
 	vars := masterEnvironmentVariables
 	if role == "node" {
+		// is the cluster ready?
+		if len(cluster.Status.APIEndpoints) == 0 {
+			return "", fmt.Errorf("cluster not yet ready, has 0 API endpoints")
+		}
 		params.MasterEndpoint = endpoint(cluster.Status.APIEndpoints[0])
 		vars = nodeEnvironmentVariables
 	}
