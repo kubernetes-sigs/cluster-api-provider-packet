@@ -43,9 +43,11 @@ func GenerateSelfSigned(cn, hosts string) ([]byte, *rsa.PrivateKey, error) {
 		NotBefore:    notBefore,
 		NotAfter:     notAfter,
 
-		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		MaxPathLenZero:        true,
 		BasicConstraintsValid: true,
+		MaxPathLen:            0,
+		IsCA:                  true,
 	}
 	hostnames := strings.Split(hosts, ",")
 	for _, h := range hostnames {
