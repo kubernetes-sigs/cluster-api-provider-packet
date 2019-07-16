@@ -199,6 +199,24 @@ make manifests
 
 As always with `make`, you can force the rebuilding of a component with `make -B <target>`.
 
+## Running locally
+
+You can run the `manager` locally on your own laptop in order to ease and speed development, or even run it through a debugger. The steps are:
+
+1. Create a kubernetes bootstrap cluster, e.g. kind
+1. Set your `KUBECONFIG` to point to that cluster, e.g. `export KUBECONFIG=...`
+1. Create a local OS/arch `manager` binary, essentially `make manager`. This will save it as `bin/manager-<os>-<arch>`, e.g. `bin/manager-linux-arm64` or `bin/manager-darwin-amd64`
+1. Generate your yaml `./generate-yaml.sh`
+1. Run the manager against the cluster with the local configs, `bin/manager-darwin-amd64 -config ./config/default/machine_configs.yaml -ca-cache ./out/cache.json`
+
+In the above example:
+
+* We are running on macOS (`darwin`) and an Intel x86_64 (`amd64`)
+* We are using the default config file `./config/default/machine_configs.yaml`
+* We are caching the CA keys and certs in `out/cache.json`
+
+Caching the CA caches the certs **and the keys**. Only do this in test mode, or if you really are sure what you are doing. The purpose, in this case, is to allow you to stop and start the process, and pick up existing certs.
+
 ## References
 
 * [kubeadm yaml api](https://godoc.org/k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta2)

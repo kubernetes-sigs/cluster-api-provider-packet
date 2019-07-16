@@ -38,9 +38,12 @@ func main() {
 	}
 
 	// get a deployer, which is needed at various stages
-	deployer := deployer.New(deployer.Params{
+	deployer, err := deployer.New(deployer.Params{
 		Client: client,
 	})
+	if err != nil {
+		klog.Fatalf("unable to get deployer: %v", err)
+	}
 
 	common.RegisterClusterProvisioner("packet", deployer)
 	cmd.Execute()

@@ -53,12 +53,15 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	log.Printf("Reconciling cluster %v.", cluster.Name)
 	// ensure that we have a CA cert/key and save it
-	if _, ok := a.deployer.Certs[cluster.Name]; !ok {
+	if cert, _ := a.deployer.GetCA(cluster.Name); cert == nil {
 		caCertAndKey, err := ca.GenerateCACertAndKey(cluster.Name, "")
 		if err != nil {
 			return fmt.Errorf("unable to generate CA cert and key: %v", err)
 		}
-		a.deployer.Certs[cluster.Name] = caCertAndKey
+		err = a.deployer.PutCA(cluster.Name, caCertAndKey)
+		if err != nil {
+			return fmt.Errorf("unable to save CA cert and key: %v", err)
+		}
 	}
 	return nil
 }
@@ -67,6 +70,6 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 func (a *Actuator) Delete(cluster *clusterv1.Cluster) error {
 	log.Printf("Deleting cluster %v.", cluster.Name)
 	// remove the CA cert key
-	delete(a.deployer.Certs, cluster.Name)
+	a.deployer.DeleteCA(cluster.Name)
 	return nil
 }
