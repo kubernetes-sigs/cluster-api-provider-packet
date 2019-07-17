@@ -123,6 +123,9 @@ items:
         chmod 0600 ${CA_KEY_PATH}
     }
   
+    # running with swap is not supported
+    swapoff -a
+
     if [ "$ROLE" = "master" ]; then
       # Set up kubeadm config file to pass parameters to kubeadm init.
       touch /etc/kubernetes/kubeadm_config.yaml
@@ -157,8 +160,6 @@ items:
   
       install_custom_ca
       
-      # running with swap is not supported
-      swapoff -a
       kubeadm init --config /etc/kubernetes/kubeadm_config.yaml
       # Apply Weave CNI
       for tries in $(seq 1 60); do
