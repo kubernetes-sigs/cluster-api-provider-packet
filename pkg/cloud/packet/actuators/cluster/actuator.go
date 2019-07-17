@@ -19,6 +19,7 @@ package cluster
 import (
 	"fmt"
 	"log"
+	"reflect"
 
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/ca"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/deployer"
@@ -52,6 +53,8 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 // Reconcile reconciles a cluster and is invoked by the Cluster Controller
 func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	log.Printf("Reconciling cluster %v.", cluster.Name)
+	// save the original status
+	clusterCopy := cluster.DeepCopy()
 	// ensure that we have a CA cert/key and save it
 	if cert, _ := a.deployer.GetCA(cluster.Name); cert == nil {
 		caCertAndKey, err := ca.GenerateCACertAndKey(cluster.Name, "")
@@ -63,6 +66,39 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 			return fmt.Errorf("unable to save CA cert and key: %v", err)
 		}
 	}
+	// ensure that we save the correct IP address for the cluster
+	address, err := a.deployer.GetIP(cluster, nil)
+	_, isNoMachine := err.(*deployer.MachineNotFound)
+	_, isNoIP := err.(*deployer.MachineNoIP)
+	switch {
+	case err != nil && isNoMachine:
+		return nil
+	case err != nil && isNoIP:
+		return nil
+	case err != nil:
+		return err
+	case err == nil:
+		cluster.Status.APIEndpoints = []clusterv1.APIEndpoint{
+			{
+				Host: address,
+				Port: a.deployer.ControlPort,
+			},
+		}
+	}
+
+	var clusterClient client.ClusterInterface
+	if a.clustersGetter != nil {
+		clusterClient = a.clustersGetter.Clusters(cluster.Namespace)
+	}
+	if !reflect.DeepEqual(cluster.Status, clusterCopy.Status) {
+		log.Printf("saving updated cluster status %s", cluster.Name)
+		if _, err := clusterClient.UpdateStatus(cluster); err != nil {
+			msg := fmt.Sprintf("failed to save updated cluster status %s: %v", cluster.Name, err)
+			log.Printf(msg)
+			return fmt.Errorf(msg)
+		}
+	}
+
 	return nil
 }
 
