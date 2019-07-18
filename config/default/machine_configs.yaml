@@ -92,17 +92,6 @@ items:
     # kubeadm uses 10th IP as DNS server
     CLUSTER_DNS_SERVER=$(prips ${SERVICE_CIDR} | head -n 11 | tail -n 1)
   
-    # add cloud provider args.
-    touch /etc/systemd/system/kubelet.service.d/20-kubelet.conf
-    cat > /etc/systemd/system/kubelet.service.d/20-kubelet.conf <<EOF
-    [Service]
-    Environment="KUBELET_NETWORK_ARGS=--network-plugin=cni"
-    Environment="KUBELET_DNS_ARGS=--resolv-conf=/run/systemd/resolve/resolv.conf --cluster-dns=${CLUSTER_DNS_SERVER} --cluster-domain=${CLUSTER_DNS_DOMAIN} --node-ip=${PRIVATEIP}"
-    Environment="KUBELET_EXTRA_ARGS=--allow-privileged=true --cloud-provider=external --authentication-token-webhook=true --read-only-port=0"
-    EOF
-    systemctl daemon-reload
-    systemctl restart kubelet.service
-  
     function install_custom_ca () {
         if [ ! -n "$MASTER_CA_CERTIFICATE" ]; then
             return
@@ -137,6 +126,15 @@ items:
       bindPort: ${PORT}
     nodeRegistration:
       name: ${HOSTNAME}
+      kubeletExtraArgs: 
+        #resolv-conf: /run/systemd/resolve/resolv.conf
+        cluster-dns: ${CLUSTER_DNS_SERVER}
+        cluster-domain: ${CLUSTER_DNS_DOMAIN}
+        node-ip: ${PRIVATEIP}
+        allow-privileged: "true"
+        cloud-provider: external 
+        authentication-token-webhook: "true"
+        read-only-port: "0"
     ---
     apiVersion: kubeadm.k8s.io/v1beta1
     kind: ClusterConfiguration
@@ -167,6 +165,23 @@ items:
           sleep 1
       done
     else
+      touch /etc/kubernetes/kubeadm_config.yaml
+      cat > /etc/kubernetes/kubeadm_config.yaml <<EOF
+    apiVersion: kubeadm.k8s.io/v1beta1
+    kind: JoinConfiguration
+    nodeRegistration:
+      name: ${HOSTNAME}
+      kubeletExtraArgs: 
+        #resolv-conf: /run/systemd/resolve/resolv.conf
+        cluster-dns: ${CLUSTER_DNS_SERVER}
+        cluster-domain: ${CLUSTER_DNS_DOMAIN}
+        node-ip: ${PRIVATEIP}
+        allow-privileged: "true"
+        cloud-provider: external 
+        authentication-token-webhook: "true"
+        read-only-port: "0"
+    EOF
+    
       export ENDPOINT=''
       if [ -n "$MASTER_PRIVATE" ]; then
           export ENDPOINT=$MASTER_PRIVATE
