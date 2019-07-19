@@ -20,12 +20,17 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"time"
 
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/ca"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/deployer"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
+	controllerError "sigs.k8s.io/cluster-api/pkg/controller/error"
 )
+
+// if the control plane is not ready, wait 15 seconds and try again
+const waitForControlPlaneMachineDuration = 15 * time.Second
 
 // Add RBAC rules to access cluster-api resources
 //+kubebuilder:rbac:groups=cluster.k8s.io,resources=clusters;clusters/status,verbs=get;list;watch;update
@@ -72,9 +77,9 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	_, isNoIP := err.(*deployer.MachineNoIP)
 	switch {
 	case err != nil && isNoMachine:
-		return nil
+		return &controllerError.RequeueAfterError{RequeueAfter: waitForControlPlaneMachineDuration}
 	case err != nil && isNoIP:
-		return nil
+		return &controllerError.RequeueAfterError{RequeueAfter: waitForControlPlaneMachineDuration}
 	case err != nil:
 		return err
 	case err == nil:
