@@ -161,7 +161,7 @@ items:
       kubeadm init --config /etc/kubernetes/kubeadm_config.yaml
       # Apply Weave CNI
       for tries in $(seq 1 60); do
-          kubectl --kubeconfig /etc/kubernetes/admin.conf apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')" && break
+          kubectl --kubeconfig /etc/kubernetes/admin.conf apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')&env.IPALLOC_RANGE=${POD_CIDR}" && break
           sleep 1
       done
     else
