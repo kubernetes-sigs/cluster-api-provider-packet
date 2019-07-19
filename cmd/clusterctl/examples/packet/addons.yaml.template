@@ -1,5 +1,154 @@
 # Note: kubectl apply the generated file after the cluster is provisioned
-# todo: csi and ccm here!!
+# todo: csi here!!
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: packet-cloud-controller-manager
+  namespace: kube-system
+  labels:
+    app: packet-cloud-controller-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: packet-cloud-controller-manager
+  template:
+    metadata:
+      labels:
+        app: packet-cloud-controller-manager
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ''
+    spec:
+      dnsPolicy: Default
+      hostNetwork: true
+      serviceAccountName: cloud-controller-manager
+      tolerations:
+        # this taint is set by all kubelets running `--cloud-provider=external`
+        # so we should tolerate it to schedule the packet ccm
+        - key: "node.cloudprovider.kubernetes.io/uninitialized"
+          value: "true"
+          effect: "NoSchedule"
+        - key: "CriticalAddonsOnly"
+          operator: "Exists"
+        - key: "node.kubernetes.io/not-ready"
+          effect: "NoSchedule"
+        # cloud controller manager should be able to run on masters
+        - key: "node-role.kubernetes.io/master"
+          effect: NoSchedule
+      containers:
+      - image: packethost/packet-ccm:v0.0.4
+        name: packet-cloud-controller-manager
+        command:
+          - "./packet-cloud-controller-manager"
+          - "--cloud-provider=packet"
+          - "--leader-elect=false"
+          - "--allow-untagged-cloud=true"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 50Mi
+        env:
+          - name: PACKET_AUTH_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: packet-cloud-config
+                key: apiKey
+          - name: PACKET_PROJECT_ID
+            valueFrom:
+              secretKeyRef:
+                name: packet-cloud-config
+                key: projectID
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cloud-controller-manager
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: "true"
+  name: system:cloud-controller-manager
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - nodes/status
+  verbs:
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services/status
+  verbs:
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumes
+  verbs:
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - endpoints
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+  - update
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: system:cloud-controller-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:cloud-controller-manager
+subjects:
+- kind: ServiceAccount
+  name: cloud-controller-manager
+  namespace: kube-system
 ---
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
