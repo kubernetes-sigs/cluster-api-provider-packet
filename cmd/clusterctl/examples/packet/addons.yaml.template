@@ -52,12 +52,12 @@ spec:
           - name: PACKET_AUTH_TOKEN
             valueFrom:
               secretKeyRef:
-                name: packet-cloud-config
+                name: cluster-api-provider-packet-credentials
                 key: apiKey
           - name: PACKET_PROJECT_ID
             valueFrom:
               secretKeyRef:
-                name: packet-cloud-config
+                name: cluster-api-provider-packet-credentials
                 key: projectID
 ---
 apiVersion: v1
