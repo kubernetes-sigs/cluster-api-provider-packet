@@ -150,25 +150,12 @@ subjects:
   name: cloud-controller-manager
   namespace: kube-system
 ---
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-  name: standard
-  annotations:
-    storageclass.kubernetes.io/is-default-class: "true"
-provisioner: kubernetes.io/gce-pd
-parameters:
-  type: pd-standard
----
 apiVersion: v1
-kind: ConfigMap
+kind: Secret
 metadata:
-  name: ingress-controller-config
+  name: cluster-api-provider-packet-credentials
   namespace: kube-system
-data:
-  gce.conf: |
-    [global]
-    token-url = nil
-    network = default
-    project-id = $GCLOUD_PROJECT
-    node-tags = $CLUSTER_NAME-worker
+stringData:
+  apiKey: "$PACKET_API_KEY"
+  projectID: "$PACKET_PROJECT_ID"
+type: Opaque

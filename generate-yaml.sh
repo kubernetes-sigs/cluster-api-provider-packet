@@ -163,6 +163,8 @@ cat $CLUSTER_TEMPLATE_FILE \
 
 cat $ADDON_TEMPLATE_FILE \
   | sed -e "s/\$CLUSTER_NAME/$CLUSTER_NAME/" \
+  | sed -e "s/\$PACKET_PROJECT_ID/$PACKET_PROJECT_ID/" \
+  | sed -e "s/\$PACKET_API_KEY/$PACKET_API_KEY/" \
   > $ADDON_GENERATED_FILE
 
 echo -e "\nYour cluster name is '${CLUSTER_NAME}'"

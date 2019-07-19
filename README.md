@@ -38,7 +38,7 @@ To deploy a cluster:
    * `cluster.yaml`
    * `machines.yaml`
    * `provider-components.yaml` - note that this file _will_ contain your secrets, specifically `PACKET_API_KEY`, to be loaded into the cluster
-   * `addons.yaml` 
+   * `addons.yaml` - note that this file _will_ contain your secrets, specifically `PACKET_API_KEY`, to be loaded into the cluster
 1. If desired, edit the following files:
    * `cluster.yaml` - to change parameters or settings, including network CIDRs
    * `machines.yaml` - to change parameters or settings, including machine types and quantity
@@ -68,6 +68,14 @@ Run `clusterctl create cluster --help` for more options, for example to use an e
 1. Deploy add-on components, e.g. the [packet cloud-controller-manager](https://github.com/packethost/packet-ccm) and the [packet cloud storage interface provider](https://github.com/packethost/csi-packet)
 1. If a new bootstrap cluster was created, terminate it
 
+#### About Those Secrets
+
+Notice that the API key is load into _two_ separate files, `provider-components.yaml` and `addons.yaml`. This is unfortunately necessary.
+
+* `provider-components.yaml` - needs the secret to run the `manager` that creates and destroys nodes.
+* `addons.yaml` - needs the secret to run the Packet cloud controller manager.
+
+Each of these runs in a distinct namespace, which means that each needs it in a separate kubernetes `Secret`. In the future, we may merge the namespaces or, more likely, create an authentication service that gives out credentials.
 
 ### Deploying Manually
 
