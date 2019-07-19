@@ -88,8 +88,7 @@ kind: Secret
 metadata:
   name: credentials
   namespace: system
-type: Opaque
 stringData:
-  # these are stubs that are replaced by clusterctl
-  apiKey: "apiKey"
-  projectID: "projectID"
+  apiKey: $PACKET_API_KEY
+  projectID: $PACKET_PROJECT_ID
+type: Opaque

@@ -26,10 +26,10 @@ spec:
           type: string
         metadata:
           type: object
-        project:
+        projectID:
           type: string
       required:
-      - project
+      - projectID
   version: v1alpha1
 status:
   acceptedNames:

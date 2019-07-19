@@ -47,6 +47,9 @@ spec:
             type: string
           type: array
       required:
+      - OS
+      - projectID
+      - billingCycle
       - machineType
   version: v1alpha1
 status:

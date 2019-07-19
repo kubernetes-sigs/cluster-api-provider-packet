@@ -31,7 +31,7 @@ OS ?= $(BUILDOS)
 
 # Image URL to use all building/pushing image targets
 IMG ?= packethost/cluster-api-provider-packet:latest
-PROVIDERYAML ?= provider-components.yaml
+PROVIDERYAML ?= provider-components.yaml.template
 CLUSTERCTL ?= bin/clusterctl-$(OS)-$(ARCH)
 MANAGER ?= bin/manager-$(OS)-$(ARCH)
 KUBECTL ?= kubectl
@@ -66,7 +66,8 @@ install: manifests
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
-	cat provider-components.yaml | kubectl apply -f -
+	generate-yaml.sh
+	cat out/packet/provider-components.yaml | kubectl apply -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: $(PROVIDERYAML)

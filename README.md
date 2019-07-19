@@ -37,7 +37,7 @@ To deploy a cluster:
 1. Create the config files you need via `./generate-yaml.sh`. This will generate the following files in [out/packet](./out/packet):
    * `cluster.yaml`
    * `machines.yaml`
-   * `provider-components.yaml`
+   * `provider-components.yaml` - note that this file _will_ contain your secrets, specifically `PACKET_API_KEY`, to be loaded into the cluster
    * `addons.yaml` 
 1. If desired, edit the following files:
    * `cluster.yaml` - to change parameters or settings, including network CIDRs
@@ -62,7 +62,6 @@ Run `clusterctl create cluster --help` for more options, for example to use an e
    * creating a new one using [kind](https://github.com/kubernetes-sigs/kind)
    * connecting using the provided kubeconfig
 1. Deploy the provider components in `provider-components.yaml`
-1. Update the secret in the cluster with your credentials based on the environment variables set earlier
 1. Create a master node on Packet, download the `kubeconfig` file
 1. Connect to the master and deploy the controllers
 1. Create worker nodes
@@ -74,17 +73,20 @@ Run `clusterctl create cluster --help` for more options, for example to use an e
 
 If you _really_ want to deploy manually, rather than using `clusterctl`, do the following. This assumes that you have generated the yaml files as required.
 
-1. Ensure you have a cluster running
-1. Edit the `provider-components.yaml` to update the secret at the very end with the real values for the project ID and API key
+1. Ensure you have a bootstrap cluster running
+1. Run `./generate-yaml.sh` per the instructions above
 1. Deploy the manager controller: `kubectl apply -f provider-components.yaml`
 1. Deploy the cluster: `kubectl apply -f cluster.yaml`
 1. Deploy the machines: `kubectl apply -f machines.yaml`
 1. Deploy the addons: `kubectl apply -f addons.yaml`
+1. Create a `kubeconfig` file for the workload cluster
+1. "Pivot" to the workload cluster by switching to the new kubeconfig: `export KUBECONFIG=kubeconfig`
+1. Reapply all of the components: `kubectl apply -f provider-components.yaml cluster.yaml machines.yaml addons.yaml`
+1. Shut down the bootstrap cluster, if desired
 
 Note that, unlike `clusterctl`, this method will not take care of the following:
 
 * create a bootstrap cluster
-* inject the actual secret values
 * pivot the control from the bootstrap cluster to the newly started cluster
 * remove the bootstrap cluster
 
@@ -106,6 +108,7 @@ The components deployed via the `yaml` files are the following:
   * all of the necessary `ClusterRole`, `ClusterRoleBinding`, `ServiceAccount` to run the controllers
   * Packet-specific `manager` binary, in a `StatefulSet`, whose control loop manages the `Cluster` and `MachineDeployment` resources, and creates, updates or removes `Machine` resources
   * Cluster-API-generic `controller` binary, in a `StatefulSet`, whose control loop manages the `Machine` resources
+  * `Secret` with Packet credentials
 
 As of this writing, the Packet cluster-api provider control plane supports only one master node. Thus, you should deploy a single control plane node as a `Machine`, and the worker nodes as a `MachineDeployment`. This is the default provided by `generate-yaml.sh`. Because the worker nodes are a `MachineDeployment`, the cluster-api manager keeps track of the count. If one disappears, it ensures that a new one is deployed to take its place.
 
