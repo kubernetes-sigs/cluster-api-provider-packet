@@ -41,7 +41,20 @@ func (p *PacketClient) GetDevice(machine *clusterv1.Machine) (*packngo.Device, e
 	if err != nil {
 		return nil, fmt.Errorf("Failed to process config for providerSpec: %v", err)
 	}
-	tag := util.GenerateMachineTag(string(machine.UID))
+	// if there are no annotations, or the annotation we want does not exist, nothing to do
+	if machine.Annotations == nil {
+		fmt.Printf("No annotations with machine UID for %s, machine does not exist", machine.Name)
+		return nil, nil
+	}
+	var (
+		mUID string
+		ok   bool
+	)
+	if mUID, ok = machine.Annotations[util.AnnotationUID]; !ok {
+		fmt.Printf("No UID annotation %s with machine UID for %s, machine does not exist", util.AnnotationUID, machine.Name)
+		return nil, nil
+	}
+	tag := util.GenerateMachineTag(mUID)
 	return p.GetDeviceByTags(c.ProjectID, []string{tag})
 }
 func (p *PacketClient) GetDeviceByTags(project string, tags []string) (*packngo.Device, error) {

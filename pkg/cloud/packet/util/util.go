@@ -16,6 +16,7 @@ const (
 	MasterTag     = "kubernetes.io/role:master"
 	WorkerTag     = "kubernetes.io/role:node"
 	ControlPort   = 6443
+	AnnotationUID = "cluster.k8s.io/machine-uid"
 )
 
 func MachineProviderFromProviderConfig(providerConfig clusterv1.ProviderSpec) (*packetconfigv1.PacketMachineProviderConfig, error) {

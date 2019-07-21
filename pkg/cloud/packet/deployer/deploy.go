@@ -72,7 +72,18 @@ func (d *Deployer) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine)
 	)
 	if machine != nil {
 		log.Printf("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
-		machineRef = string(machine.UID)
+		// if there are no annotations, or the annotation we want does not exist, nothing to do
+		if machine.Annotations == nil {
+			return "", fmt.Errorf("No annotations with machine UID for %s", machine.Name)
+		}
+		var (
+			mUID string
+			ok   bool
+		)
+		if mUID, ok = machine.Annotations[util.AnnotationUID]; !ok {
+			return "", fmt.Errorf("No UID annotation %s on machine %s", util.AnnotationUID, machine.Name)
+		}
+		machineRef = mUID
 		device, err = d.client.GetDevice(machine)
 	} else {
 		log.Printf("Getting IP of any master machine for cluster %v.", cluster.Name)

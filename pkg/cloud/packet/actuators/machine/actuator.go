@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine/machineconfig"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/deployer"
@@ -90,8 +91,11 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("unable to unpack cluster provider: %v", err)
 	}
 
+	// generate a unique UID that will survive pivot, i.e. is not tied to the cluster itself
+	mUID := uuid.New().String()
+
 	tags := []string{
-		util.GenerateMachineTag(string(machine.UID)),
+		util.GenerateMachineTag(mUID),
 		util.GenerateClusterTag(string(cluster.Name)),
 	}
 	// generate userdata from the template
@@ -158,6 +162,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	machine.Annotations["cluster-api-provider-packet"] = "true"
 	machine.Annotations["cluster.k8s.io/machine"] = cluster.Name
+	machine.Annotations[util.AnnotationUID] = mUID
 
 	if _, err = a.updateMachine(cluster, machine); err != nil {
 		return fmt.Errorf("error updating Machine object with annotations: %v", err)
@@ -177,10 +182,10 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 	log.Printf("Deleting machine %v for cluster %v.", machine.Name, cluster.Name)
 	device, err := a.packetClient.GetDevice(machine)
 	if err != nil {
-		return fmt.Errorf("error retrieving machine status %s: %v", machine.UID, err)
+		return fmt.Errorf("error retrieving machine status %s: %v", machine.Name, err)
 	}
 	if device == nil {
-		return fmt.Errorf("machine does not exist: %s", machine.UID)
+		return fmt.Errorf("machine does not exist: %s", machine.Name)
 	}
 
 	_, err = a.packetClient.Devices.Delete(device.ID)
@@ -211,7 +216,7 @@ func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machi
 	// - check if anything mutable has changed, in which case we update the instance
 	device, err := a.packetClient.GetDevice(machine)
 	if err != nil {
-		return fmt.Errorf("error retrieving machine status %s: %v", machine.UID, err)
+		return fmt.Errorf("error retrieving machine status %s: %v", machine.Name, err)
 	}
 	if device == nil {
 		return fmt.Errorf("received nil machine")
@@ -246,7 +251,7 @@ func (a *Actuator) Exists(ctx context.Context, cluster *clusterv1.Cluster, machi
 	log.Printf("Checking if machine %v for cluster %v exists.", machine.Name, cluster.Name)
 	device, err := a.packetClient.GetDevice(machine)
 	if err != nil {
-		return false, fmt.Errorf("error retrieving machine status %s: %v", machine.UID, err)
+		return false, fmt.Errorf("error retrieving machine status %s: %v", machine.Name, err)
 	}
 	if device == nil {
 		return false, nil
@@ -264,7 +269,7 @@ func (a *Actuator) get(machine *clusterv1.Machine) (*packngo.Device, error) {
 		return device, nil
 	}
 
-	return nil, fmt.Errorf("Device %s not found", machine.UID)
+	return nil, fmt.Errorf("Device %s not found", machine.Name)
 }
 
 func (a *Actuator) updateMachine(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (*clusterv1.Machine, error) {
