@@ -26,6 +26,7 @@ import (
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine/machineconfig"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/deployer"
+	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/util"
 	"k8s.io/klog"
 	clusterapis "sigs.k8s.io/cluster-api/pkg/apis"
 	"sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
@@ -36,10 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
-)
-
-const (
-	controlPort = 6443
 )
 
 func main() {
@@ -79,7 +76,7 @@ func main() {
 	// get a deployer, which is needed at various stages
 	deployer, err := deployer.New(deployer.Params{
 		Client: client,
-		Port:   controlPort,
+		Port:   util.ControlPort,
 	})
 	if err != nil {
 		klog.Fatalf(err.Error())

@@ -21,6 +21,7 @@ import (
 
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/deployer"
+	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/util"
 	"k8s.io/klog"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/cmd"
 	"sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
@@ -39,6 +40,7 @@ func main() {
 
 	// get a deployer, which is needed at various stages
 	deployer, err := deployer.New(deployer.Params{
+		Port:   util.ControlPort,
 		Client: client,
 	})
 	if err != nil {
