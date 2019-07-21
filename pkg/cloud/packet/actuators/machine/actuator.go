@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine/machineconfig"
@@ -29,10 +30,13 @@ import (
 	"github.com/packethost/packngo"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
+	capiutil "sigs.k8s.io/cluster-api/pkg/util"
 )
 
 const (
-	ProviderName = "packet"
+	ProviderName              = "packet"
+	retryIntervalMachineReady = 10 * time.Second
+	timeoutMachineReady       = 10 * time.Minute
 )
 
 // Add RBAC rules to access cluster-api resources
@@ -138,10 +142,14 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		Tags:         tags,
 	}
 
-	_, _, err = a.packetClient.Devices.Create(serverCreateOpts)
+	device, _, err := a.packetClient.Devices.Create(serverCreateOpts)
 	if err != nil {
 		return fmt.Errorf("failed to create server: %v", err)
 	}
+
+	// we need to loop here until the device exists and has an IP address
+	log.Printf("Created device, waiting for it to be ready")
+	a.waitForMachineReady(device)
 
 	// add the annotations so that cluster-api knows it is there (also, because it is useful to have)
 	if machine.Annotations == nil {
@@ -272,6 +280,21 @@ func (a *Actuator) updateMachine(cluster *clusterv1.Cluster, machine *clusterv1.
 		return nil, err
 	}
 	return updatedMachine, nil
+}
+
+func (a *Actuator) waitForMachineReady(device *packngo.Device) error {
+	err := capiutil.PollImmediate(retryIntervalMachineReady, timeoutMachineReady, func() (bool, error) {
+		fmt.Printf("Waiting for device %v to become ready...", device.ID)
+		dev, _, err := a.packetClient.Devices.Get(device.ID, nil)
+		if err != nil {
+			return false, nil
+		}
+
+		ready := dev.Network == nil || len(dev.Network) == 0 || dev.Network[0].Address == ""
+		return ready, nil
+	})
+
+	return err
 }
 
 func changedImmutable(projectID string, device *packngo.Device, machine *clusterv1.Machine) error {
