@@ -28,3 +28,5 @@ out/
 
 # debugging
 __debug_bin
+
+kubeconfig
