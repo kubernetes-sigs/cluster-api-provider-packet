@@ -28,6 +28,7 @@ import (
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/util"
 	"github.com/packethost/packngo"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
+	client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
 )
 
 const (
@@ -41,6 +42,7 @@ const (
 
 // Actuator is responsible for performing machine reconciliation
 type Actuator struct {
+	machinesGetter      client.MachinesGetter
 	packetClient        *packet.PacketClient
 	machineConfigGetter machineconfig.Getter
 	deployer            *deployer.Deployer
@@ -49,6 +51,7 @@ type Actuator struct {
 
 // ActuatorParams holds parameter information for Actuator
 type ActuatorParams struct {
+	MachinesGetter      client.MachinesGetter
 	MachineConfigGetter machineconfig.Getter
 	Client              *packet.PacketClient
 	Deployer            *deployer.Deployer
@@ -58,6 +61,7 @@ type ActuatorParams struct {
 // NewActuator creates a new Actuator
 func NewActuator(params ActuatorParams) (*Actuator, error) {
 	return &Actuator{
+		machinesGetter:      params.MachinesGetter,
 		packetClient:        params.Client,
 		machineConfigGetter: params.MachineConfigGetter,
 		deployer:            params.Deployer,
@@ -131,6 +135,18 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	_, _, err = a.packetClient.Devices.Create(serverCreateOpts)
 	if err != nil {
 		return fmt.Errorf("failed to create server: %v", err)
+	}
+
+	// add the annotations so that cluster-api knows it is there (also, because it is useful to have)
+	if machine.Annotations == nil {
+		machine.Annotations = map[string]string{}
+	}
+
+	machine.Annotations["cluster-api-provider-packet"] = "true"
+	machine.Annotations["cluster.k8s.io/machine"] = cluster.Name
+
+	if _, err = a.updateMachine(cluster, machine); err != nil {
+		return fmt.Errorf("error updating Machine object with annotations: %v", err)
 	}
 
 	return nil
@@ -235,6 +251,21 @@ func (a *Actuator) get(machine *clusterv1.Machine) (*packngo.Device, error) {
 	}
 
 	return nil, fmt.Errorf("Device %s not found", machine.UID)
+}
+
+func (a *Actuator) updateMachine(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (*clusterv1.Machine, error) {
+	var (
+		machineClient  client.MachineInterface
+		updatedMachine *clusterv1.Machine
+		err            error
+	)
+	if a.machinesGetter != nil {
+		machineClient = a.machinesGetter.Machines(cluster.Namespace)
+	}
+	if updatedMachine, err = machineClient.Update(machine); err != nil {
+		return nil, err
+	}
+	return updatedMachine, nil
 }
 
 func changedImmutable(projectID string, device *packngo.Device, machine *clusterv1.Machine) error {
