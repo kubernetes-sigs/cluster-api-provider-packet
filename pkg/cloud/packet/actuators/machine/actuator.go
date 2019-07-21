@@ -106,6 +106,12 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		role = "master"
 		caCert = clusterConfig.CAKeyPair.Cert
 		caKey = clusterConfig.CAKeyPair.Key
+		if len(caCert) == 0 {
+			return fmt.Errorf("CA Certificate not yet created")
+		}
+		if len(caKey) == 0 {
+			return fmt.Errorf("CA Key not yet created")
+		}
 		tags = append(tags, util.MasterTag)
 	} else {
 		token, err = a.deployer.NewBootstrapToken(cluster)
