@@ -33,6 +33,16 @@ type PacketClusterProviderSpec struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	ProjectID string `json:"projectID"`
+
+	// CAKeyPair is the key pair for ca certs.
+	CAKeyPair KeyPair `json:"caKeyPair,omitempty"`
+}
+
+// KeyPair is how operators can supply custom keypairs for kubeadm to use.
+type KeyPair struct {
+	// base64 encoded cert and key
+	Cert []byte `json:"cert"`
+	Key  []byte `json:"key"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

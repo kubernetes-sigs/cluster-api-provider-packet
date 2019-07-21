@@ -34,7 +34,12 @@ func TestStoragePacketClusterProviderSpec(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "foo",
 			Namespace: "default",
-		}}
+		},
+		CAKeyPair: KeyPair{
+			Key:  []byte{10, 20, 30},
+			Cert: []byte{10, 20, 30},
+		},
+	}
 	g := gomega.NewGomegaWithT(t)
 
 	// Test Create

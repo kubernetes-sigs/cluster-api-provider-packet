@@ -24,6 +24,7 @@ import (
 
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/ca"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/deployer"
+	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/util"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
 	controllerError "sigs.k8s.io/cluster-api/pkg/controller/error"
@@ -60,16 +61,39 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	log.Printf("Reconciling cluster %v.", cluster.Name)
 	// save the original status
 	clusterCopy := cluster.DeepCopy()
+	// get a client we can use
+	var (
+		clusterClient  client.ClusterInterface
+		updatedCluster *clusterv1.Cluster
+	)
+	if a.clustersGetter != nil {
+		clusterClient = a.clustersGetter.Clusters(cluster.Namespace)
+	}
 	// ensure that we have a CA cert/key and save it
-	if cert, _ := a.deployer.GetCA(cluster.Name); cert == nil {
+	c, err := util.ClusterProviderFromProviderConfig(cluster.Spec.ProviderSpec)
+	if err != nil {
+		return fmt.Errorf("unable to unpack cluster provider for cluster %s: %v", cluster.Name, err)
+	}
+	if len(c.CAKeyPair.Cert) == 0 || len(c.CAKeyPair.Cert) == 0 {
 		caCertAndKey, err := ca.GenerateCACertAndKey(cluster.Name, "")
 		if err != nil {
-			return fmt.Errorf("unable to generate CA cert and key: %v", err)
+			return fmt.Errorf("unable to generate CA cert and key for cluster %s: %v", cluster.Name, err)
 		}
-		err = a.deployer.PutCA(cluster.Name, caCertAndKey)
+		c.CAKeyPair.Cert = caCertAndKey.Certificate
+		c.CAKeyPair.Key = caCertAndKey.PrivateKey
+		// update cluster spec
+		spec, err := util.ClusterProviderConfigFromProvider(c)
 		if err != nil {
-			return fmt.Errorf("unable to save CA cert and key: %v", err)
+			return fmt.Errorf("unable to convert newly generated provider spec with CA key/certificate to provider config for %s: %v", cluster.Name, err)
 		}
+		cluster.Spec.ProviderSpec = spec
+		log.Printf("saving updated cluster spec %s", cluster.Name)
+		if updatedCluster, err = clusterClient.Update(cluster); err != nil {
+			msg := fmt.Sprintf("failed to save updated cluster %s: %v", cluster.Name, err)
+			log.Printf(msg)
+			return fmt.Errorf(msg)
+		}
+		cluster = updatedCluster
 	}
 	// ensure that we save the correct IP address for the cluster
 	address, err := a.deployer.GetIP(cluster, nil)
@@ -91,10 +115,6 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 		}
 	}
 
-	var clusterClient client.ClusterInterface
-	if a.clustersGetter != nil {
-		clusterClient = a.clustersGetter.Clusters(cluster.Namespace)
-	}
 	if !reflect.DeepEqual(cluster.Status, clusterCopy.Status) {
 		log.Printf("saving updated cluster status %s", cluster.Name)
 		if _, err := clusterClient.UpdateStatus(cluster); err != nil {
@@ -110,7 +130,5 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 // Delete deletes a cluster and is invoked by the Cluster Controller
 func (a *Actuator) Delete(cluster *clusterv1.Cluster) error {
 	log.Printf("Deleting cluster %v.", cluster.Name)
-	// remove the CA cert key
-	a.deployer.DeleteCA(cluster.Name)
 	return nil
 }

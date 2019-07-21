@@ -1129,6 +1129,20 @@ spec:
             of an object. Servers should convert recognized schemas to the latest
             internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
           type: string
+        caKeyPair:
+          description: CAKeyPair is the key pair for ca certs.
+          properties:
+            cert:
+              description: base64 encoded cert and key
+              format: byte
+              type: string
+            key:
+              format: byte
+              type: string
+          required:
+          - cert
+          - key
+          type: object
         kind:
           description: 'Kind is a string value representing the REST resource this
             object represents. Servers may infer this from the endpoint the client
@@ -1493,10 +1507,11 @@ data:
     \     \n      kubeadm init --config /etc/kubernetes/kubeadm_config.yaml\n      #
     Apply Weave CNI\n      for tries in $(seq 1 60); do\n          kubectl --kubeconfig
     /etc/kubernetes/admin.conf apply -f \"https://cloud.weave.works/k8s/net?k8s-version=$(kubectl
-    version | base64 | tr -d '\\n')\" && break\n          sleep 1\n      done\n    else\n
-    \     touch /etc/kubernetes/kubeadm_config.yaml\n      cat > /etc/kubernetes/kubeadm_config.yaml
-    <<EOF\n    apiVersion: kubeadm.k8s.io/v1beta1\n    kind: JoinConfiguration\n    nodeRegistration:\n
-    \     name: ${HOSTNAME}\n      kubeletExtraArgs: \n        #resolv-conf: /run/systemd/resolve/resolv.conf\n
+    version | base64 | tr -d '\\n')&env.IPALLOC_RANGE=${POD_CIDR}\" && break\n          sleep
+    1\n      done\n    else\n      touch /etc/kubernetes/kubeadm_config.yaml\n      cat
+    > /etc/kubernetes/kubeadm_config.yaml <<EOF\n    apiVersion: kubeadm.k8s.io/v1beta1\n
+    \   kind: JoinConfiguration\n    nodeRegistration:\n      name: ${HOSTNAME}\n
+    \     kubeletExtraArgs: \n        #resolv-conf: /run/systemd/resolve/resolv.conf\n
     \       cluster-dns: ${CLUSTER_DNS_SERVER}\n        cluster-domain: ${CLUSTER_DNS_DOMAIN}\n
     \       node-ip: ${PRIVATEIP}\n        allow-privileged: \"true\"\n        cloud-provider:
     external \n        authentication-token-webhook: \"true\"\n        read-only-port:
@@ -1510,7 +1525,7 @@ data:
     2>&1 | tee /var/log/startup.log\n"
 kind: ConfigMap
 metadata:
-  name: cluster-api-provider-packet-machine-setup-f99c2t2ddm
+  name: cluster-api-provider-packet-machine-setup-fgdgh5f444
   namespace: cluster-api-provider-packet-system
 ---
 apiVersion: v1
@@ -1597,5 +1612,5 @@ spec:
       terminationGracePeriodSeconds: 10
       volumes:
       - configMap:
-          name: cluster-api-provider-packet-machine-setup-f99c2t2ddm
+          name: cluster-api-provider-packet-machine-setup-fgdgh5f444
         name: configs

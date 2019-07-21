@@ -28,7 +28,6 @@ import (
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/util"
 	"github.com/packethost/packngo"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
-	"sigs.k8s.io/cluster-api/pkg/cert"
 )
 
 const (
@@ -78,6 +77,10 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	if err != nil {
 		return fmt.Errorf("Unable to read providerSpec from machine config: %v", err)
 	}
+	clusterConfig, err := util.ClusterProviderFromProviderConfig(cluster.Spec.ProviderSpec)
+	if err != nil {
+		return fmt.Errorf("unable to unpack cluster provider: %v", err)
+	}
 
 	tags := []string{
 		util.GenerateMachineTag(string(machine.UID)),
@@ -97,16 +100,8 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	)
 	if machine.Spec.Versions.ControlPlane != "" {
 		role = "master"
-		// generate a cluster CA cert and key
-		var (
-			caCertAndKey *cert.CertificateAuthority
-			ok           bool
-		)
-		if caCertAndKey, ok = a.deployer.Certs[cluster.Name]; !ok {
-			return fmt.Errorf("Unable to read CA cert/key for uninitialized cluster %s", cluster.Name)
-		}
-		caCert = caCertAndKey.Certificate
-		caKey = caCertAndKey.PrivateKey
+		caCert = clusterConfig.CAKeyPair.Cert
+		caKey = clusterConfig.CAKeyPair.Key
 		tags = append(tags, util.MasterTag)
 	} else {
 		token, err = a.deployer.NewBootstrapToken(cluster)

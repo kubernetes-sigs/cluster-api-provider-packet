@@ -53,7 +53,6 @@ func main() {
 	metricsAddr := flag.String("metrics-addr", ":8080", "The address the metric endpoint binds to.")
 
 	machineSetupConfig := flag.String("config", "/etc/machineconfig/machine_configs.yaml", "path to the machine setup config")
-	caCache := flag.String("ca-cache", "", "path to file to save cluster credentials; should be used for development purposes only, as it saves actual CA credentials")
 	flag.Parse()
 
 	log := logf.Log.WithName("packet-controller-manager")
@@ -79,9 +78,8 @@ func main() {
 	}
 	// get a deployer, which is needed at various stages
 	deployer, err := deployer.New(deployer.Params{
-		Client:  client,
-		Port:    controlPort,
-		CACache: *caCache,
+		Client: client,
+		Port:   controlPort,
 	})
 	if err != nil {
 		klog.Fatalf(err.Error())

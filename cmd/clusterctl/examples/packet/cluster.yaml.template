@@ -14,3 +14,6 @@ spec:
         apiVersion: "packetprovider/v1alpha1"
         kind: "PacketClusterProviderSpec"
         projectID: "$PROJECT_ID"
+        caKeyPair:
+          cert: ""
+          key: ""

@@ -40,7 +40,7 @@ To deploy a cluster:
    * `provider-components.yaml` - note that this file _will_ contain your secrets, specifically `PACKET_API_KEY`, to be loaded into the cluster
    * `addons.yaml` - note that this file _will_ contain your secrets, specifically `PACKET_API_KEY`, to be loaded into the cluster
 1. If desired, edit the following files:
-   * `cluster.yaml` - to change parameters or settings, including network CIDRs
+   * `cluster.yaml` - to change parameters or settings, including network CIDRs, and, if desired, your own CA certificate and key
    * `machines.yaml` - to change parameters or settings, including machine types and quantity
 1. Run `clusterctl` with the appropriate command.
 
@@ -67,6 +67,16 @@ Run `clusterctl create cluster --help` for more options, for example to use an e
 1. Create worker nodes
 1. Deploy add-on components, e.g. the [packet cloud-controller-manager](https://github.com/packethost/packet-ccm) and the [packet cloud storage interface provider](https://github.com/packethost/csi-packet)
 1. If a new bootstrap cluster was created, terminate it
+
+#### Defaults
+
+If you do not change the generated `yaml` files, it will use defaults. You can look in the `*.yaml.template` files in [cmd/clusterctl/examples/packet/](./cmd/clusterctl/examples/packet/) for details.
+
+* CA key/certificate: leave blank, which will cause the `manager` to create one.
+* service CIDR: `172.25.0.0/16`
+* pod CIDR: `172.26.0.0/16`
+* service domain: `cluster.local`
+* cluster name: `test1-<random>`, where random is a random 5-character string containing the characters `a-z0-9`
 
 #### About Those Secrets
 
@@ -132,19 +142,17 @@ The Packet cluster-api provider follows the standard design for cluster-api. It 
 The actual machines are deployed using `kubeadm`. The deployment process uses the following process.
 
 1. When a new `Cluster` is created:
-   * create a new CA certificate and key, encrypt and save them in a bootstrap controller Kubernetes secret
-   * create a new kubeadm token, encrypt and save in a bootstrap controller Kubernetes secret. This 
-   * create an admin user certificate using the CA certificate and key, encrypt and save them in a bootstrap controller Kubernetes secret
+   * if the `ClusterSpec` does not include a CA key/certificate pair, create one and save it on the `Cluster` object
 2. When a new master `Machine` is created:
-   * retrieve the CA certificate and key from the bootstrap controller Kubernetes secret
-   * retrieve the kubeadm token from the bootstrap controller Kubernetes secret
+   * retrieve the CA certificate and key from the `Cluster` object
    * launch a new server instance on Packet
-   * set the `cloud-init` on the instance to run `kubeadm init`, passing it the CA certificate and key and kubeadm token
+   * set the `cloud-init` on the instance to run `kubeadm init`, passing it the CA certificate and key
 3. When a new worker `Machine` is created:
-   * retrieve the kubeadm token from the Kubernetes secret
+   * check if the cluster is ready, i.e. has a valid endpoint; if not, retry every 15 seconds
+   * generate a new kubeadm bootstrap token and save it to the workload cluster
    * launch a new server instance on Packet
-   * set the `cloud-init` on the instance to run `kubeadm join`, passing it the kubeadm token
-4. When a user requests the kubeconfig via `clusterctl`, it retrieves it from the Kubernetes secret and passes it to the user
+   * set the `cloud-init` on the instance to run `kubeadm join`, passing it the newly generated kubeadm token
+4. When a user requests the kubeconfig via `clusterctl`, generate a new one using the CA key/certificate pair
 
 
 ## Building
@@ -218,7 +226,7 @@ You can run the `manager` locally on your own laptop in order to ease and speed 
 1. Set your `KUBECONFIG` to point to that cluster, e.g. `export KUBECONFIG=...`
 1. Create a local OS/arch `manager` binary, essentially `make manager`. This will save it as `bin/manager-<os>-<arch>`, e.g. `bin/manager-linux-arm64` or `bin/manager-darwin-amd64`
 1. Generate your yaml `./generate-yaml.sh`
-1. Run the manager against the cluster with the local configs, `bin/manager-darwin-amd64 -config ./config/default/machine_configs.yaml -ca-cache ./out/cache.json`
+1. Run the manager against the cluster with the local configs, `bin/manager-darwin-amd64 -config ./config/default/machine_configs.yaml`
 
 In the above example:
 

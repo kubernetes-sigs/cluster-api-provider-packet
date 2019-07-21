@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	packetconfigv1 "github.com/packethost/cluster-api-provider-packet/pkg/apis/packetprovider/v1alpha1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/json"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	"sigs.k8s.io/yaml"
 )
@@ -28,6 +30,17 @@ func ClusterProviderFromProviderConfig(providerConfig clusterv1.ProviderSpec) (*
 		return nil, err
 	}
 	return &config, nil
+}
+func ClusterProviderConfigFromProvider(config *packetconfigv1.PacketClusterProviderSpec) (clusterv1.ProviderSpec, error) {
+	provider := clusterv1.ProviderSpec{}
+	raw, err := json.Marshal(config)
+	if err != nil {
+		return provider, err
+	}
+	provider.Value = &runtime.RawExtension{
+		Raw: raw,
+	}
+	return provider, nil
 }
 func GenerateMachineTag(ID string) string {
 	return fmt.Sprintf("%s:%s", machineUIDTag, ID)
