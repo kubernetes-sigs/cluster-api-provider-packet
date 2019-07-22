@@ -1078,7 +1078,7 @@ spec:
       containers:
       - command:
         - /manager
-        image: gcr.io/k8s-cluster-api/cluster-api-controller:0.1.1
+        image: gcr.io/k8s-cluster-api/cluster-api-controller:v0.1.7
         name: manager
         resources:
           limits:
