@@ -77,6 +77,17 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoExecute
+        key: node.alpha.kubernetes.io/notReady
+        operator: Exists
+      - effect: NoExecute
+        key: node.alpha.kubernetes.io/unreachable
+        operator: Exists
       terminationGracePeriodSeconds: 10
       volumes:
       - name: configs
