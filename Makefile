@@ -43,6 +43,7 @@ all: test manager clusterctl
 # vendor
 vendor:
 	$(GO) mod vendor
+	./hack/update-vendor.sh
 
 # Run tests
 test: vendor generate fmt vet manifests

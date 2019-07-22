@@ -114,14 +114,14 @@ github.com/onsi/gomega/internal/asyncassertion
 github.com/onsi/gomega/internal/testingtsupport
 github.com/onsi/gomega/matchers
 github.com/onsi/gomega/types
+github.com/onsi/gomega/gbytes
+github.com/onsi/gomega/gexec
 github.com/onsi/gomega/internal/oraclematcher
 github.com/onsi/gomega/format
 github.com/onsi/gomega/matchers/support/goraph/bipartitegraph
 github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
-github.com/onsi/gomega/gbytes
-github.com/onsi/gomega/gexec
 # github.com/packethost/packngo v0.0.0-20190507131943-1343be729ca2
 github.com/packethost/packngo
 # github.com/pborman/uuid v1.2.0
@@ -535,6 +535,7 @@ k8s.io/klog
 # k8s.io/kube-openapi v0.0.0-20190709113604-33be087ad058
 k8s.io/kube-openapi/pkg/util/proto
 # sigs.k8s.io/cluster-api v0.1.7
+sigs.k8s.io/cluster-api/hack
 sigs.k8s.io/cluster-api/cmd/clusterctl/cmd
 sigs.k8s.io/cluster-api/pkg/apis/cluster/common
 sigs.k8s.io/cluster-api/pkg/apis
