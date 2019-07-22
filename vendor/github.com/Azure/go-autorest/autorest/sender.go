@@ -248,24 +248,16 @@ func DoRetryForStatusCodes(attempts int, backoff time.Duration, codes ...int) Se
 	}
 }
 
-// DelayWithRetryAfter invokes time.After for the duration specified in the "Retry-After" header.
-// The value of Retry-After can be either the number of seconds or a date in RFC1123 format.
-// The function returns true after successfully waiting for the specified duration.  If there is
-// no Retry-After header or the wait is cancelled the return value is false.
+// DelayWithRetryAfter invokes time.After for the duration specified in the "Retry-After" header in
+// responses with status code 429
 func DelayWithRetryAfter(resp *http.Response, cancel <-chan struct{}) bool {
 	if resp == nil {
 		return false
 	}
-	var dur time.Duration
-	ra := resp.Header.Get("Retry-After")
-	if retryAfter, _ := strconv.Atoi(ra); retryAfter > 0 {
-		dur = time.Duration(retryAfter) * time.Second
-	} else if t, err := time.Parse(time.RFC1123, ra); err == nil {
-		dur = t.Sub(time.Now())
-	}
-	if dur > 0 {
+	retryAfter, _ := strconv.Atoi(resp.Header.Get("Retry-After"))
+	if resp.StatusCode == http.StatusTooManyRequests && retryAfter > 0 {
 		select {
-		case <-time.After(dur):
+		case <-time.After(time.Duration(retryAfter) * time.Second):
 			return true
 		case <-cancel:
 			return false

@@ -1,4 +1,4 @@
-.PHONY: deps test manager clusterctl run install deploy manifests generate fmt vet run
+.PHONY: vendor test manager clusterctl run install deploy manifests generate fmt vet run
 
 # BUILDARCH is the host architecture
 # ARCH is the target architecture
@@ -36,29 +36,31 @@ CLUSTERCTL ?= bin/clusterctl-$(OS)-$(ARCH)
 MANAGER ?= bin/manager-$(OS)-$(ARCH)
 KUBECTL ?= kubectl
 
+GO ?= GO111MODULE=on go
+
 all: test manager clusterctl
 
-# deps
-deps:
-	dep ensure
+# vendor
+vendor:
+	$(GO) mod vendor
 
 # Run tests
-test: deps generate fmt vet manifests
-	go test ./pkg/... ./cmd/... -coverprofile cover.out
+test: vendor generate fmt vet manifests
+	$(GO) test -mod=vendor ./pkg/... ./cmd/... -coverprofile cover.out
 
 # Build manager binary
 manager: $(MANAGER)
-$(MANAGER): deps generate fmt vet
-	GOOS=$(OS) GOARCH=$(ARCH) go build -o $@ github.com/packethost/cluster-api-provider-packet/cmd/manager
+$(MANAGER): vendor generate fmt vet
+	GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -mod=vendor -o $@ github.com/packethost/cluster-api-provider-packet/cmd/manager
 
 # Build clusterctl binary
 clusterctl: $(CLUSTERCTL)
-$(CLUSTERCTL): deps generate fmt vet
-	GOOS=$(OS) GOARCH=$(ARCH) go build -o $@ github.com/packethost/cluster-api-provider-packet/cmd/clusterctl
+$(CLUSTERCTL): vendor generate fmt vet
+	GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -mod=vendor -o $@ github.com/packethost/cluster-api-provider-packet/cmd/clusterctl
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: deps generate fmt vet
-	go run ./cmd/manager/main.go
+run: vendor generate fmt vet
+	$(GO) run -mod=vendor ./cmd/manager/main.go
 
 # Install CRDs into a cluster
 install: manifests
@@ -72,7 +74,7 @@ deploy: manifests
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: $(PROVIDERYAML)
 $(PROVIDERYAML):
-	go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go all
+	$(GO) run -mod=vendor vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go all
 	$(KUBECTL) kustomize vendor/sigs.k8s.io/cluster-api/config/default/ > $(PROVIDERYAML)
 	echo "---" >> $(PROVIDERYAML)
 	$(KUBECTL) kustomize config/ >> $(PROVIDERYAML)
@@ -80,18 +82,18 @@ $(PROVIDERYAML):
 
 # Run go fmt against code
 fmt:
-	go fmt ./pkg/... ./cmd/...
+	$(GO) fmt ./pkg/... ./cmd/...
 
 # Run go vet against code
 vet:
-	go vet ./pkg/... ./cmd/...
+	$(GO) vet -mod=vendor ./pkg/... ./cmd/...
 
 # Generate code
 generate:
 ifndef GOPATH
 	$(error GOPATH not defined, please define GOPATH. Run "go help gopath" to learn more about GOPATH)
 endif
-	go generate ./pkg/... ./cmd/...
+	$(GO) generate -mod=vendor ./pkg/... ./cmd/...
 
 # Build the docker image
 docker-build: test
