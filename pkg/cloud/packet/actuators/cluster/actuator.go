@@ -17,14 +17,15 @@ limitations under the License.
 package cluster
 
 import (
+	"errors"
 	"fmt"
-	"log"
 	"reflect"
 	"time"
 
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/ca"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/deployer"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/util"
+	"k8s.io/klog"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
 	controllerError "sigs.k8s.io/cluster-api/pkg/controller/error"
@@ -58,7 +59,7 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 
 // Reconcile reconciles a cluster and is invoked by the Cluster Controller
 func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
-	log.Printf("Reconciling cluster %v.", cluster.Name)
+	klog.Infof("Reconciling cluster %v.", cluster.Name)
 	// save the original status
 	clusterCopy := cluster.DeepCopy()
 	// get a client we can use
@@ -87,11 +88,11 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 			return fmt.Errorf("unable to convert newly generated provider spec with CA key/certificate to provider config for %s: %v", cluster.Name, err)
 		}
 		cluster.Spec.ProviderSpec = spec
-		log.Printf("saving updated cluster spec %s", cluster.Name)
+		klog.Infof("saving updated cluster spec %s", cluster.Name)
 		if updatedCluster, err = clusterClient.Update(cluster); err != nil {
 			msg := fmt.Sprintf("failed to save updated cluster %s: %v", cluster.Name, err)
-			log.Printf(msg)
-			return fmt.Errorf(msg)
+			klog.Info(msg)
+			return errors.New(msg)
 		}
 		cluster = updatedCluster
 	}
@@ -116,19 +117,22 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	}
 
 	if !reflect.DeepEqual(cluster.Status, clusterCopy.Status) {
-		log.Printf("saving updated cluster status %s", cluster.Name)
+		klog.Infof("saving updated cluster status %s", cluster.Name)
 		if _, err := clusterClient.UpdateStatus(cluster); err != nil {
 			msg := fmt.Sprintf("failed to save updated cluster status %s: %v", cluster.Name, err)
-			log.Printf(msg)
-			return fmt.Errorf(msg)
+			klog.Info(msg)
+			return errors.New(msg)
 		}
+		klog.Infof("successfully updated cluster status %s", cluster.Name)
 	}
+
+	klog.Infof("cluster reconcile complete: %s", cluster.Name)
 
 	return nil
 }
 
 // Delete deletes a cluster and is invoked by the Cluster Controller
 func (a *Actuator) Delete(cluster *clusterv1.Cluster) error {
-	log.Printf("Deleting cluster %v.", cluster.Name)
+	klog.Infof("Deleting cluster %v.", cluster.Name)
 	return nil
 }

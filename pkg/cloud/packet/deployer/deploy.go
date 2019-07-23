@@ -20,7 +20,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
@@ -31,6 +30,7 @@ import (
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/klog"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
@@ -71,7 +71,7 @@ func (d *Deployer) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine)
 		machineRef string
 	)
 	if machine != nil {
-		log.Printf("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
+		klog.Infof("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
 		// if there are no annotations, or the annotation we want does not exist, nothing to do
 		if machine.Annotations == nil {
 			return "", fmt.Errorf("No annotations with machine UID for %s", machine.Name)
@@ -86,7 +86,7 @@ func (d *Deployer) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine)
 		machineRef = mUID
 		device, err = d.client.GetDevice(machine)
 	} else {
-		log.Printf("Getting IP of any master machine for cluster %v.", cluster.Name)
+		klog.Infof("Getting IP of any master machine for cluster %v.", cluster.Name)
 		machineRef = fmt.Sprintf("master for cluster %s", cluster.Name)
 		tags := []string{
 			util.GenerateClusterTag(string(cluster.Name)),
@@ -119,7 +119,7 @@ func (d *Deployer) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.M
 	if cluster == nil {
 		return "", fmt.Errorf("cannot get kubeconfig for nil cluster")
 	}
-	log.Printf("Getting KubeConfig for cluster %v.", cluster.Name)
+	klog.Infof("Getting KubeConfig for cluster %v.", cluster.Name)
 
 	// use local var to allow for easier future changes
 	userName := adminUserName

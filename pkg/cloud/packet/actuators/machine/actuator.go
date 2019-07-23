@@ -18,8 +18,8 @@ package machine
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -29,6 +29,7 @@ import (
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/deployer"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/util"
 	"github.com/packethost/packngo"
+	"k8s.io/klog"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
 	capiutil "sigs.k8s.io/cluster-api/pkg/util"
@@ -82,13 +83,19 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	if machine == nil {
 		return fmt.Errorf("cannot create nil machine")
 	}
+	var msg string
+	klog.Infof("Create machine %s", machine.Name)
 	machineConfig, err := util.MachineProviderFromProviderConfig(machine.Spec.ProviderSpec)
 	if err != nil {
-		return fmt.Errorf("Unable to read providerSpec from machine config: %v", err)
+		msg = fmt.Sprintf("Unable to read providerSpec from machine config: %v", err)
+		klog.Info(msg)
+		return errors.New(msg)
 	}
 	clusterConfig, err := util.ClusterProviderFromProviderConfig(cluster.Spec.ProviderSpec)
 	if err != nil {
-		return fmt.Errorf("unable to unpack cluster provider: %v", err)
+		msg = fmt.Sprintf("Error reading cluster provider config: %v", err)
+		klog.Info(msg)
+		return errors.New(msg)
 	}
 
 	// generate a unique UID that will survive pivot, i.e. is not tied to the cluster itself
@@ -102,7 +109,9 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	// first we need to find the correct userdata
 	userdataTmpl, containerRuntime, err := a.machineConfigGetter.GetUserdata(machineConfig.OS, machine.Spec.Versions)
 	if err != nil {
-		return fmt.Errorf("Unable to read userdata: %v", err)
+		msg = fmt.Sprintf("Unable to read userdata: %v", err)
+		klog.Info(msg)
+		return errors.New(msg)
 	}
 	var (
 		token  = ""
@@ -111,27 +120,37 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		caKey  []byte
 	)
 	if machine.Spec.Versions.ControlPlane != "" {
+		klog.Infof("building master controlplane node: %s", machine.Name)
 		role = "master"
 		caCert = clusterConfig.CAKeyPair.Cert
 		caKey = clusterConfig.CAKeyPair.Key
 		if len(caCert) == 0 {
-			return fmt.Errorf("CA Certificate not yet created")
+			msg = fmt.Sprintf("CA Certificate not yet created for cluster %s when building machine: %s", cluster.Name, machine.Name)
+			klog.Info(msg)
+			return errors.New(msg)
 		}
 		if len(caKey) == 0 {
-			return fmt.Errorf("CA Key not yet created")
+			msg = fmt.Sprintf("CA Key not yet created for cluster %s when building machine: %s", cluster.Name, machine.Name)
+			klog.Info(msg)
+			return errors.New(msg)
 		}
 		tags = append(tags, util.MasterTag)
 	} else {
+		klog.Infof("building worker controlplane node: %s", machine.Name)
 		token, err = a.deployer.NewBootstrapToken(cluster)
 		if err != nil {
-			return fmt.Errorf("failed to create and save token for cluster %q: %v", cluster.Name, err)
+			msg = fmt.Sprintf("failed to create and save token for cluster %q: %v", cluster.Name, err)
+			klog.Info(msg)
+			return errors.New(msg)
 		}
 		tags = append(tags, util.WorkerTag)
 	}
 
 	userdata, err := parseUserdata(userdataTmpl, role, cluster, machine, machineConfig.OS, token, caCert, caKey, a.controlPort, containerRuntime)
 	if err != nil {
-		return fmt.Errorf("Unable to generate userdata: %v", err)
+		msg = fmt.Sprintf("Unable to generate userdata for machine %s: %v", machine.Name, err)
+		klog.Info(msg)
+		return errors.New(msg)
 	}
 
 	log.Printf("Creating machine %v for cluster %v.", machine.Name, cluster.Name)
@@ -148,11 +167,13 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	device, _, err := a.packetClient.Devices.Create(serverCreateOpts)
 	if err != nil {
-		return fmt.Errorf("failed to create server: %v", err)
+		msg = fmt.Sprintf("failed to create machine %s: %v", machine.Name, err)
+		klog.Info(msg)
+		return errors.New(msg)
 	}
 
 	// we need to loop here until the device exists and has an IP address
-	log.Printf("Created device, waiting for it to be ready")
+	log.Printf("Created device %s, waiting for it to be ready", machine.Name)
 	a.waitForMachineReady(device)
 
 	// add the annotations so that cluster-api knows it is there (also, because it is useful to have)
@@ -167,6 +188,8 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	if _, err = a.updateMachine(cluster, machine); err != nil {
 		return fmt.Errorf("error updating Machine object with annotations: %v", err)
 	}
+	msg = fmt.Sprintf("machine successfully created and annotated %s", machine.Name)
+	klog.Info(msg)
 
 	return nil
 }
@@ -248,15 +271,22 @@ func (a *Actuator) Exists(ctx context.Context, cluster *clusterv1.Cluster, machi
 	if machine == nil {
 		return false, fmt.Errorf("cannot check if nil machine exists")
 	}
+	var msg string
 	log.Printf("Checking if machine %v for cluster %v exists.", machine.Name, cluster.Name)
 	device, err := a.packetClient.GetDevice(machine)
 	if err != nil {
-		return false, fmt.Errorf("error retrieving machine status %s: %v", machine.Name, err)
+		msg = fmt.Sprintf("error retrieving machine status %s: %v", machine.Name, err)
+		klog.Info(msg)
+		return false, errors.New(msg)
 	}
 	if device == nil {
+		msg = fmt.Sprintf("machine not found %s", machine.Name)
+		klog.Info(msg)
 		return false, nil
 	}
 
+	msg = fmt.Sprintf("machine found %s: %s", machine.Name, device.ID)
+	klog.Info(msg)
 	return true, nil
 }
 
@@ -289,7 +319,7 @@ func (a *Actuator) updateMachine(cluster *clusterv1.Cluster, machine *clusterv1.
 
 func (a *Actuator) waitForMachineReady(device *packngo.Device) error {
 	err := capiutil.PollImmediate(retryIntervalMachineReady, timeoutMachineReady, func() (bool, error) {
-		fmt.Printf("Waiting for device %v to become ready...", device.ID)
+		klog.Infof("Waiting for device %v to become ready...", device.ID)
 		dev, _, err := a.packetClient.Devices.Get(device.ID, nil)
 		if err != nil {
 			return false, nil
