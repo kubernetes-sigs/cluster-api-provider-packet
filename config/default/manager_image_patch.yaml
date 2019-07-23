@@ -7,5 +7,5 @@ spec:
   template:
     spec:
       containers:
-      - image: packethost/cluster-api-provider-packet:latest
+      - image: PATCH_ME_IMAGE
         name: manager
