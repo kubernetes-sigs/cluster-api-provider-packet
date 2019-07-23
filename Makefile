@@ -68,9 +68,9 @@ install: manifests
 	kubectl apply -f config/crds
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-deploy: manifests
+deploy: manifests $(CLUSTERCTL)
 	generate-yaml.sh
-	cat out/packet/provider-components.yaml | kubectl apply -f -
+	$(CLUSTERCTL) create cluster --provider packet --bootstrap-type kind -c out/packet/cluster.yaml -m out/packet/machines.yaml -a out/packet/addons.yaml -p out/packet/provider-components.yaml --v=10
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: $(PROVIDERYAML)
