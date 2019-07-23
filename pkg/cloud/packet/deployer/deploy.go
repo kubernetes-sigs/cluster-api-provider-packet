@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	defaultTokenTTL = 10 * time.Minute
+	defaultTokenTTL = 30 * time.Minute
 	adminUserName   = "kubernetes-admin"
 )
 
