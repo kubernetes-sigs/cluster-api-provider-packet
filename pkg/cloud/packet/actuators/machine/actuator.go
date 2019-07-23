@@ -153,7 +153,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return errors.New(msg)
 	}
 
-	log.Printf("Creating machine %v for cluster %v.", machine.Name, cluster.Name)
+	klog.Infof("Creating machine %v for cluster %v.", machine.Name, cluster.Name)
 	serverCreateOpts := &packngo.DeviceCreateRequest{
 		Hostname:     machine.Name,
 		UserData:     userdata,
@@ -173,7 +173,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	}
 
 	// we need to loop here until the device exists and has an IP address
-	log.Printf("Created device %s, waiting for it to be ready", machine.Name)
+	klog.Infof("Created device %s, waiting for it to be ready", machine.Name)
 	a.waitForMachineReady(device)
 
 	// add the annotations so that cluster-api knows it is there (also, because it is useful to have)
@@ -202,7 +202,7 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 	if machine == nil {
 		return fmt.Errorf("cannot delete nil machine")
 	}
-	log.Printf("Deleting machine %v for cluster %v.", machine.Name, cluster.Name)
+	klog.Infof("Deleting machine %v for cluster %v.", machine.Name, cluster.Name)
 	device, err := a.packetClient.GetDevice(machine)
 	if err != nil {
 		return fmt.Errorf("error retrieving machine status %s: %v", machine.Name, err)
@@ -232,7 +232,7 @@ func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("unable to unpack cluster provider: %v", err)
 	}
 
-	log.Printf("Updating machine %v for cluster %v.", machine.Name, cluster.Name)
+	klog.Infof("Updating machine %v for cluster %v.", machine.Name, cluster.Name)
 	// how to update the machine:
 	// - get the current parameters of the machine from the API
 	// - check if anything immutable has changed, in which case we return an error
@@ -272,7 +272,7 @@ func (a *Actuator) Exists(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return false, fmt.Errorf("cannot check if nil machine exists")
 	}
 	var msg string
-	log.Printf("Checking if machine %v for cluster %v exists.", machine.Name, cluster.Name)
+	klog.Infof("Checking if machine %v for cluster %v exists.", machine.Name, cluster.Name)
 	device, err := a.packetClient.GetDevice(machine)
 	if err != nil {
 		msg = fmt.Sprintf("error retrieving machine status %s: %v", machine.Name, err)
