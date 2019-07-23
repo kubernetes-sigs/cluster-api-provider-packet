@@ -30,3 +30,6 @@ out/
 __debug_bin
 
 kubeconfig
+
+# from the sed we run
+config/default/manager_image_patch.yaml-e
