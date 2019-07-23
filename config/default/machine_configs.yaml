@@ -189,6 +189,8 @@ items:
           export ENDPOINT=$MASTER
       fi
   
+      # to make it easier to debug going forward
+      echo "running kubeadm join $(date)"
       kubeadm join --token "${TOKEN}" "${ENDPOINT}" --ignore-preflight-errors=all --discovery-token-unsafe-skip-ca-verification
     fi
   

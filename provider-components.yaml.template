@@ -1473,15 +1473,16 @@ data:
     external \n        authentication-token-webhook: \"true\"\n        read-only-port:
     \"0\"\n    EOF\n    \n      export ENDPOINT=''\n      if [ -n \"$MASTER_PRIVATE\"
     ]; then\n          export ENDPOINT=$MASTER_PRIVATE\n      else\n          export
-    ENDPOINT=$MASTER\n      fi\n  \n      kubeadm join --token \"${TOKEN}\" \"${ENDPOINT}\"
-    --ignore-preflight-errors=all --discovery-token-unsafe-skip-ca-verification\n
+    ENDPOINT=$MASTER\n      fi\n  \n      # to make it easier to debug going forward\n
+    \     echo \"running kubeadm join $(date)\"\n      kubeadm join --token \"${TOKEN}\"
+    \"${ENDPOINT}\" --ignore-preflight-errors=all --discovery-token-unsafe-skip-ca-verification\n
     \   fi\n  \n  \n    # Annotate node.\n    for tries in $(seq 1 60); do\n        kubectl
     --kubeconfig /etc/kubernetes/kubelet.conf annotate --overwrite node ${HOSTNAME}
     machine=${MACHINE} && break\n        sleep 1\n    done\n  \n    echo done.\n    )
     2>&1 | tee /var/log/startup.log\n"
 kind: ConfigMap
 metadata:
-  name: cluster-api-provider-packet-machine-setup-fgdgh5f444
+  name: cluster-api-provider-packet-machine-setup-6c29cc9cf4
   namespace: cluster-api-provider-packet-system
 ---
 apiVersion: v1
@@ -1579,5 +1580,5 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: cluster-api-provider-packet-machine-setup-fgdgh5f444
+          name: cluster-api-provider-packet-machine-setup-6c29cc9cf4
         name: configs
