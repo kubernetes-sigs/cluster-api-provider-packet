@@ -1,0 +1,38 @@
+---
+kind: pipeline
+name: default
+
+platform:
+  os: linux
+  arch: amd64
+
+workspace:
+  base: /go
+  path: src/github.com/packethost/cluster-api-provider-packet
+
+steps:
+- name: test
+  pull: always
+  image: golang:1.12.7-alpine
+  commands:
+  - apk --update add make git
+  - make ci
+
+- name: publish-amd64
+  pull: always
+  image: plugins/docker
+  settings:
+    context: .
+    dockerfile: Dockerfile
+    password:
+      from_secret: docker_password
+    repo: packethost/metabot
+    tags:
+    - "${DRONE_COMMIT}"
+    - latest
+    username:
+      from_secret: docker_username
+  when:
+    event:
+      exclude:
+      - pull_request
