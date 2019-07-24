@@ -15,10 +15,21 @@ steps:
   pull: always
   image: golang:1.12.7-alpine
   commands:
-  - apk --update add make git
-  - make ci
+  - apk --update add make git bash jq curl
+  - make ci-test
 
-- name: publish-amd64
+- name: image
+  pull: always
+  image: plugins/docker
+  settings:
+    dry_run: true
+    context: .
+    dockerfile: Dockerfile
+    repo: packethost/cluster-api-provider-packet
+    tags:
+    - latest
+
+- name: publish
   pull: always
   image: plugins/docker
   settings:
@@ -26,13 +37,14 @@ steps:
     dockerfile: Dockerfile
     password:
       from_secret: docker_password
-    repo: packethost/metabot
+    repo: packethost/cluster-api-provider-packet
     tags:
     - "${DRONE_COMMIT}"
     - latest
     username:
       from_secret: docker_username
   when:
+    branch: master
     event:
-      exclude:
-      - pull_request
+      - push
+      - tag
