@@ -1,4 +1,7 @@
-.PHONY: vendor test manager clusterctl run install deploy manifests generate fmt vet run
+.PHONY: vendor test manager clusterctl run install deploy manifests generate fmt vet run kubebuilder ci cd
+
+KUBEBUILDER_VERSION ?= 2.0.0-beta.0
+KUBEBUILDER ?= /usr/local/kubebuilder/bin/kubebuilder
 
 GIT_VERSION?=$(shell git log -1 --format="%h")
 RELEASE_TAG ?= $(shell git tag --points-at HEAD)
@@ -41,7 +44,7 @@ CLUSTERCTL ?= bin/clusterctl-$(OS)-$(ARCH)
 MANAGER ?= bin/manager-$(OS)-$(ARCH)
 KUBECTL ?= kubectl
 
-GO ?= GO111MODULE=on go
+GO ?= GO111MODULE=on CGO_ENABLED=0 go
 
 all: test manager clusterctl
 
@@ -50,7 +53,9 @@ vendor:
 	$(GO) mod vendor
 	./hack/update-vendor.sh
 
-ci: fmt vet test image
+# 2 separate targets: ci-test does everything locally, does not need docker; ci includes ci-test and building the image
+ci-test: fmt vet test
+ci: ci-test image
 
 imagetag:
 ifndef IMAGETAG
@@ -68,9 +73,17 @@ endif
 cd: confirm
 	$(MAKE) tag-image push IMAGETAG=$(GIT_VERSION)
 
+# needed kubebuilder for tests
+kubebuilder: $(KUBEBUILDER)
+$(KUBEBUILDER):
+	curl -sL https://go.kubebuilder.io/dl/$(KUBEBUILDER_VERSION)/$(BUILDOS)/$(BUILDARCH) | tar -xz -C /tmp/
+	# move to a long-term location and put it on your path
+	# (you'll need to set the KUBEBUILDER_ASSETS env var if you put it somewhere else)
+	mv /tmp/kubebuilder_$(KUBEBUILDER_VERSION)_$(BUILDOS)_$(BUILDARCH) /usr/local/kubebuilder
+
 
 # Run tests
-test: vendor generate fmt vet manifests
+test: vendor generate fmt vet manifests $(KUBEBUILDER)
 	$(GO) test -mod=vendor ./pkg/... ./cmd/... -coverprofile cover.out
 
 # Build manager binary
@@ -133,7 +146,7 @@ endif
 
 # Build the docker image
 image: docker-build
-docker-build: test
+docker-build:
 	docker build -t $(BUILD_IMAGE_TAG) .
 
 # Push the docker image
