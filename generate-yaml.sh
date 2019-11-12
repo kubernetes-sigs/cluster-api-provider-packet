@@ -117,7 +117,7 @@ fi
 # must have API key and project ID specified in env
 PACKET_PROJECT_ID="${PACKET_PROJECT_ID:-}"
 if [ -z "$PACKET_PROJECT_ID" ]; then
-  echo "Must specify the Packet project ID as PACKET_PROJECTID"
+  echo "Must specify the Packet project ID as PACKET_PROJECT_ID"
   exit 1
 fi
 PACKET_API_KEY="${PACKET_API_KEY:-}"
