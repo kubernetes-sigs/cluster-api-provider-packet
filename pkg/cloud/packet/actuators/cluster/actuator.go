@@ -25,6 +25,8 @@ import (
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/ca"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/deployer"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/util"
+
+	clientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/klog"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
@@ -40,12 +42,14 @@ const waitForControlPlaneMachineDuration = 15 * time.Second
 // Actuator is responsible for performing cluster reconciliation
 type Actuator struct {
 	clustersGetter client.ClustersGetter
+	secretsGetter  clientv1.SecretsGetter
 	deployer       *deployer.Deployer
 }
 
 // ActuatorParams holds parameter information for Actuator
 type ActuatorParams struct {
 	ClustersGetter client.ClustersGetter
+	SecretsGetter  clientv1.SecretsGetter
 	Deployer       *deployer.Deployer
 }
 
@@ -53,6 +57,7 @@ type ActuatorParams struct {
 func NewActuator(params ActuatorParams) (*Actuator, error) {
 	return &Actuator{
 		clustersGetter: params.ClustersGetter,
+		secretsGetter:  params.SecretsGetter,
 		deployer:       params.Deployer,
 	}, nil
 }
@@ -64,38 +69,32 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	clusterCopy := cluster.DeepCopy()
 	// get a client we can use
 	var (
-		clusterClient  client.ClusterInterface
-		updatedCluster *clusterv1.Cluster
+		clusterClient client.ClusterInterface
+		secretsClient clientv1.SecretInterface
 	)
 	if a.clustersGetter != nil {
 		clusterClient = a.clustersGetter.Clusters(cluster.Namespace)
 	}
-	// ensure that we have a CA cert/key and save it
-	c, err := util.ClusterProviderFromProviderConfig(cluster.Spec.ProviderSpec)
-	if err != nil {
-		return fmt.Errorf("unable to unpack cluster provider for cluster %s: %v", cluster.Name, err)
+	if a.secretsGetter != nil {
+		secretsClient = a.secretsGetter.Secrets(util.CAPPNamespace)
 	}
-	if len(c.CAKeyPair.Cert) == 0 || len(c.CAKeyPair.Cert) == 0 {
+	// ensure that we have a CA cert/key and save it
+	caKey, caCert, err := util.GetCAFromSecret(secretsClient, cluster)
+	if err != nil {
+		return fmt.Errorf("unable to get CA from secret: %v", err)
+	}
+	if len(caKey) == 0 || len(caCert) == 0 {
 		caCertAndKey, err := ca.GenerateCACertAndKey(cluster.Name, "")
 		if err != nil {
 			return fmt.Errorf("unable to generate CA cert and key for cluster %s: %v", cluster.Name, err)
 		}
-		c.CAKeyPair.Cert = caCertAndKey.Certificate
-		c.CAKeyPair.Key = caCertAndKey.PrivateKey
-		// update cluster spec
-		spec, err := util.ClusterProviderConfigFromProvider(c)
-		if err != nil {
-			return fmt.Errorf("unable to convert newly generated provider spec with CA key/certificate to provider config for %s: %v", cluster.Name, err)
+		klog.Infof("saving secret for %s", cluster.Name)
+		if err := util.SaveCAToSecret(caCertAndKey.PrivateKey, caCertAndKey.Certificate, secretsClient, cluster); err != nil {
+			klog.Info(err.Error())
+			return err
 		}
-		cluster.Spec.ProviderSpec = spec
-		klog.Infof("saving updated cluster spec %s", cluster.Name)
-		if updatedCluster, err = clusterClient.Update(cluster); err != nil {
-			msg := fmt.Sprintf("failed to save updated cluster %s: %v", cluster.Name, err)
-			klog.Info(msg)
-			return errors.New(msg)
-		}
-		cluster = updatedCluster
 	}
+
 	// ensure that we save the correct IP address for the cluster
 	address, err := a.deployer.GetIP(cluster, nil)
 	_, isNoMachine := err.(*deployer.MachineNotFound)

@@ -122,7 +122,7 @@ endif
 	$(GO) run -mod=vendor vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go all
 	# patch the particular image tag we will want to deploy
 	@echo "updating kustomize image patch file for manager resource"
-	sed -i'' -e 's@PATCH_ME_IMAGE@image: '"$(PATCH_IMAGE_TAG)"'@' ./config/default/manager_image_patch.yaml
+	sed -i'' -e 's@PATCH_ME_IMAGE@'"$(PATCH_IMAGE_TAG)"'@' ./config/default/manager_image_patch.yaml
 	# create the manifests
 	$(KUBECTL) kustomize vendor/sigs.k8s.io/cluster-api/config/default/ > $(PROVIDERYAML)
 	echo "---" >> $(PROVIDERYAML)

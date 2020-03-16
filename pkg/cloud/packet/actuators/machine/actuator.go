@@ -29,6 +29,7 @@ import (
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/deployer"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/util"
 	"github.com/packethost/packngo"
+	clientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/klog"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
@@ -51,6 +52,7 @@ type Actuator struct {
 	machinesGetter      client.MachinesGetter
 	packetClient        *packet.PacketClient
 	machineConfigGetter machineconfig.Getter
+	secretsGetter       clientv1.SecretsGetter
 	deployer            *deployer.Deployer
 	controlPort         int
 }
@@ -59,6 +61,7 @@ type Actuator struct {
 type ActuatorParams struct {
 	MachinesGetter      client.MachinesGetter
 	MachineConfigGetter machineconfig.Getter
+	SecretsGetter       clientv1.SecretsGetter
 	Client              *packet.PacketClient
 	Deployer            *deployer.Deployer
 	ControlPort         int
@@ -68,6 +71,7 @@ type ActuatorParams struct {
 func NewActuator(params ActuatorParams) (*Actuator, error) {
 	return &Actuator{
 		machinesGetter:      params.MachinesGetter,
+		secretsGetter:       params.SecretsGetter,
 		packetClient:        params.Client,
 		machineConfigGetter: params.MachineConfigGetter,
 		deployer:            params.Deployer,
@@ -83,17 +87,19 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	if machine == nil {
 		return fmt.Errorf("cannot create nil machine")
 	}
-	var msg string
+	var (
+		secretsClient clientv1.SecretInterface
+		msg           string
+		token         = ""
+		role          = "node"
+		caCert        []byte
+		caKey         []byte
+		err           error
+	)
 	klog.Infof("Create machine %s", machine.Name)
 	machineConfig, err := util.MachineProviderFromProviderConfig(machine.Spec.ProviderSpec)
 	if err != nil {
 		msg = fmt.Sprintf("Unable to read providerSpec from machine config: %v", err)
-		klog.Info(msg)
-		return errors.New(msg)
-	}
-	clusterConfig, err := util.ClusterProviderFromProviderConfig(cluster.Spec.ProviderSpec)
-	if err != nil {
-		msg = fmt.Sprintf("Error reading cluster provider config: %v", err)
 		klog.Info(msg)
 		return errors.New(msg)
 	}
@@ -113,17 +119,18 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		klog.Info(msg)
 		return errors.New(msg)
 	}
-	var (
-		token  = ""
-		role   = "node"
-		caCert []byte
-		caKey  []byte
-	)
 	if machine.Spec.Versions.ControlPlane != "" {
 		klog.Infof("building master controlplane node: %s", machine.Name)
 		role = "master"
-		caCert = clusterConfig.CAKeyPair.Cert
-		caKey = clusterConfig.CAKeyPair.Key
+		if a.secretsGetter != nil {
+			secretsClient = a.secretsGetter.Secrets(util.CAPPNamespace)
+		}
+		// ensure that we have a CA cert/key and save it
+		if caKey, caCert, err = util.GetCAFromSecret(secretsClient, cluster); err != nil {
+			msg = fmt.Sprintf("failed to retrieve CA key and cert for cluster %s when building machine %s: %v", cluster.Name, machine.Name, err)
+			klog.Info(msg)
+			return errors.New(msg)
+		}
 		if len(caCert) == 0 {
 			msg = fmt.Sprintf("CA Certificate not yet created for cluster %s when building machine: %s", cluster.Name, machine.Name)
 			klog.Info(msg)
