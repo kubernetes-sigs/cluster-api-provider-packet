@@ -35,10 +35,6 @@ func TestStoragePacketClusterProviderSpec(t *testing.T) {
 			Name:      "foo",
 			Namespace: "default",
 		},
-		CAKeyPair: KeyPair{
-			Key:  []byte{10, 20, 30},
-			Cert: []byte{10, 20, 30},
-		},
 	}
 	g := gomega.NewGomegaWithT(t)
 

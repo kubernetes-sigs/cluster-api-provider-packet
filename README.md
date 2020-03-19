@@ -11,7 +11,7 @@ To use the cluster-api to deploy a Kubernetes cluster to Packet, you need the fo
 * A Packet API key
 * A Packet project ID
 * The `clusterctl` binary from this repository.
-* A Kubernetes cluster - the "bootstrap cluster" - that will deploy and manage the cluster on Packet. 
+* A Kubernetes cluster - the "bootstrap cluster" - that will deploy and manage the cluster on Packet.
 * `kubectl` - not absolutely required, but hard to interact with a cluster without it
 
 For the bootstrap cluster, any cluster is just fine for this, including [k3s](https://k3s.io), [k3d](https://github.com/rancher/k3d) and [kind](https://github.com/kubernetes-sigs/kind).
@@ -34,13 +34,15 @@ To deploy a cluster:
    *  `CLUSTER_NAME` - The created cluster will have this name. If not set, it will generate one for you.
    *  `FACILITY` - The Packet facility where you wantto deploy the cluster. If not set, it will default to `ewr1`.
    *  `SSH_KEY` - The path to an ssh public key to place on all of the machines. If not set, it will use whichever ssh keys are defined for your project.
+   *  `CA_KEY` - The path to a file with the CA private key. If not set, it will generate one for you.
+   *  `CA_CERT` - The path to a file with the CA certificate. If not set, it will generate one for you.
 1. Create the config files you need via `./generate-yaml.sh`. This will generate the following files in [out/packet](./out/packet):
    * `cluster.yaml`
    * `machines.yaml`
-   * `provider-components.yaml` - note that this file _will_ contain your secrets, specifically `PACKET_API_KEY`, to be loaded into the cluster
+   * `provider-components.yaml` - note that this file _will_ contain your secrets, specifically `PACKET_API_KEY`, to be loaded into the cluster, and optionally your CA private key, if provided (but not if auto-generated)
    * `addons.yaml` - note that this file _will_ contain your secrets, specifically `PACKET_API_KEY`, to be loaded into the cluster
 1. If desired, edit the following files:
-   * `cluster.yaml` - to change parameters or settings, including network CIDRs, and, if desired, your own CA certificate and key
+   * `cluster.yaml` - to change parameters or settings, including network CIDRs
    * `machines.yaml` - to change parameters or settings, including machine types and quantity
 1. Run `clusterctl` with the appropriate command.
 
@@ -72,7 +74,6 @@ Run `clusterctl create cluster --help` for more options, for example to use an e
 
 If you do not change the generated `yaml` files, it will use defaults. You can look in the `*.yaml.template` files in [cmd/clusterctl/examples/packet/](./cmd/clusterctl/examples/packet/) for details.
 
-* CA key/certificate: leave blank, which will cause the `manager` to create one.
 * service CIDR: `172.25.0.0/16`
 * pod CIDR: `172.26.0.0/16`
 * service domain: `cluster.local`
@@ -112,7 +113,7 @@ Note that, unlike `clusterctl`, this method will not take care of the following:
 
 The components deployed via the `yaml` files are the following:
 
-* `cluster.yaml` - contains 
+* `cluster.yaml` - contains
   * a single `Cluster` CRD which defines the new cluster to be deployed. Includes cluster-wide definitions, including cidr definitions for services and pods.
 * `machines.yaml` - contains
   * one or more `Machine` CRDs, which cause the deployment of individual server instance to serve as Kubernetes master or worker nodes.
@@ -142,9 +143,9 @@ The Packet cluster-api provider follows the standard design for cluster-api. It 
 The actual machines are deployed using `kubeadm`. The deployment process uses the following process.
 
 1. When a new `Cluster` is created:
-   * if the `ClusterSpec` does not include a CA key/certificate pair, create one and save it on the `Cluster` object
+   * if the appropriate `Secret` does not include a CA key/certificate pair, create one and save it in that `Secret`
 2. When a new master `Machine` is created:
-   * retrieve the CA certificate and key from the `Cluster` object
+   * retrieve the CA certificate and key from the appropriate Kubernetes `Secret`
    * launch a new server instance on Packet
    * set the `cloud-init` on the instance to run `kubeadm init`, passing it the CA certificate and key
 3. When a new worker `Machine` is created:
@@ -265,5 +266,3 @@ Important notes:
 ## References
 
 * [kubeadm yaml api](https://godoc.org/k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta2)
-
-

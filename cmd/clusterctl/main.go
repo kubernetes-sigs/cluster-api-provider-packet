@@ -22,13 +22,20 @@ import (
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/deployer"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/util"
+	kclient "k8s.io/client-go/kubernetes"
+	clientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/klog"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/cmd"
 	"sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 func main() {
-	var err error
+	var (
+		err           error
+		kube          *kclient.Clientset
+		secretsGetter clientv1.SecretsGetter
+	)
 
 	flag.Parse()
 
@@ -38,10 +45,19 @@ func main() {
 		klog.Fatalf("unable to get Packet client: %v", err)
 	}
 
+	cfg, _ := config.GetConfig()
+	if cfg != nil {
+		kube, _ = kclient.NewForConfig(cfg)
+	}
+	if kube != nil {
+		secretsGetter = kube.CoreV1()
+	}
+
 	// get a deployer, which is needed at various stages
 	deployer, err := deployer.New(deployer.Params{
-		Port:   util.ControlPort,
-		Client: client,
+		Port:          util.ControlPort,
+		SecretsGetter: secretsGetter,
+		Client:        client,
 	})
 	if err != nil {
 		klog.Fatalf("unable to get deployer: %v", err)

@@ -103,3 +103,13 @@ stringData:
   apiKey: $PACKET_API_KEY
   projectID: $PACKET_PROJECT_ID
 type: Opaque
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ca-$CLUSTER_NAME
+  namespace: system
+stringData:
+  key: $CA_KEY
+  certificate: $CA_CERT
+type: Opaque

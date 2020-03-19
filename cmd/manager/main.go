@@ -27,6 +27,7 @@ import (
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/actuators/machine/machineconfig"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/deployer"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/util"
+	kclient "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 	clusterapis "sigs.k8s.io/cluster-api/pkg/apis"
 	"sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
@@ -67,6 +68,10 @@ func main() {
 	if err != nil {
 		klog.Fatalf(err.Error())
 	}
+	kube, err := kclient.NewForConfig(cfg)
+	if err != nil {
+		klog.Fatalf(err.Error())
+	}
 
 	// get a packet client
 	client, err := packet.GetClient()
@@ -75,8 +80,9 @@ func main() {
 	}
 	// get a deployer, which is needed at various stages
 	deployer, err := deployer.New(deployer.Params{
-		Client: client,
-		Port:   util.ControlPort,
+		Client:        client,
+		SecretsGetter: kube.CoreV1(),
+		Port:          util.ControlPort,
 	})
 	if err != nil {
 		klog.Fatalf(err.Error())
@@ -85,6 +91,7 @@ func main() {
 	clusterInterface := cs.ClusterV1alpha1()
 	clusterActuator, err := cluster.NewActuator(cluster.ActuatorParams{
 		ClustersGetter: clusterInterface,
+		SecretsGetter:  kube.CoreV1(),
 		Deployer:       deployer,
 	})
 	if err != nil {
@@ -100,6 +107,7 @@ func main() {
 	machineActuator, err := machine.NewActuator(machine.ActuatorParams{
 		MachinesGetter:      clusterInterface,
 		MachineConfigGetter: getter,
+		SecretsGetter:       kube.CoreV1(),
 		Client:              client,
 		Deployer:            deployer,
 	})

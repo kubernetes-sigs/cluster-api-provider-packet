@@ -1,11 +1,15 @@
 package util
 
 import (
+	"errors"
 	"fmt"
 
 	packetconfigv1 "github.com/packethost/cluster-api-provider-packet/pkg/apis/packetprovider/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/json"
+	clientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	"sigs.k8s.io/yaml"
 )
@@ -17,6 +21,8 @@ const (
 	WorkerTag     = "kubernetes.io/role:node"
 	ControlPort   = 6443
 	AnnotationUID = "cluster.k8s.io/machine-uid"
+	caKeyName     = "key"
+	caCertName    = "certificate"
 )
 
 func MachineProviderFromProviderConfig(providerConfig clusterv1.ProviderSpec) (*packetconfigv1.PacketMachineProviderConfig, error) {
@@ -81,4 +87,48 @@ func ItemsInList(list []string, items []string) bool {
 		}
 	}
 	return true
+}
+
+func SecretName(cluster *clusterv1.Cluster) (string, error) {
+	return fmt.Sprintf("%s%s-%s", CAPPPrefix, "ca", cluster.Name), nil
+}
+
+func GetCAFromSecret(secretsClient clientv1.SecretInterface, cluster *clusterv1.Cluster) ([]byte, []byte, error) {
+	secretName, err := SecretName(cluster)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to get the name of the secret: %v", err)
+	}
+	if secretsClient == nil {
+		return nil, nil, errors.New("kubernetes client not set, cannot retrieve secret")
+	}
+	secret, err := secretsClient.Get(secretName, metav1.GetOptions{})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get secret %s/%s: %v", cluster.Namespace, secretName, err)
+	}
+	return secret.Data[caKeyName], secret.Data[caCertName], nil
+}
+
+func SaveCAToSecret(caKey, caCert []byte, secretsClient clientv1.SecretInterface, cluster *clusterv1.Cluster) error {
+	secretName, err := SecretName(cluster)
+	if err != nil {
+		return fmt.Errorf("unable to get the name of the secret: %v", err)
+	}
+	secret := &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Secret",
+			APIVersion: "core/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: CAPPNamespace,
+		},
+		Data: map[string][]byte{
+			caKeyName:  caKey,
+			caCertName: caCert,
+		},
+	}
+	if _, err := secretsClient.Update(secret); err != nil {
+		return fmt.Errorf("failed to save updated secret %s/%s for %s: %v", CAPPNamespace, secretName, cluster.Name, err)
+	}
+	return nil
 }

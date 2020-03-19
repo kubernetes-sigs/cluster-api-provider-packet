@@ -126,7 +126,6 @@ if [ -z "$PACKET_API_KEY" ]; then
   exit 1
 fi
 
-
 mkdir -p ${OUTPUT_DIR}
 
 SSH_KEY=${SSH_KEY:-}
@@ -141,13 +140,42 @@ else
   SSH_KEY=$SSH_PUBLIC_FILE
 fi
 
+CA_KEY="${CA_KEY:-}"
+CA_CERT="${CA_CERT:-}"
+CA_KEY_CONTENT=
+CA_CERT_CONTENT=
+if [ -z "$CA_KEY" -o -z "$CA_CERT" ]; then
+  echo "CA key and CA certificate not provided, will generate automatically"
+elif [ ! -e "$CA_KEY" ]; then
+	echo "CA private key file $CA_KEY does not exist" >&2
+	exit 1
+elif [ ! -e "$CA_CERT" ]; then
+	echo "CA certificate file $CA_CERT does not exist" >&2
+	exit 1
+else
+	CA_KEY_CONTENT=$(cat $CA_KEY | base64 | tr -d '\r\n')
+	CA_CERT_CONTENT=$(cat $CA_CERT | base64 | tr -d '\r\n')
+fi
+# to be sane about the output
+if [ -z "$CA_KEY_CONTENT" ]; then
+	CA_KEY_CONTENT="''"
+fi
+if [ -z "$CA_CERT_CONTENT" ]; then
+	CA_CERT_CONTENT="''"
+fi
+
+
+
 # By default, linux wraps base64 output every 76 cols, so we use 'tr -d' to remove whitespaces.
 # Note 'base64 -w0' doesn't work on Mac OS X, which has different flags.
 SSH_PUBLIC=$(cat $SSH_KEY | base64 | tr -d '\r\n')
 
 cat $PROVIDER_TEMPLATE_FILE \
+  | sed -e "s/\$CLUSTER_NAME/$CLUSTER_NAME/" \
   | sed -e "s/\$PACKET_PROJECT_ID/$PACKET_PROJECT_ID/" \
-  | sed -e "s/\$PACKET_API_KEY/$PACKET_API_KEY/" > $PROVIDER_GENERATED_FILE
+  | sed -e "s/\$PACKET_API_KEY/$PACKET_API_KEY/" \
+  | sed -e "s/\$CA_KEY/$CA_KEY_CONTENT/" \
+  | sed -e "s/\$CA_CERT/$CA_CERT_CONTENT/" > $PROVIDER_GENERATED_FILE
 
 cat $MACHINE_TEMPLATE_FILE \
   | sed -e "s/\$CLUSTER_NAME/$CLUSTER_NAME/" \

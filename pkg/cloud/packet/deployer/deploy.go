@@ -41,21 +41,24 @@ const (
 
 // Deployer satisfies the ProviderDeployer(https://github.com/kubernetes-sigs/cluster-api/blob/master/cmd/clusterctl/clusterdeployer/clusterdeployer.go) interface.
 type Deployer struct {
-	client      *packet.PacketClient
-	ControlPort int
+	client        *packet.PacketClient
+	secretsGetter corev1.SecretsGetter
+	ControlPort   int
 }
 
 // Params is used to create a new deployer.
 type Params struct {
-	Client *packet.PacketClient
-	Port   int
+	Client        *packet.PacketClient
+	SecretsGetter corev1.SecretsGetter
+	Port          int
 }
 
 // New returns a new Deployer.
 func New(params Params) (*Deployer, error) {
 	d := Deployer{
-		client:      params.Client,
-		ControlPort: params.Port,
+		client:        params.Client,
+		secretsGetter: params.SecretsGetter,
+		ControlPort:   params.Port,
 	}
 	return &d, nil
 }
@@ -131,13 +134,15 @@ func (d *Deployer) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.M
 	// 4. Generate a kubeconfig with all of the above
 	// 5. serialize to yaml
 
-	// get the config
-	clusterConfig, err := util.ClusterProviderFromProviderConfig(cluster.Spec.ProviderSpec)
-	if err != nil {
-		return "", fmt.Errorf("unable to unpack cluster provider: %v", err)
+	var secretsClient corev1.SecretInterface
+
+	if d.secretsGetter != nil {
+		secretsClient = d.secretsGetter.Secrets(util.CAPPNamespace)
 	}
-	if len(clusterConfig.CAKeyPair.Key) == 0 || len(clusterConfig.CAKeyPair.Cert) == 0 {
-		return "", fmt.Errorf("CA certs for cluster %s not initialized", cluster.Name)
+	// ensure that we have a CA cert/key and save it
+	caKeyBytes, caCertBytes, err := util.GetCAFromSecret(secretsClient, cluster)
+	if err != nil {
+		return "", fmt.Errorf("unable to get CA from secret: %v", err)
 	}
 
 	// get the URL of the master
@@ -146,12 +151,12 @@ func (d *Deployer) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.M
 		return "", fmt.Errorf("failed to retrieve controlplane URL: %+v", err)
 	}
 
-	caCertPem, _ := pem.Decode(clusterConfig.CAKeyPair.Cert)
+	caCertPem, _ := pem.Decode(caCertBytes)
 	caCert, err := x509.ParseCertificate(caCertPem.Bytes)
 	if err != nil {
 		return "", fmt.Errorf("error parsing CA certificate: %v", err)
 	}
-	caKeyPem, _ := pem.Decode(clusterConfig.CAKeyPair.Key)
+	caKeyPem, _ := pem.Decode(caKeyBytes)
 	caKey, err := x509.ParsePKCS1PrivateKey(caKeyPem.Bytes)
 	if err != nil {
 		return "", fmt.Errorf("error parsing CA key: %v", err)
@@ -171,7 +176,7 @@ func (d *Deployer) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.M
 		Clusters: map[string]*clientcmdapi.Cluster{
 			clusterName: {
 				Server:                   server,
-				CertificateAuthorityData: clusterConfig.CAKeyPair.Cert,
+				CertificateAuthorityData: caCertBytes,
 			},
 		},
 		Contexts: map[string]*clientcmdapi.Context{
