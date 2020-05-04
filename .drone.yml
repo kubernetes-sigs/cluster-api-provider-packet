@@ -13,10 +13,10 @@ workspace:
 steps:
 - name: test
   pull: always
-  image: golang:1.12.7-alpine
+  image: golang:1.14.2-alpine3.11
   commands:
   - apk --update add make git bash jq curl
-  - make ci-test
+  - make test
 
 - name: image
   pull: always
