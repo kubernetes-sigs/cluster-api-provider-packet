@@ -1,5 +1,4 @@
 # Adds namespace to all resources.
-# This must match PRECISELY what is in the constant in pkg/cloud/packet/util.CAPPNamespace
 namespace: cluster-api-provider-packet-system
 
 # Value of this field is prepended to the
@@ -9,11 +8,11 @@ namespace: cluster-api-provider-packet-system
 # field above.
 namePrefix: cluster-api-provider-packet-
 
-bases:
-- ./crd
-- ./rbac
-- ./namespace
-- ./manager
+# Labels to add to all resources and selectors.
+#commonLabels:
+#  someName: someValue
 
-patches:
-- default/manager_image_patch.yaml
+bases:
+- ../crd
+- ../rbac
+- ../namespace

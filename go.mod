@@ -1,41 +1,34 @@
 module github.com/packethost/cluster-api-provider-packet
 
-go 1.12
+go 1.13
 
 require (
-	github.com/appscode/jsonpatch v2.0.0+incompatible // indirect
-	github.com/evanphx/json-patch v4.5.0+incompatible // indirect
-	github.com/go-logr/zapr v0.1.1 // indirect
-	github.com/gogo/protobuf v1.2.1 // indirect
-	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
+	4d63.com/gochecknoglobals v0.0.0-20190306162314-7c3491d2b6ec // indirect
+	github.com/alecthomas/gocyclo v0.0.0-20150208221726-aa8f8b160214 // indirect
+	github.com/alexkohler/nakedret v1.0.0 // indirect
+	github.com/go-logr/logr v0.1.0
 	github.com/google/uuid v1.1.1
-	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
-	github.com/onsi/gomega v1.5.0
-	github.com/packethost/packngo v0.0.0-20190507131943-1343be729ca2
-	github.com/pkg/errors v0.8.1
-	github.com/spf13/cobra v0.0.5 // indirect
-	go.uber.org/atomic v1.4.0 // indirect
-	go.uber.org/zap v1.10.0 // indirect
-	golang.org/x/net v0.0.0-20190613194153-d28f0bde5980
-	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
-	k8s.io/api v0.0.0-20190222213804-5cb15d344471
-	k8s.io/apimachinery v0.0.0-20190703205208-4cfb76a8bf76
-	k8s.io/client-go v10.0.0+incompatible
-	k8s.io/cluster-bootstrap v0.0.0-20190223141759-fab9a0a63c55
-	k8s.io/code-generator v0.0.0-20190717022600-77f3a1fe56bb
-	k8s.io/klog v0.3.2
-	sigs.k8s.io/cluster-api v0.1.7
-	sigs.k8s.io/controller-runtime v0.1.12
-	sigs.k8s.io/controller-tools v0.1.11
-	sigs.k8s.io/yaml v1.1.0
-)
-
-replace (
-	github.com/Sirupsen/logrus v1.0.5 => github.com/sirupsen/logrus v1.0.5
-	github.com/Sirupsen/logrus v1.3.0 => github.com/Sirupsen/logrus v1.0.6
-	github.com/Sirupsen/logrus v1.4.0 => github.com/sirupsen/logrus v1.0.6
-	github.com/Sirupsen/logrus v1.4.2 => github.com/sirupsen/logrus v1.0.6
-	github.com/appscode/jsonpatch v2.0.0+incompatible => github.com/gomodules/jsonpatch v0.0.0-20190108182946-7c0e3b262f30
-	k8s.io/api => k8s.io/api v0.0.0-20190222213804-5cb15d344471
-	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190221213512-86fb29eff628
+	github.com/jgautheron/goconst v0.0.0-20200227150835-cda7ea3bf591 // indirect
+	github.com/mdempsky/maligned v0.0.0-20180708014732-6e39bd26a8c8 // indirect
+	github.com/mdempsky/unconvert v0.0.0-20200228143138-95ecdbfc0b5f // indirect
+	github.com/mibk/dupl v1.0.0 // indirect
+	github.com/onsi/ginkgo v1.12.0
+	github.com/onsi/gomega v1.9.0
+	github.com/opennota/check v0.0.0-20180911053232-0c771f5545ff // indirect
+	github.com/packethost/packngo v0.2.0
+	github.com/pkg/errors v0.9.1
+	github.com/securego/gosec v0.0.0-20200316084457-7da9f46445fd // indirect
+	github.com/stripe/safesql v0.2.0 // indirect
+	github.com/tsenart/deadcode v0.0.0-20160724212837-210d2dc333e9 // indirect
+	github.com/walle/lll v1.0.1 // indirect
+	k8s.io/api v0.17.2
+	k8s.io/apimachinery v0.17.2
+	k8s.io/client-go v0.17.2
+	k8s.io/klog v1.0.0
+	k8s.io/utils v0.0.0-20200229041039-0a110f9eb7ab
+	mvdan.cc/interfacer v0.0.0-20180901003855-c20040233aed // indirect
+	mvdan.cc/lint v0.0.0-20170908181259-adc824a0674b // indirect
+	mvdan.cc/unparam v0.0.0-20200314162735-0ac8026f7d06 // indirect
+	sigs.k8s.io/cluster-api v0.3.2
+	sigs.k8s.io/controller-runtime v0.5.1
 )

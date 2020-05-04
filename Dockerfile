@@ -1,21 +1,27 @@
 # Build the manager binary
-FROM golang:1.12.7-alpine as builder
+FROM golang:1.13 as builder
 
-# Copy in the go src
-WORKDIR /go/src/github.com/packethost/cluster-api-provider-packet
-COPY pkg/    pkg/
-COPY cmd/    cmd/
-COPY vendor/ vendor/
-COPY go.* ./
-COPY tools.go ./
+WORKDIR /workspace
+# Copy the Go Modules manifests
+COPY go.mod go.mod
+COPY go.sum go.sum
+# cache deps before building and copying source so that we don't need to re-download as much
+# and so that source changes don't invalidate our downloaded layer
+RUN go mod download
 
+# Copy the go source
+COPY main.go main.go
+COPY api/ api/
+COPY controllers/ controllers/
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -mod=vendor -a -o manager github.com/packethost/cluster-api-provider-packet/cmd/manager
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
 
-# Copy the controller-manager into a thin image
-FROM alpine:3.10
+# Use distroless as minimal base image to package the manager binary
+# Refer to https://github.com/GoogleContainerTools/distroless for more details
+FROM gcr.io/distroless/static:nonroot
 WORKDIR /
-RUN apk --update add ca-certificates
-COPY --from=builder /go/src/github.com/packethost/cluster-api-provider-packet/manager .
+COPY --from=builder /workspace/manager .
+USER nonroot:nonroot
+
 ENTRYPOINT ["/manager"]

@@ -1,0 +1,98 @@
+apiVersion: cluster.x-k8s.io/v1alpha3
+kind: Cluster
+metadata:
+  name: "${CLUSTER_NAME}"
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks: ["${POD_CIDR}"]
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+    kind: PacketCluster
+    name: "${CLUSTER_NAME}"
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+kind: PacketCluster
+metadata:
+  name: "${CLUSTER_NAME}"
+spec:
+  projectID: "${PROJECT_ID}"
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+kind: Machine
+metadata:
+  name: "${CLUSTER_NAME}-master-0"
+  labels:
+    cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
+    cluster.x-k8s.io/control-plane: true
+spec:
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+    kind: PacketMachine
+    name: "${CLUSTER_NAME}-master-0"
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+kind: PacketMachine
+metadata:
+  name: "${CLUSTER_NAME}-master-0"
+spec:
+  OS: "${NODE_OS}"
+  facility:
+  - "${FACILITY}"
+  billingCycle: hourly
+  machineType: "${MASTER_NODE_TYPE}"
+  sshKeys:
+  - "${SSH_KEY}"
+  tags: []
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+kind: Machine
+metadata:
+  name: "${CLUSTER_NAME}-worker-0"
+  labels:
+    cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
+spec:
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+    kind: PacketMachine
+    name: "${CLUSTER_NAME}-worker-0"
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+kind: PacketMachine
+metadata:
+  name: "${CLUSTER_NAME}-worker-0"
+spec:
+  OS: "${NODE_OS}"
+  facility:
+  - "${FACILITY}"
+  billingCycle: hourly
+  machineType: "${WORKER_NODE_TYPE}"
+  sshKeys:
+  - "${SSH_KEY}"
+  tags: []
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+kind: Machine
+metadata:
+  name: "${CLUSTER_NAME}-worker-1"
+  labels:
+    cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
+spec:
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+    kind: PacketMachine
+    name: "${CLUSTER_NAME}-worker-1"
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+kind: PacketMachine
+metadata:
+  name: "${CLUSTER_NAME}-worker-1"
+spec:
+  OS: "${NODE_OS}"
+  facility:
+  - "${FACILITY}"
+  billingCycle: hourly
+  machineType: "${WORKER_NODE_TYPE}"
+  sshKeys:
+  - "${SSH_KEY}"
+  tags: []

@@ -1,0 +1,4 @@
+releaseSeries:
+- major: MAJOR
+  minor: MINOR
+  contract: CONTRACT
