@@ -31,6 +31,8 @@ steps:
     repo: packethost/cluster-api-provider-packet
     tags:
     - latest
+    build_args:
+      - GOVER=1.14.2-alpine3.11
 
 - name: publish
   pull: always
