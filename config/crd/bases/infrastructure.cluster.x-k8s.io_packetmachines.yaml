@@ -46,8 +46,6 @@ spec:
               type: array
             machineType:
               type: string
-            projectID:
-              type: string
             providerID:
               description: ProviderID is the unique identifier as specified by the
                 cloud provider.
@@ -66,7 +64,6 @@ spec:
           - OS
           - billingCycle
           - machineType
-          - projectID
           type: object
         status:
           description: PacketMachineStatus defines the observed state of PacketMachine
