@@ -1,9 +1,6 @@
 .PHONY: vendor test manager clusterctl run install deploy manifests generate fmt vet run kubebuilder ci cd
 
-#KUBEBUILDER_VERSION ?= 2.3.0
-# because of a known bug in 2.3.0, notably the one fixed in https://github.com/kubernetes-sigs/kubebuilder/pull/1417
-# we will use master until 2.3.1 (or 2.4.0) comes out
-KUBEBUILDER_VERSION ?= master
+KUBEBUILDER_VERSION ?= 2.3.1
 KUBEBUILDER ?= /usr/local/kubebuilder/bin/kubebuilder
 
 GIT_VERSION?=$(shell git log -1 --format="%h")
