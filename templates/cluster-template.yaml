@@ -1,3 +1,18 @@
+# this is a temporary mock
+kind: KubeadmConfig
+apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+metadata:
+  name: my-control-plane1-config
+spec:
+  initConfiguration:
+    nodeRegistration:
+      kubeletExtraArgs:
+        eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+  clusterConfiguration:
+    controllerManager:
+      extraArgs:
+        enable-hostpath-provisioner: "true"
+---
 apiVersion: cluster.x-k8s.io/v1alpha3
 kind: Cluster
 metadata:
@@ -18,14 +33,20 @@ metadata:
 spec:
   projectID: "${PROJECT_ID}"
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+apiVersion: cluster.x-k8s.io/v1alpha3
 kind: Machine
 metadata:
   name: "${CLUSTER_NAME}-master-0"
   labels:
     cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
-    cluster.x-k8s.io/control-plane: true
+    cluster.x-k8s.io/control-plane: "true"
 spec:
+  clusterName: "${CLUSTER_NAME}"
+  bootstrap:
+    configRef:
+      kind: KubeadmConfig
+      apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+      name: my-control-plane1-config
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
     kind: PacketMachine
@@ -45,13 +66,19 @@ spec:
   - "${SSH_KEY}"
   tags: []
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+apiVersion: cluster.x-k8s.io/v1alpha3
 kind: Machine
 metadata:
   name: "${CLUSTER_NAME}-worker-0"
   labels:
     cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
 spec:
+  clusterName: "${CLUSTER_NAME}"
+  bootstrap:
+    configRef:
+      kind: KubeadmConfig
+      apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+      name: my-control-plane1-config
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
     kind: PacketMachine
@@ -71,13 +98,19 @@ spec:
   - "${SSH_KEY}"
   tags: []
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+apiVersion: cluster.x-k8s.io/v1alpha3
 kind: Machine
 metadata:
   name: "${CLUSTER_NAME}-worker-1"
   labels:
     cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
 spec:
+  clusterName: "${CLUSTER_NAME}"
+  bootstrap:
+    configRef:
+      kind: KubeadmConfig
+      apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+      name: my-control-plane1-config
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
     kind: PacketMachine
