@@ -130,7 +130,7 @@ func (r *PacketMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, re
 		return ctrl.Result{}, errors.Errorf("failed to create scope: %+v", err)
 	}
 
-	// Always close the scope when exiting this function so we can persist any DOMachine changes.
+	// Always close the scope when exiting this function so we can persist any PacketMachine changes.
 	defer func() {
 		if err := machineScope.Close(); err != nil && reterr == nil {
 			reterr = err
@@ -239,8 +239,14 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineScope *scope.MachineScope, clusterScope *scope.ClusterScope, logger logr.Logger) (ctrl.Result, error) {
 	logger.Info("Deleting machine")
 	packetmachine := machineScope.PacketMachine
+	providerID := machineScope.GetInstanceID()
+	if providerID == "" {
+		logger.Info("no provider ID provided, nothing to delete")
+		controllerutil.RemoveFinalizer(packetmachine, infrastructurev1alpha3.MachineFinalizer)
+		return ctrl.Result{}, nil
+	}
 
-	device, err := r.PacketClient.GetDevice(machineScope.GetInstanceID())
+	device, err := r.PacketClient.GetDevice(providerID)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("error retrieving machine status %s: %v", packetmachine.Name, err)
 	}
@@ -253,5 +259,6 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 		return ctrl.Result{}, fmt.Errorf("failed to delete the machine: %v", err)
 	}
 
+	controllerutil.RemoveFinalizer(packetmachine, infrastructurev1alpha3.MachineFinalizer)
 	return ctrl.Result{}, nil
 }

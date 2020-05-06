@@ -20,6 +20,8 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/util"
@@ -29,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	infrastructurev1alpha3 "github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
+	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/scope"
 )
 
 // PacketClusterReconciler reconciles a PacketCluster object
@@ -42,11 +45,46 @@ type PacketClusterReconciler struct {
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=packetclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
 
-func (r *PacketClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	_ = r.Log.WithValues("packetcluster", req.NamespacedName)
+func (r *PacketClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
+	ctx := context.Background()
+	logger := r.Log.WithValues("packetcluster", req.NamespacedName)
 
 	// your logic here
+	packetcluster := &infrastructurev1alpha3.PacketCluster{}
+	if err := r.Get(ctx, req.NamespacedName, packetcluster); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+
+	logger = logger.WithName(packetcluster.APIVersion)
+
+	// Fetch the Machine.
+	cluster, err := util.GetOwnerCluster(ctx, r.Client, packetcluster.ObjectMeta)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Create the cluster scope
+	clusterScope, err := scope.NewClusterScope(scope.ClusterScopeParams{
+		Logger:        logger,
+		Client:        r.Client,
+		Cluster:       cluster,
+		PacketCluster: packetcluster,
+	})
+	if err != nil {
+		return ctrl.Result{}, errors.Errorf("failed to create scope: %+v", err)
+	}
+	// Always close the scope when exiting this function so we can persist any PacketCluster changes.
+	defer func() {
+		if err := clusterScope.Close(); err != nil && reterr == nil {
+			reterr = err
+		}
+	}()
+
+	// we have no setup to be done
+	clusterScope.PacketCluster.Status.Ready = true
 
 	return ctrl.Result{}, nil
 }
