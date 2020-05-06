@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -27,6 +28,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	"sigs.k8s.io/cluster-api/util"
@@ -38,6 +40,7 @@ import (
 
 	packet "github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/scope"
+	"github.com/packethost/packngo"
 
 	infrastructurev1alpha3 "github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
 )
@@ -50,6 +53,7 @@ const (
 type PacketMachineReconciler struct {
 	client.Client
 	Log          logr.Logger
+	Recorder     record.EventRecorder
 	Scheme       *runtime.Scheme
 	PacketClient *packet.PacketClient
 }
@@ -248,9 +252,19 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 
 	device, err := r.PacketClient.GetDevice(providerID)
 	if err != nil {
+		if err.(*packngo.ErrorResponse).Response != nil && err.(*packngo.ErrorResponse).Response.StatusCode == http.StatusNotFound {
+			// When the server does not exist we do not have anything left to do.
+			// Probably somebody manually deleted the server from the UI or via API.
+			logger.Info("Server not found, nothing left to do")
+			controllerutil.RemoveFinalizer(packetmachine, infrastructurev1alpha3.MachineFinalizer)
+			return ctrl.Result{}, nil
+		}
 		return ctrl.Result{}, fmt.Errorf("error retrieving machine status %s: %v", packetmachine.Name, err)
 	}
+
+	// We should never get there but this is a safetly check
 	if device == nil {
+		controllerutil.RemoveFinalizer(packetmachine, infrastructurev1alpha3.MachineFinalizer)
 		return ctrl.Result{}, fmt.Errorf("machine does not exist: %s", packetmachine.Name)
 	}
 
