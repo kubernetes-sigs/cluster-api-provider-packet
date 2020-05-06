@@ -174,9 +174,9 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		return ctrl.Result{}, nil
 	}
 
-	// Make sure bootstrap data is available and populated.
-	if machineScope.Machine.Spec.Bootstrap.Data == nil {
-		machineScope.Info("Bootstrap data is not yet available")
+	// Make sure bootstrap data secret is available and populated.
+	if machineScope.Machine.Spec.Bootstrap.DataSecretName == nil {
+		machineScope.Info("Bootstrap data secret is not yet available")
 		return ctrl.Result{}, nil
 	}
 
