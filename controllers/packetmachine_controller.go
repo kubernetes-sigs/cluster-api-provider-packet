@@ -41,7 +41,6 @@ import (
 
 	packet "github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/scope"
-	"github.com/packethost/packngo"
 
 	infrastructurev1alpha3 "github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
 )
