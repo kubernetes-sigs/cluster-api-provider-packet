@@ -42,6 +42,10 @@ import (
 	infrastructurev1alpha3 "github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
 )
 
+const (
+	providerName = "packet"
+)
+
 // PacketMachineReconciler reconciles a PacketMachine object
 type PacketMachineReconciler struct {
 	client.Client
@@ -202,7 +206,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		}
 	}
 
-	machineScope.SetProviderID(dev.ID)
+	machineScope.SetProviderID(fmt.Sprintf("%s://%s", providerName, dev.ID))
 	machineScope.SetInstanceStatus(infrastructurev1alpha3.PacketResourceStatus(dev.State))
 
 	addrs, err := r.PacketClient.GetDeviceAddresses(dev)
