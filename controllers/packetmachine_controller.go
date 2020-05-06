@@ -23,6 +23,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
+	"github.com/packethost/packngo"
 	"github.com/pkg/errors"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -180,9 +181,17 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		return ctrl.Result{}, nil
 	}
 
-	dev, err := r.PacketClient.GetDevice(machineScope.GetInstanceID())
-	if err != nil {
-		return ctrl.Result{}, err
+	providerID := machineScope.GetInstanceID()
+	var (
+		dev *packngo.Device
+		err error
+	)
+	// if we have no provider ID, then we are creating
+	if providerID != "" {
+		dev, err = r.PacketClient.GetDevice(providerID)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 	if dev == nil {
 		// generate a unique UID that will survive pivot, i.e. is not tied to the cluster itself
@@ -206,7 +215,8 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		}
 	}
 
-	machineScope.SetProviderID(fmt.Sprintf("%s://%s", providerName, dev.ID))
+	// we do not need to set this as packet://<id> because SetProviderID() does the formatting for us
+	machineScope.SetProviderID(dev.ID)
 	machineScope.SetInstanceStatus(infrastructurev1alpha3.PacketResourceStatus(dev.State))
 
 	addrs, err := r.PacketClient.GetDeviceAddresses(dev)
