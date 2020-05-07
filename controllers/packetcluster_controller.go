@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -33,15 +34,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	infrastructurev1alpha3 "github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
+	packet "github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/scope"
 )
 
 // PacketClusterReconciler reconciles a PacketCluster object
 type PacketClusterReconciler struct {
 	client.Client
-	Log      logr.Logger
-	Recorder record.EventRecorder
-	Scheme   *runtime.Scheme
+	Log          logr.Logger
+	Recorder     record.EventRecorder
+	Scheme       *runtime.Scheme
+	PacketClient *packet.PacketClient
 }
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=packetclusters,verbs=get;list;watch;create;update;patch;delete
@@ -94,8 +97,29 @@ func (r *PacketClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, re
 		}
 	}()
 
-	// we have no setup to be done
 	clusterScope.PacketCluster.Status.Ready = true
+
+	address, err := r.getIP(clusterScope.PacketCluster)
+	_, isNoMachine := err.(*MachineNotFound)
+	_, isNoIP := err.(*MachineNoIP)
+	switch {
+	case err != nil && isNoMachine:
+		logger.Info("Control plan device not found. Requeueing...")
+		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+	case err != nil && isNoIP:
+		logger.Info("Control plan device not found. Requeueing...")
+		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+	case err != nil:
+		logger.Error(err, "error getting a control plan ip")
+		return ctrl.Result{}, err
+	case err == nil:
+		clusterScope.PacketCluster.Status.APIEndpoints = []infrastructurev1alpha3.APIEndpoint{
+			{
+				Host: address,
+				Port: 6443,
+			},
+		}
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -110,4 +134,46 @@ func (r *PacketClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			},
 		).
 		Complete(r)
+}
+
+func (r *PacketClusterReconciler) getIP(cluster *infrastructurev1alpha3.PacketCluster) (string, error) {
+	if cluster == nil {
+		return "", fmt.Errorf("cannot get IP of machine in nil cluster")
+	}
+	tags := []string{
+		packet.GenerateClusterTag(string(cluster.Name)),
+		infrastructurev1alpha3.MasterTag,
+	}
+	device, err := r.PacketClient.GetDeviceByTags(cluster.Spec.ProjectID, tags)
+	if err != nil {
+		return "", fmt.Errorf("error retrieving machine: %v", err)
+	}
+	if device == nil {
+		return "", &MachineNotFound{err: fmt.Sprintf("machine does not exist")}
+	}
+	if device.Network == nil || len(device.Network) == 0 || device.Network[0].Address == "" {
+		return "", &MachineNoIP{err: "machine does not yet have an IP address"}
+	}
+	// TODO: validate that this address exists, so we don't hit nil pointer
+	// TODO: check which address to return
+	// TODO: check address format (cidr, subnet, etc.)
+	return device.Network[0].Address, nil
+}
+
+// MachineNotFound error representing that the requested device was not yet found
+type MachineNotFound struct {
+	err string
+}
+
+func (e *MachineNotFound) Error() string {
+	return e.err
+}
+
+// MachineNoIP error representing that the requested device does not have an IP yet assigned
+type MachineNoIP struct {
+	err string
+}
+
+func (e *MachineNoIP) Error() string {
+	return e.err
 }
