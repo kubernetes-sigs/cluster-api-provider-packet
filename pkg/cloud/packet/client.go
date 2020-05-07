@@ -74,3 +74,17 @@ func (p *PacketClient) GetDeviceAddresses(device *packngo.Device) ([]corev1.Node
 	}
 	return addrs, nil
 }
+
+func (p *PacketClient) GetDeviceByTags(project string, tags []string) (*packngo.Device, error) {
+	devices, _, err := p.Devices.List(project, nil)
+	if err != nil {
+		return nil, fmt.Errorf("Error retrieving devices: %v", err)
+	}
+	// returns the first one that matches all of the tags
+	for _, device := range devices {
+		if ItemsInList(device.Tags, tags) {
+			return &device, nil
+		}
+	}
+	return nil, nil
+}

@@ -85,10 +85,11 @@ func main() {
 	}
 
 	if err = (&controllers.PacketClusterReconciler{
-		Client:   mgr.GetClient(),
-		Log:      ctrl.Log.WithName("controllers").WithName("PacketCluster"),
-		Recorder: mgr.GetEventRecorderFor("packetcluster-controller"),
-		Scheme:   mgr.GetScheme(),
+		Client:       mgr.GetClient(),
+		Log:          ctrl.Log.WithName("controllers").WithName("PacketCluster"),
+		Recorder:     mgr.GetEventRecorderFor("packetcluster-controller"),
+		PacketClient: client,
+		Scheme:       mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PacketCluster")
 		os.Exit(1)
