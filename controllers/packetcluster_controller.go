@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -66,6 +67,14 @@ func (r *PacketClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, re
 	cluster, err := util.GetOwnerCluster(ctx, r.Client, packetcluster.ObjectMeta)
 	if err != nil {
 		return ctrl.Result{}, err
+	}
+
+	if cluster == nil {
+		logger.Info("OwenerCluster is not set yet. Requeuing...")
+		return ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: 2 * time.Second,
+		}, nil
 	}
 
 	// Create the cluster scope

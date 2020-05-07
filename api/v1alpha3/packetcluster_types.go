@@ -32,6 +32,14 @@ type PacketClusterSpec struct {
 	ProjectID string `json:"projectID"`
 }
 
+// APIEndpoint represents a reachable Kubernetes API endpoint.
+type APIEndpoint struct {
+	// The hostname on which the API server is serving.
+	Host string `json:"host"`
+	// The port on which the API server is serving.
+	Port int `json:"port"`
+}
+
 // PacketClusterStatus defines the observed state of PacketCluster
 type PacketClusterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
@@ -40,6 +48,9 @@ type PacketClusterStatus struct {
 	// Ready denotes that the cluster (infrastructure) is ready.
 	// +optional
 	Ready bool `json:"ready"`
+	// APIEndpoints represents the endpoints to communicate with the control plane.
+	// +optional
+	APIEndpoints []APIEndpoint `json:"apiEndpoints,omitempty"`
 }
 
 // +kubebuilder:subresource:status

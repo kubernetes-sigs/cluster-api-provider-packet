@@ -43,7 +43,8 @@ func (p *PacketClient) GetDevice(deviceID string) (*packngo.Device, error) {
 	return dev, err
 }
 
-func (p *PacketClient) NewDevice(hostname, project string, spec infrav1.PacketMachineSpec) (*packngo.Device, error) {
+func (p *PacketClient) NewDevice(hostname, project string, spec infrav1.PacketMachineSpec, extraTags []string) (*packngo.Device, error) {
+	tags := append(spec.Tags, extraTags...)
 	serverCreateOpts := &packngo.DeviceCreateRequest{
 		Hostname:     hostname,
 		ProjectID:    project,
@@ -51,7 +52,7 @@ func (p *PacketClient) NewDevice(hostname, project string, spec infrav1.PacketMa
 		BillingCycle: spec.BillingCycle,
 		Plan:         spec.MachineType,
 		OS:           spec.OS,
-		Tags:         spec.Tags,
+		Tags:         tags,
 	}
 
 	dev, _, err := p.Client.Devices.Create(serverCreateOpts)

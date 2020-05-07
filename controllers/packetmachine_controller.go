@@ -208,8 +208,9 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		} else {
 			tags = append(tags, infrastructurev1alpha3.WorkerTag)
 		}
+
 		name := machineScope.Name()
-		dev, err = r.PacketClient.NewDevice(name, clusterScope.PacketCluster.Spec.ProjectID, machineScope.PacketMachine.Spec)
+		dev, err = r.PacketClient.NewDevice(name, clusterScope.PacketCluster.Spec.ProjectID, machineScope.PacketMachine.Spec, tags)
 		if err != nil {
 			errs := fmt.Errorf("failed to create machine %s: %v", name, err)
 			machineScope.SetErrorReason(capierrors.CreateMachineError)
