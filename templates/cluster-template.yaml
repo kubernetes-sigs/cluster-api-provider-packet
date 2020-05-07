@@ -2,7 +2,7 @@
 kind: KubeadmConfig
 apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
 metadata:
-  name: my-control-plane1-config
+  name: "${CLUSTER_NAME}-control-plane1-config"
 spec:
   initConfiguration:
     nodeRegistration:
@@ -46,7 +46,7 @@ spec:
     configRef:
       kind: KubeadmConfig
       apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
-      name: my-control-plane1-config
+      name: "${CLUSTER_NAME}-control-plane1-config"
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
     kind: PacketMachine
@@ -78,7 +78,7 @@ spec:
     configRef:
       kind: KubeadmConfig
       apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
-      name: my-control-plane1-config
+      name: "${CLUSTER_NAME}-worker0-config"
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
     kind: PacketMachine
@@ -110,7 +110,7 @@ spec:
     configRef:
       kind: KubeadmConfig
       apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
-      name: my-control-plane1-config
+      name: "${CLUSTER_NAME}-worker1-config"
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
     kind: PacketMachine
@@ -129,3 +129,23 @@ spec:
   sshKeys:
   - "${SSH_KEY}"
   tags: []
+---
+kind: KubeadmConfig
+apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+metadata:
+  name: "${CLUSTER_NAME}-worker1-config"
+spec:
+  joinConfiguration:
+    nodeRegistration:
+      kubeletExtraArgs:
+        eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+---
+kind: KubeadmConfig
+apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+metadata:
+  name: "${CLUSTER_NAME}-worker0-config"
+spec:
+  joinConfiguration:
+    nodeRegistration:
+      kubeletExtraArgs:
+        eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
