@@ -4,12 +4,11 @@ package v1alpha3
 type PacketResourceStatus string
 
 var (
-	// PacketResourceStatus is the string representing a Packet resource just created and in a provisioning state.
+	// PacketResourceStatus is the string representing a Packet resource just created.
 	PacketResourceStatusNew = PacketResourceStatus("new")
 	// PacketResourceStatusQueued is the string representing a Packet resource that is waiting in a queue to be created.
 	PacketResourceStatusQueued = PacketResourceStatus("queued")
-	// PacketResourceStatusQueued is the string representing a Packet resource
-	// that got picked from a worker that is not provisioning it.
+	// PacketResourceStatusProvisioning is the string reresenting a Packet resource that is in provisioning
 	PacketResourceStatusProvisioning = PacketResourceStatus("provisioning")
 	// PacketResourceStatusRunning is the string representing a Packet resource already provisioned and in a active state.
 	PacketResourceStatusRunning = PacketResourceStatus("active")

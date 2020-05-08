@@ -97,30 +97,44 @@ func (r *PacketClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, re
 		}
 	}()
 
-	clusterScope.PacketCluster.Status.Ready = true
+	// Handle deleted clusters
+	if !cluster.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, logger, clusterScope)
+	}
 
+	return r.reconcile(ctx, logger, clusterScope)
+}
+
+func (r *PacketClusterReconciler) reconcile(ctx context.Context, logger logr.Logger, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
 	address, err := r.getIP(clusterScope.PacketCluster)
-	_, isNoMachine := err.(*MachineNotFound)
-	_, isNoIP := err.(*MachineNoIP)
-	switch {
-	case err != nil && isNoMachine:
-		logger.Info("Control plane device not found. Requeueing...")
-		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
-	case err != nil && isNoIP:
-		logger.Info("Control plane device not found. Requeueing...")
-		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
-	case err != nil:
-		logger.Error(err, "error getting a control plane ip")
-		return ctrl.Result{}, err
-	case err == nil:
+	if err == nil {
 		clusterScope.PacketCluster.Status.APIEndpoints = []infrastructurev1alpha3.APIEndpoint{
 			{
 				Host: address,
 				Port: 6443,
 			},
 		}
+		clusterScope.PacketCluster.Status.Ready = true
+		return ctrl.Result{}, nil
 	}
 
+	_, isNoMachine := err.(*MachineNotFound)
+	_, isNoIP := err.(*MachineNoIP)
+	switch {
+	case err != nil && isNoMachine:
+		logger.Info("Control plan device not found. Requeueing...")
+		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+	case err != nil && isNoIP:
+		logger.Info("Control plan device not found. Requeueing...")
+		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+	case err != nil:
+		logger.Error(err, "Control plan device not found. Requeueing...")
+		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *PacketClusterReconciler) reconcileDelete(ctx context.Context, logger logr.Logger, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 

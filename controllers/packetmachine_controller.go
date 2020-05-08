@@ -173,15 +173,17 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	// If the PacketMachine doesn't have our finalizer, add it.
 	controllerutil.AddFinalizer(packetmachine, infrastructurev1alpha3.MachineFinalizer)
 
-	if !machineScope.Cluster.Status.InfrastructureReady {
-		machineScope.Info("Cluster infrastructure is not ready yet")
-		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
-	}
+	if !machineScope.IsControlPlane() {
+		if !machineScope.Cluster.Status.InfrastructureReady {
+			machineScope.Info("Cluster infrastructure is not ready yet")
+			return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+		}
 
-	// Make sure bootstrap data secret is available and populated.
-	if machineScope.Machine.Spec.Bootstrap.DataSecretName == nil {
-		machineScope.Info("Bootstrap data secret is not yet available")
-		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+		// Make sure bootstrap data secret is available and populated.
+		if machineScope.Machine.Spec.Bootstrap.DataSecretName == nil {
+			machineScope.Info("Bootstrap data secret is not yet available")
+			return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+		}
 	}
 
 	providerID := machineScope.GetInstanceID()
@@ -234,7 +236,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	var result = ctrl.Result{}
 
 	switch infrastructurev1alpha3.PacketResourceStatus(dev.State) {
-	case infrastructurev1alpha3.PacketResourceStatusNew, infrastructurev1alpha3.PacketResourceStatusQueued:
+	case infrastructurev1alpha3.PacketResourceStatusNew, infrastructurev1alpha3.PacketResourceStatusQueued, infrastructurev1alpha3.PacketResourceStatusProvisioning:
 		machineScope.Info("Machine instance is pending", "instance-id", machineScope.GetInstanceID())
 		result = ctrl.Result{RequeueAfter: 10 * time.Second}
 	case infrastructurev1alpha3.PacketResourceStatusRunning:
