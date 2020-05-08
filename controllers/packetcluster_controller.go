@@ -108,11 +108,9 @@ func (r *PacketClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, re
 func (r *PacketClusterReconciler) reconcile(ctx context.Context, logger logr.Logger, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
 	address, err := r.getIP(clusterScope.PacketCluster)
 	if err == nil {
-		clusterScope.PacketCluster.Status.APIEndpoints = []infrastructurev1alpha3.APIEndpoint{
-			{
-				Host: address,
-				Port: 6443,
-			},
+		clusterScope.PacketCluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
+			Host: address,
+			Port: 6443,
 		}
 		clusterScope.PacketCluster.Status.Ready = true
 		return ctrl.Result{}, nil
