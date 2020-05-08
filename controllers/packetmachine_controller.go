@@ -175,13 +175,13 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 
 	if !machineScope.Cluster.Status.InfrastructureReady {
 		machineScope.Info("Cluster infrastructure is not ready yet")
-		return ctrl.Result{}, nil
+		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 	}
 
 	// Make sure bootstrap data secret is available and populated.
 	if machineScope.Machine.Spec.Bootstrap.DataSecretName == nil {
 		machineScope.Info("Bootstrap data secret is not yet available")
-		return ctrl.Result{}, nil
+		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 	}
 
 	providerID := machineScope.GetInstanceID()
