@@ -3,6 +3,8 @@
 KUBEBUILDER_VERSION ?= 2.3.1
 KUBEBUILDER ?= /usr/local/kubebuilder/bin/kubebuilder
 
+CERTMANAGER_URL ?= https://github.com/jetstack/cert-manager/releases/download/v0.14.1/cert-manager.yaml
+
 GIT_VERSION?=$(shell git log -1 --format="%h")
 RELEASE_TAG ?= $(shell git tag --points-at HEAD)
 
@@ -55,6 +57,12 @@ GOBIN=$(shell go env GOPATH)/bin
 else
 GOBIN=$(shell go env GOBIN)
 endif
+
+# where we store downloaded core
+COREPATH ?= out/core
+CORE_VERSION ?= v0.3.5
+CORE_API ?= https://api.github.com/repos/kubernetes-sigs/cluster-api/releases
+CORE_URL ?= https://github.com/kubernetes-sigs/cluster-api/releases/download/$(CORE_VERSION)
 
 # useful function
 word-dot = $(word $2,$(subst ., ,$1))
@@ -222,3 +230,20 @@ $(MANAGERLESS_CLUSTERCTLYAML): $(MANAGERLESS_BASE)
 	@cat $(CLUSTERCTL_TEMPLATE) | sed 's%URL%$(FULL_MANAGERLESS_MANIFEST)%g' > $@
 	@echo "managerless ready, command-line is:"
 	@echo "	clusterctl --config=$@ <commands>"
+
+$(COREPATH):
+	mkdir -p $@
+
+$(COREPATH)/%:
+	curl -s -L -o $@ $(CORE_URL)/$*
+
+core: $(COREPATH)
+	# download from core
+	@$(eval YAMLS := $(shell curl -s -L $(CORE_API) | jq -r '[.[] | select(.tag_name == "$(CORE_VERSION)").assets[] | select(.name | contains("yaml")) | .name] | join(" ")'))
+	@if [ -n "$(YAMLS)" ]; then $(MAKE) $(addprefix $(COREPATH)/,$(YAMLS)); fi
+
+cluster-init: core managerless
+	kubectl apply --validate=false -f $(CERTMANAGER_URL)
+	# because of dependencies, this is allowed to fail once or twice
+	kubectl apply -f $(COREPATH) || kubectl apply -f $(COREPATH) || kubectl apply -f $(COREPATH)
+	kubectl apply -f $(FULL_MANAGERLESS_MANIFEST)
