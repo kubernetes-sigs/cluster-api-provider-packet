@@ -234,7 +234,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	var result = ctrl.Result{}
 
 	switch infrastructurev1alpha3.PacketResourceStatus(dev.State) {
-	case infrastructurev1alpha3.PacketResourceStatusNew, infrastructurev1alpha3.PacketResourceStatusQueued:
+	case infrastructurev1alpha3.PacketResourceStatusNew, infrastructurev1alpha3.PacketResourceStatusQueued, infrastructurev1alpha3.PacketResourceStatusProvisioning:
 		machineScope.Info("Machine instance is pending", "instance-id", machineScope.GetInstanceID())
 		result = ctrl.Result{RequeueAfter: 10 * time.Second}
 	case infrastructurev1alpha3.PacketResourceStatusRunning:

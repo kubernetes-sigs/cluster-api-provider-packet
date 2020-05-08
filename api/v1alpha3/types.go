@@ -4,18 +4,22 @@ package v1alpha3
 type PacketResourceStatus string
 
 var (
-	// PacketResourceStatus is the string representing a Packet resource just created and in a provisioning state.
+	// PacketResourceStatusNew represents a Packet resource requested.
+	// The Packet infrastucture uses a queue to avoid any abuse. So a resource
+	// does not get created straigh away but it can wait for a bit in a queue.
 	PacketResourceStatusNew = PacketResourceStatus("new")
-	// PacketResourceStatusQueued is the string representing a Packet resource that is waiting in a queue to be created.
+	// PacketResourceStatusQueued represents a device waiting for his turn to be provisioned.
+	// Time in queue depends on how many creation requests you already issued, or
+	// from how many resources waiting to be deleted we have for you.
 	PacketResourceStatusQueued = PacketResourceStatus("queued")
-	// PacketResourceStatusQueued is the string representing a Packet resource
-	// that got picked from a worker that is not provisioning it.
+	// PacketResourceStatusProvisioning represents a resource that got dequeued
+	// and it is activelly processed by a worker.
 	PacketResourceStatusProvisioning = PacketResourceStatus("provisioning")
-	// PacketResourceStatusRunning is the string representing a Packet resource already provisioned and in a active state.
+	// PacketResourceStatusRunning represents a Packet resource already provisioned and in a active state.
 	PacketResourceStatusRunning = PacketResourceStatus("active")
-	// PacketResourceStatusErrored is the string representing a Packet resource in a errored state.
+	// PacketResourceStatusErrored represents a Packet resource in a errored state.
 	PacketResourceStatusErrored = PacketResourceStatus("errored")
-	// PacketResourceStatusOff is the string representing a Packet resource in off state.
+	// PacketResourceStatusOff represents a Packet resource in off state.
 	PacketResourceStatusOff = PacketResourceStatus("off")
 )
 
