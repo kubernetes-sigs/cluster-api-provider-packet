@@ -104,13 +104,13 @@ func (r *PacketClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, re
 	_, isNoIP := err.(*MachineNoIP)
 	switch {
 	case err != nil && isNoMachine:
-		logger.Info("Control plan device not found. Requeueing...")
+		logger.Info("Control plane device not found. Requeueing...")
 		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 	case err != nil && isNoIP:
-		logger.Info("Control plan device not found. Requeueing...")
+		logger.Info("Control plane device not found. Requeueing...")
 		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 	case err != nil:
-		logger.Error(err, "error getting a control plan ip")
+		logger.Error(err, "error getting a control plane ip")
 		return ctrl.Result{}, err
 	case err == nil:
 		clusterScope.PacketCluster.Status.APIEndpoints = []infrastructurev1alpha3.APIEndpoint{
