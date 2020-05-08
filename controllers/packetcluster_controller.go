@@ -97,9 +97,12 @@ func (r *PacketClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, re
 		}
 	}()
 
-	clusterScope.PacketCluster.Status.Ready = true
-
 	address, err := r.getIP(clusterScope.PacketCluster)
+	if err == nil {
+		clusterScope.PacketCluster.Status.Ready = true
+		return ctrl.Result{}, nil
+	}
+
 	_, isNoMachine := err.(*MachineNotFound)
 	_, isNoIP := err.(*MachineNoIP)
 	switch {
@@ -113,12 +116,11 @@ func (r *PacketClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, re
 		logger.Error(err, "error getting a control plane ip")
 		return ctrl.Result{}, err
 	case err == nil:
-		clusterScope.PacketCluster.Status.APIEndpoints = []infrastructurev1alpha3.APIEndpoint{
-			{
-				Host: address,
-				Port: 6443,
-			},
+		clusterScope.PacketCluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
+			Host: address,
+			Port: 6443,
 		}
+		clusterScope.PacketCluster.Status.Ready = true
 	}
 
 	return ctrl.Result{}, nil
