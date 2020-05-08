@@ -42,12 +42,13 @@ You now should have a functional manager in [bin/](./bin/) named `manager-<os>-<
 
 ### Deploy the core cluster-api provider
 
-This can be done in one of two ways:
+This can be done in one of three ways:
 
-* Manually:
+* Manually: This generally is not recommended, but is good for seeing the various parts that make up a manager cluster, understanding how they work together, and debugging issues.
   * apply the cert manager as `kubectl apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/v0.14.1/cert-manager.yaml`
   * download the components from the [official cluster-api releases page](https://github.com/kubernetes-sigs/cluster-api/releases); you will need all of the `.yaml` files in a release. Then run `kubectl apply -f <dir>` to whatever directory you downloaded it. The order _does_ matter, and the CRDs have to exist, so you might need to
 `kubectl apply` multiple times until it all is accepted.
+* Make target: This just wraps the above manual steps: `make cluster-init`
 * CLI: use the `clusterctl` binary from the [official cluster-api releases page](https://github.com/kubernetes-sigs/cluster-api/releases) to deploy to your cluster. This will download the yaml files, apply them and ensure that CRDs are in place before applying the rest.
 
 ### Generate the Packet infrastructure provider yaml
