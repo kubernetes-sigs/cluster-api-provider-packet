@@ -7,7 +7,13 @@ spec:
   initConfiguration:
     nodeRegistration:
       kubeletExtraArgs:
-        eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+        cluster-dns: ${CLUSTER_DNS_SERVER}
+        cluster-domain: "cluster.local" 
+        node-ip: ${PRIVATEIP}
+        allow-privileged: "true"
+        cloud-provider: external 
+        authentication-token-webhook: "true"
+        read-only-port: "0"
   clusterConfiguration:
     controllerManager:
       extraArgs:
@@ -138,7 +144,13 @@ spec:
   joinConfiguration:
     nodeRegistration:
       kubeletExtraArgs:
-        eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+        cluster-dns: ${CLUSTER_DNS_SERVER}
+        cluster-domain: "cluster.local" 
+        node-ip: ${PRIVATEIP}
+        allow-privileged: "true"
+        cloud-provider: external 
+        authentication-token-webhook: "true"
+        read-only-port: "0"
 ---
 kind: KubeadmConfig
 apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
@@ -148,4 +160,10 @@ spec:
   joinConfiguration:
     nodeRegistration:
       kubeletExtraArgs:
-        eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+        cluster-dns: ${CLUSTER_DNS_SERVER}
+        cluster-domain: "cluster.local" 
+        node-ip: ${PRIVATEIP}
+        allow-privileged: "true"
+        cloud-provider: external 
+        authentication-token-webhook: "true"
+        read-only-port: "0"

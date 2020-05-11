@@ -53,6 +53,7 @@ func (p *PacketClient) NewDevice(hostname, project string, spec infrav1.PacketMa
 		Plan:         spec.MachineType,
 		OS:           spec.OS,
 		Tags:         tags,
+		UserData:     userData,
 	}
 
 	dev, _, err := p.Client.Devices.Create(serverCreateOpts)
