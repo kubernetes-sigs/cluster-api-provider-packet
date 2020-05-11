@@ -2,6 +2,8 @@
 
 KUBEBUILDER_VERSION ?= 2.3.1
 KUBEBUILDER ?= /usr/local/kubebuilder/bin/kubebuilder
+CONTROLLER_GEN_VERSION ?= v0.3.0
+CONTROLLER_GEN=$(GOBIN)/controller-gen
 
 CERTMANAGER_URL ?= https://github.com/jetstack/cert-manager/releases/download/v0.14.1/cert-manager.yaml
 
@@ -179,20 +181,11 @@ push:
 
 # find or download controller-gen
 # download controller-gen if necessary
-controller-gen:
-ifeq (, $(shell which controller-gen))
-	@{ \
-	set -e ;\
-	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
-	cd $$CONTROLLER_GEN_TMP_DIR ;\
-	go mod init tmp ;\
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.5 ;\
-	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
-	}
-CONTROLLER_GEN=$(GOBIN)/controller-gen
-else
-CONTROLLER_GEN=$(shell which controller-gen)
-endif
+# version must be at least the given version
+.PHONY: $(CONTROLLER_GEN)
+controller-gen: $(CONTROLLER_GEN)
+$(CONTROLLER_GEN):
+	scripts/controller-gen.sh $@ $(CONTROLLER_GEN_VERSION)
 
 examples:
 	./generate-examples.sh
