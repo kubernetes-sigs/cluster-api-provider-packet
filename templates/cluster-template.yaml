@@ -85,113 +85,73 @@ spec:
   tags: []
 ---
 apiVersion: cluster.x-k8s.io/v1alpha3
-kind: Machine
+kind: MachineDeployment
 metadata:
-  name: "${CLUSTER_NAME}-worker-0"
+  name: ${CLUSTER_NAME}-worker-a
   labels:
     cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
+    pool: worker-a
 spec:
-  clusterName: "${CLUSTER_NAME}"
-  bootstrap:
-    configRef:
-      kind: KubeadmConfig
-      apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
-      name: "${CLUSTER_NAME}-worker0-config"
-  infrastructureRef:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
-    kind: PacketMachine
-    name: "${CLUSTER_NAME}-worker-0"
+  replicas: 3
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
+      pool: worker-a
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
+        pool: worker-a
+    spec:
+      version: ${KUBERNETES_VERSION}
+      bootstrap:
+        configRef:
+          name: ${CLUSTER_NAME}-worker-a
+          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+          kind: KubeadmConfigTemplate
+      infrastructureRef:
+        name: ${CLUSTER_NAME}-worker-a
+        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+        kind: PacketMachineTemplate
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
-kind: PacketMachine
+kind: PacketMachineTemplate
 metadata:
-  name: "${CLUSTER_NAME}-worker-0"
+  name: ${CLUSTER_NAME}-worker-a
 spec:
-  OS: "${NODE_OS}"
-  facility:
-  - "${FACILITY}"
-  billingCycle: hourly
-  machineType: "${WORKER_NODE_TYPE}"
-  sshKeys:
-  - "${SSH_KEY}"
-  tags: []
+  template:
+    spec:
+      OS: "${NODE_OS}"
+      facility:
+      - "${FACILITY}"
+      billingCycle: hourly
+      machineType: "${WORKER_NODE_TYPE}"
+      sshKeys:
+      - "${SSH_KEY}"
+      tags: []
 ---
-apiVersion: cluster.x-k8s.io/v1alpha3
-kind: Machine
-metadata:
-  name: "${CLUSTER_NAME}-worker-1"
-  labels:
-    cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
-spec:
-  clusterName: "${CLUSTER_NAME}"
-  bootstrap:
-    configRef:
-      kind: KubeadmConfig
-      apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
-      name: "${CLUSTER_NAME}-worker1-config"
-  infrastructureRef:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
-    kind: PacketMachine
-    name: "${CLUSTER_NAME}-worker-1"
----
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
-kind: PacketMachine
-metadata:
-  name: "${CLUSTER_NAME}-worker-1"
-spec:
-  OS: "${NODE_OS}"
-  facility:
-  - "${FACILITY}"
-  billingCycle: hourly
-  machineType: "${WORKER_NODE_TYPE}"
-  sshKeys:
-  - "${SSH_KEY}"
-  tags: []
----
-kind: KubeadmConfig
+kind: KubeadmConfigTemplate
 apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
 metadata:
-  name: "${CLUSTER_NAME}-worker1-config"
+  name: "${CLUSTER_NAME}-worker-a"
 spec:
-  preKubeadmCommands:
-    - swapoff -a
-    - apt-get -y update
-    - DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
-    - curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-    - echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
-    - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-    - apt-key fingerprint 0EBFCD88
-    - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-    - apt-get update -y
-    - apt-get install -y ca-certificates socat jq ebtables apt-transport-https cloud-utils prips docker-ce docker-ce-cli containerd.io kubelet kubeadm kubectl
-    - systemctl daemon-reload
-    - systemctl enable docker
-    - systemctl start docker
-  joinConfiguration:
-    nodeRegistration:
-      kubeletExtraArgs:
-        cloud-provider: external 
----
-kind: KubeadmConfig
-apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
-metadata:
-  name: "${CLUSTER_NAME}-worker0-config"
-spec:
-  preKubeadmCommands:
-    - swapoff -a
-    - apt-get -y update
-    - DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
-    - curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-    - echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
-    - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-    - apt-key fingerprint 0EBFCD88
-    - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-    - apt-get update -y
-    - apt-get install -y ca-certificates socat jq ebtables apt-transport-https cloud-utils prips docker-ce docker-ce-cli containerd.io kubelet kubeadm kubectl
-    - systemctl daemon-reload
-    - systemctl enable docker
-    - systemctl start docker
-  joinConfiguration:
-    nodeRegistration:
-      kubeletExtraArgs:
-        cloud-provider: external 
+  template:
+    spec:
+      preKubeadmCommands:
+        - swapoff -a
+        - apt-get -y update
+        - DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
+        - curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+        - echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
+        - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+        - apt-key fingerprint 0EBFCD88
+        - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+        - apt-get update -y
+        - apt-get install -y ca-certificates socat jq ebtables apt-transport-https cloud-utils prips docker-ce docker-ce-cli containerd.io kubelet kubeadm kubectl
+        - systemctl daemon-reload
+        - systemctl enable docker
+        - systemctl start docker
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            cloud-provider: external 
