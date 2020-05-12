@@ -175,13 +175,13 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 
 	if !machineScope.Cluster.Status.InfrastructureReady {
 		machineScope.Info("Cluster infrastructure is not ready yet")
-		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+		return ctrl.Result{}, nil
 	}
 
 	// Make sure bootstrap data secret is available and populated.
 	if machineScope.Machine.Spec.Bootstrap.DataSecretName == nil {
 		machineScope.Info("Bootstrap data secret is not yet available")
-		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+		return ctrl.Result{}, nil
 	}
 
 	providerID := machineScope.GetInstanceID()
@@ -203,14 +203,9 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 			packet.GenerateMachineTag(mUID),
 			packet.GenerateClusterTag(clusterScope.Name()),
 		}
-		if machineScope.IsControlPlane() {
-			tags = append(tags, infrastructurev1alpha3.MasterTag)
-		} else {
-			tags = append(tags, infrastructurev1alpha3.WorkerTag)
-		}
 
 		name := machineScope.Name()
-		dev, err = r.PacketClient.NewDevice(name, clusterScope.PacketCluster.Spec.ProjectID, machineScope.PacketMachine.Spec, tags)
+		dev, err = r.PacketClient.NewDevice(name, clusterScope.PacketCluster.Spec.ProjectID, machineScope, tags)
 		if err != nil {
 			errs := fmt.Errorf("failed to create machine %s: %v", name, err)
 			machineScope.SetErrorReason(capierrors.CreateMachineError)

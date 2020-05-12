@@ -26,8 +26,6 @@ import (
 
 	"k8s.io/klog/klogr"
 
-	packet "github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
-
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,7 +33,6 @@ import (
 
 // ClusterScopeParams defines the input parameters used to create a new Scope.
 type ClusterScopeParams struct {
-	PacketClient  packet.PacketClient
 	Client        client.Client
 	Logger        logr.Logger
 	Cluster       *clusterv1.Cluster
@@ -63,7 +60,6 @@ func NewClusterScope(params ClusterScopeParams) (*ClusterScope, error) {
 	return &ClusterScope{
 		Logger:        params.Logger,
 		client:        params.Client,
-		PacketClient:  params.PacketClient,
 		Cluster:       params.Cluster,
 		PacketCluster: params.PacketCluster,
 		patchHelper:   helper,
@@ -76,7 +72,6 @@ type ClusterScope struct {
 	client      client.Client
 	patchHelper *patch.Helper
 
-	PacketClient  packet.PacketClient
 	Cluster       *clusterv1.Cluster
 	PacketCluster *infrav1.PacketCluster
 }
