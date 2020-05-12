@@ -25,3 +25,9 @@ var (
 
 // Tags defines a slice of tags.
 type Tags []string
+
+// PacketMachineTemplateResource describes the data needed to create am PacketMachine from a template
+type PacketMachineTemplateResource struct {
+	// Spec is the specification of the desired behavior of the machine.
+	Spec PacketMachineSpec `json:"spec"`
+}

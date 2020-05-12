@@ -7,6 +7,7 @@ commonLabels:
 resources:
 - bases/infrastructure.cluster.x-k8s.io_packetclusters.yaml
 - bases/infrastructure.cluster.x-k8s.io_packetmachines.yaml
+- bases/infrastructure.cluster.x-k8s.io_packetmachinetemplates.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:
