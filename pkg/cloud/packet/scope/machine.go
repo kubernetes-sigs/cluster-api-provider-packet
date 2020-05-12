@@ -23,9 +23,9 @@ import (
 	"github.com/pkg/errors"
 
 	infrav1 "github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
-	packet "github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/klogr"
 	"k8s.io/utils/pointer"
 
@@ -39,7 +39,6 @@ import (
 
 // MachineScopeParams defines the input parameters used to create a new MachineScope.
 type MachineScopeParams struct {
-	PacketClient  packet.PacketClient
 	Client        client.Client
 	Logger        logr.Logger
 	Cluster       *clusterv1.Cluster
@@ -104,12 +103,12 @@ func (m *MachineScope) Close() error {
 	return m.patchHelper.Patch(context.TODO(), m.PacketMachine)
 }
 
-// Name returns the DOMachine name.
+// Name returns the PacketMachine name
 func (m *MachineScope) Name() string {
 	return m.PacketMachine.Name
 }
 
-// Namespace returns the namespace name.
+// Namespace returns the PacketMachine namespace
 func (m *MachineScope) Namespace() string {
 	return m.PacketMachine.Namespace
 }
@@ -187,4 +186,24 @@ func (m *MachineScope) Tags() infrav1.Tags {
 	}
 
 	return m.PacketMachine.Spec.Tags.DeepCopy()
+}
+
+// GetRawBootstrapData returns the bootstrap data from the secret in the Machine's bootstrap.dataSecretName.
+func (m *MachineScope) GetRawBootstrapData() ([]byte, error) {
+	if m.Machine.Spec.Bootstrap.DataSecretName == nil {
+		return nil, errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
+	}
+
+	secret := &corev1.Secret{}
+	key := types.NamespacedName{Namespace: m.Namespace(), Name: *m.Machine.Spec.Bootstrap.DataSecretName}
+	if err := m.client.Get(context.TODO(), key, secret); err != nil {
+		return nil, errors.Wrapf(err, "failed to retrieve bootstrap data secret for PacketMachine %s/%s", m.Namespace(), m.Name())
+	}
+
+	value, ok := secret.Data["value"]
+	if !ok {
+		return nil, errors.New("error retrieving bootstrap data: secret value key is missing")
+	}
+
+	return value, nil
 }

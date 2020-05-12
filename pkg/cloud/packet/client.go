@@ -5,8 +5,10 @@ import (
 	"os"
 	"strings"
 
-	infrav1 "github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
+	infrastructurev1alpha3 "github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
+	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/scope"
 	"github.com/packethost/packngo"
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -43,17 +45,26 @@ func (p *PacketClient) GetDevice(deviceID string) (*packngo.Device, error) {
 	return dev, err
 }
 
-func (p *PacketClient) NewDevice(hostname, project string, spec infrav1.PacketMachineSpec, extraTags []string) (*packngo.Device, error) {
-	tags := append(spec.Tags, extraTags...)
+func (p *PacketClient) NewDevice(hostname, project string, machineScope *scope.MachineScope, extraTags []string) (*packngo.Device, error) {
+	userData, err := machineScope.GetRawBootstrapData()
+	if err != nil {
+		return nil, errors.Wrap(err, "impossible to retrieve bootstrap data from secret")
+	}
+	tags := append(machineScope.PacketMachine.Spec.Tags, extraTags...)
+	if machineScope.IsControlPlane() {
+		tags = append(tags, infrastructurev1alpha3.MasterTag)
+	} else {
+		tags = append(tags, infrastructurev1alpha3.WorkerTag)
+	}
 	serverCreateOpts := &packngo.DeviceCreateRequest{
 		Hostname:     hostname,
 		ProjectID:    project,
-		Facility:     spec.Facility,
-		BillingCycle: spec.BillingCycle,
-		Plan:         spec.MachineType,
-		OS:           spec.OS,
+		Facility:     machineScope.PacketMachine.Spec.Facility,
+		BillingCycle: machineScope.PacketMachine.Spec.BillingCycle,
+		Plan:         machineScope.PacketMachine.Spec.MachineType,
+		OS:           machineScope.PacketMachine.Spec.OS,
 		Tags:         tags,
-		UserData:     userData,
+		UserData:     string(userData),
 	}
 
 	dev, _, err := p.Client.Devices.Create(serverCreateOpts)

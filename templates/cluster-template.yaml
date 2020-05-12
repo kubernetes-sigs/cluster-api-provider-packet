@@ -4,16 +4,28 @@ apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
 metadata:
   name: "${CLUSTER_NAME}-control-plane1-config"
 spec:
+  preKubeadmCommands:
+    - swapoff -a
+    - apt-get -y update
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
+    - curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+    - echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
+    - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+    - apt-key fingerprint 0EBFCD88
+    - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    - apt-get update -y
+    - apt-get install -y ca-certificates socat jq ebtables apt-transport-https cloud-utils prips docker-ce docker-ce-cli containerd.io kubelet kubeadm kubectl
+    - systemctl daemon-reload
+    - systemctl enable docker
+    - systemctl start docker
+  postKubeadmCommands: 
+    - "kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://docs.projectcalico.org/v3.11/manifests/calico.yaml"
+    - "kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system packet-cloud-config --from-literal=cloud-sa.json='{\"apiKey\": \"${PACKET_API_KEY}\",\"projectID\": \"${PROJECT_ID}\"}'"
+    - "kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://raw.githubusercontent.com/packethost/packet-ccm/master/deploy/releases/v1.0.0/deployment.yaml"
   initConfiguration:
     nodeRegistration:
       kubeletExtraArgs:
-        cluster-dns: ${CLUSTER_DNS_SERVER}
-        cluster-domain: "cluster.local" 
-        node-ip: ${PRIVATEIP}
-        allow-privileged: "true"
-        cloud-provider: external 
-        authentication-token-webhook: "true"
-        read-only-port: "0"
+        cloud-provider: external
   clusterConfiguration:
     controllerManager:
       extraArgs:
@@ -141,29 +153,45 @@ apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
 metadata:
   name: "${CLUSTER_NAME}-worker1-config"
 spec:
+  preKubeadmCommands:
+    - swapoff -a
+    - apt-get -y update
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
+    - curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+    - echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
+    - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+    - apt-key fingerprint 0EBFCD88
+    - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    - apt-get update -y
+    - apt-get install -y ca-certificates socat jq ebtables apt-transport-https cloud-utils prips docker-ce docker-ce-cli containerd.io kubelet kubeadm kubectl
+    - systemctl daemon-reload
+    - systemctl enable docker
+    - systemctl start docker
   joinConfiguration:
     nodeRegistration:
       kubeletExtraArgs:
-        cluster-dns: ${CLUSTER_DNS_SERVER}
-        cluster-domain: "cluster.local" 
-        node-ip: ${PRIVATEIP}
-        allow-privileged: "true"
         cloud-provider: external 
-        authentication-token-webhook: "true"
-        read-only-port: "0"
 ---
 kind: KubeadmConfig
 apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
 metadata:
   name: "${CLUSTER_NAME}-worker0-config"
 spec:
+  preKubeadmCommands:
+    - swapoff -a
+    - apt-get -y update
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
+    - curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+    - echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
+    - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+    - apt-key fingerprint 0EBFCD88
+    - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    - apt-get update -y
+    - apt-get install -y ca-certificates socat jq ebtables apt-transport-https cloud-utils prips docker-ce docker-ce-cli containerd.io kubelet kubeadm kubectl
+    - systemctl daemon-reload
+    - systemctl enable docker
+    - systemctl start docker
   joinConfiguration:
     nodeRegistration:
       kubeletExtraArgs:
-        cluster-dns: ${CLUSTER_DNS_SERVER}
-        cluster-domain: "cluster.local" 
-        node-ip: ${PRIVATEIP}
-        allow-privileged: "true"
         cloud-provider: external 
-        authentication-token-webhook: "true"
-        read-only-port: "0"
