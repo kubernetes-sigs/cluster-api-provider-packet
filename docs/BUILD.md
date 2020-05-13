@@ -20,17 +20,18 @@ Building and deploying initially involves the following steps:
 1. generate Packet infrastructure provider in a managerless mode
 1. deploy the Packet infrastructure provider to the management cluster
 1. run the binary locally against your cluster
+1. create a cluster
 
-### Deploy a cluster
+### Deploy a Management Cluster
 
-Now you need to deploy the management cluster. If you are reading this document, it is assumed you know how
+If you are reading this document, it is assumed you know how
 to deploy a kubernetes cluster. Any compliant cluster will work, including
 [official kubernetes](https://kubernetes.io), [k3s](https://k3s.io), [kind](https://github.com/kubernetes-sigs/kind)
 and [k3d](https://github.com/rancher/k3d).
 
 Once you have your cluster, ensure your `KUBECONFIG` environment variable is set correctly.
 
-### Build it
+### Build the Manager
 
 To build the binary, you need to:
 
@@ -39,17 +40,6 @@ To build the binary, you need to:
 1. Run `make manager` to generate the binary for your local OS/architecture. If you prefer to build for another, run `make manager OS=<os> ARCH=<arch>`, filling in `<os>` and `<arch>` as needed
 
 You now should have a functional manager in [bin/](./bin/) named `manager-<os>-<arch>`.
-
-### Deploy the core cluster-api provider
-
-This can be done in one of three ways:
-
-* Manually: This generally is not recommended, but is good for seeing the various parts that make up a manager cluster, understanding how they work together, and debugging issues.
-  * apply the cert manager as `kubectl apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/v0.14.1/cert-manager.yaml`
-  * download the components from the [official cluster-api releases page](https://github.com/kubernetes-sigs/cluster-api/releases); you will need all of the `.yaml` files in a release. Then run `kubectl apply -f <dir>` to whatever directory you downloaded it. The order _does_ matter, and the CRDs have to exist, so you might need to
-`kubectl apply` multiple times until it all is accepted.
-* Make target: This just wraps the above manual steps: `make cluster-init`
-* CLI: use the `clusterctl` binary from the [official cluster-api releases page](https://github.com/kubernetes-sigs/cluster-api/releases) to deploy to your cluster. This will download the yaml files, apply them and ensure that CRDs are in place before applying the rest.
 
 ### Generate the Packet infrastructure provider yaml
 
@@ -66,16 +56,34 @@ make managerless
 This will generate the yaml you need in: [out/managerless/infrastructure-packet/0.3.0/infrastructure-components.yaml](./out/managerless/infrastructure-packet/0.3.0/infrastructure-components.yaml).
 This odd path is so that it complies with the `clusterctl` requirements.
 
-### Deploy the Packet infrastructure provider
+### Deploy the core and packet cluster-api providers
 
-You now can apply it to your cluster with:
+This is performed via:
 
-```sh
-kubectl apply -f out/managerless/infrastructure-packet/0.3.0/infrastructure-components.yaml
+```
+clusterctl init
+clusterctl init --config=out/managerless/infrastructure-packet/clusterctl-<version>.yaml --infrastructure=packet
 ```
 
-If you prefer to use the `clusterctl` binary, you just need to specify the path. The `make managerless`
-will tell you how to run it, as `clusterctl --config=out/managerless/infrastructure-packet/clusterctl-0.3.0.yaml ...`
+We wrapped this up in a simple make target:
+
+```
+make cluster-init
+```
+
+If you prefer to do the above steps manually, the steps are below. This generally is not recommended, but is good for seeing the various parts that make up a manager cluster, understanding how they work together, and debugging issues.
+
+1. apply the cert manager via `kubectl apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/v0.14.1/cert-manager.yaml`
+2. download the components from the [official cluster-api releases page](https://github.com/kubernetes-sigs/cluster-api/releases) to `out/core/`; you will need all of the `.yaml` files in a release.
+3. apply the core components via  `kubectl apply -f out/core/`. The order _does_ matter, and the CRDs have to exist, so you will need to
+`kubectl apply` multiple times until it all is accepted.
+3. apply the Packet infrastructure provider via `kubectl apply -f out/managerless/infrastructure-packet/<version>/infrastructure-components.yaml`
+
+To simplify it, we have a makefile target that does all of the above:
+
+```
+make cluster-init-manual
+```
 
 Your cluster is now ready for usage.
 
@@ -91,6 +99,26 @@ For example:
 ```
 
 At this point, you can change your binary
+
+### Create a cluster
+
+The `clusterctl config cluster` command requires the correct config, as well as defaults.
+You can override key elements:
+
+```
+clusterctl --config=<config> config cluster <name>
+```
+
+This requires all of the environment variables as well as the config path. `make cluster` provides the
+defaults for the variables, which you can override, and sets the `--config=` to the official
+Packet release path at https://github.com/packethost/cluster-api-provider-packet/releases/latest/infrastructure-components.yaml
+
+You can override it by running:
+
+```
+make cluster CLUSTER_URL=./out/managerless/infrastructure-packet/<version>/clusterctl-<version>.yaml
+```
+
 
 ## Iterate
 
@@ -118,12 +146,13 @@ additional CRDs, you need to regenerate some components:
 1. Regenerate with `make generate`
 1. Rebuild the manager with `make manager`
 1. Start your manager again with `./bin/manager-<os>-<arch>`
+1. Delete your infrastructure provider for Packet with `clusterctl --config=... delete --infrastructure=packet`
+1. Reapply your infrastructure provider for Packet with `clusterctl --config=... init --infrastructure=packet`
 
 The core components do not need to be reapplied.
 
 At this point, you can apply any actual cluster-api resources, such as `Cluster` or `Machine`.
 See [README.md](./README.md) for details.
-
 
 ## Building
 

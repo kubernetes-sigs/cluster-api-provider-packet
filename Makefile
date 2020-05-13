@@ -10,6 +10,8 @@ CERTMANAGER_URL ?= https://github.com/jetstack/cert-manager/releases/download/v0
 GIT_VERSION?=$(shell git log -1 --format="%h")
 RELEASE_TAG ?= $(shell git tag --points-at HEAD)
 
+REPO_URL ?= https://github.com/packethost/cluster-api-provider-packet
+
 # BUILDARCH is the host architecture
 # ARCH is the target architecture
 # we need to keep track of them separately
@@ -81,7 +83,10 @@ RELEASE_DIR := $(RELEASE_BASE)/$(RELEASE_VERSION)
 FULL_RELEASE_DIR := $(realpath .)/$(RELEASE_DIR)
 RELEASE_MANIFEST := $(RELEASE_DIR)/infrastructure-components.yaml
 RELEASE_METADATA := $(RELEASE_DIR)/metadata.yaml
+RELEASE_CLUSTER_TEMPLATE := $(RELEASE_DIR)/cluster-template.yaml
 FULL_RELEASE_MANIFEST := $(FULL_RELEASE_DIR)/infrastructure-components.yaml
+FULL_RELEASE_MANIFEST_URL := $(REPO_URL)/releases/latest/infrastructure-components.yaml
+FULL_RELEASE_CLUSTERCTLYAML := $(FULL_RELEASE_DIR)/clusterctl.yaml
 RELEASE_CLUSTERCTLYAML := $(RELEASE_BASE)/clusterctl-$(RELEASE_VERSION).yaml
 
 # managerless - for running manager locally for testing
@@ -91,12 +96,14 @@ MANAGERLESS_DIR := $(MANAGERLESS_BASE)/$(RELEASE_VERSION)
 FULL_MANAGERLESS_DIR := $(realpath .)/$(MANAGERLESS_DIR)
 MANAGERLESS_MANIFEST := $(MANAGERLESS_DIR)/infrastructure-components.yaml
 MANAGERLESS_METADATA := $(MANAGERLESS_DIR)/metadata.yaml
+MANAGERLESS_CLUSTER_TEMPLATE := $(MANAGERLESS_DIR)/cluster-template.yaml
 FULL_MANAGERLESS_MANIFEST := $(FULL_MANAGERLESS_DIR)/infrastructure-components.yaml
 MANAGERLESS_CLUSTERCTLYAML := $(MANAGERLESS_BASE)/clusterctl-$(MANAGERLESS_VERSION).yaml
 
 # templates
 METADATA_TEMPLATE ?= templates/metadata-template.yaml
 CLUSTERCTL_TEMPLATE ?= templates/clusterctl-template.yaml
+CLUSTER_TEMPLATE ?= templates/cluster-template.yaml
 
 
 all: manager
@@ -187,8 +194,9 @@ controller-gen: $(CONTROLLER_GEN)
 $(CONTROLLER_GEN):
 	scripts/controller-gen.sh $@ $(CONTROLLER_GEN_VERSION)
 
-examples:
-	./generate-examples.sh
+## generate a cluster using clusterctl and setting defaults
+cluster:
+	./scripts/generate-cluster.sh
 
 $(RELEASE_DIR) $(RELEASE_BASE):
 	mkdir -p $@
@@ -198,16 +206,22 @@ $(MANAGERLESS_DIR) $(MANAGERLESS_BASE):
 
 .PHONY: release-clusterctl release-manifests release $(RELEASE_CLUSTERCTLYAML) $(RELEASE_MANIFEST)
 release: release-manifests release-clusterctl
-release-manifests: $(RELEASE_MANIFEST) $(RELEASE_METADATA)
+release-manifests: $(RELEASE_MANIFEST) $(RELEASE_METADATA) $(RELEASE_CLUSTER_TEMPLATE)
 $(RELEASE_MANIFEST): $(RELEASE_DIR) ## Builds the manifests to publish with a release
 	kustomize build config/default > $@
 
 $(RELEASE_METADATA): $(RELEASE_DIR) $(METADATA_TEMPLATE)
-	cat $(METADATA_TEMPLATE) | sed 's/MAJOR/$(VERSION_MAJOR)/g' | sed 's/MINOR/$(VERSION_MINOR)g' | sed 's/CONTRACT/$(VERSION_CONTRACT)/g' > $@
+	cat $(METADATA_TEMPLATE) | sed 's/MAJOR/$(VERSION_MAJOR)/g' | sed 's/MINOR/$(VERSION_MINOR)/g' | sed 's/CONTRACT/$(VERSION_CONTRACT)/g' > $@
 
-release-clusterctl: $(RELEASE_CLUSTERCTLYAML)
+$(RELEASE_CLUSTER_TEMPLATE): $(RELEASE_DIR)
+	cp $(CLUSTER_TEMPLATE) $@
+
+release-clusterctl: $(RELEASE_CLUSTERCTLYAML) $(FULL_RELEASE_CLUSTERCTLYAML)
 $(RELEASE_CLUSTERCTLYAML): $(RELEASE_BASE)
 	cat $(CLUSTERCTL_TEMPLATE) | sed 's%URL%$(FULL_RELEASE_MANIFEST)%g' > $@
+
+$(FULL_RELEASE_CLUSTERCTLYAML): $(RELEASE_DIR)
+	cat $(CLUSTERCTL_TEMPLATE) | sed 's%URL%$(FULL_RELEASE_MANIFEST_URL)%g' > $@
 
 .PHONY: managerless-clusterctl managerless-manifests managerless $(MANAGERLESS_CLUSTERCTLYAML) $(MANAGERLESS_MANIFEST)
 managerless: managerless-manifests managerless-clusterctl
@@ -217,6 +231,9 @@ $(MANAGERLESS_MANIFEST): $(MANAGERLESS_DIR)
 
 $(MANAGERLESS_METADATA): $(MANAGERLESS_DIR) $(METADATA_TEMPLATE)
 	cat $(METADATA_TEMPLATE) | sed 's/MAJOR/$(VERSION_MAJOR)/g' | sed 's/MINOR/$(VERSION_MINOR)/g' | sed 's/CONTRACT/$(VERSION_CONTRACT)/g' > $@
+
+$(MANAGERLESS_CLUSTER_TEMPLATE): $(MANAGERLESS_DIR)
+	cp $(CLUSTER_TEMPLATE) $@
 
 managerless-clusterctl: $(MANAGERLESS_CLUSTERCTLYAML)
 $(MANAGERLESS_CLUSTERCTLYAML): $(MANAGERLESS_BASE)
@@ -235,7 +252,14 @@ core: $(COREPATH)
 	@$(eval YAMLS := $(shell curl -s -L $(CORE_API) | jq -r '[.[] | select(.tag_name == "$(CORE_VERSION)").assets[] | select(.name | contains("yaml")) | .name] | join(" ")'))
 	@if [ -n "$(YAMLS)" ]; then $(MAKE) $(addprefix $(COREPATH)/,$(YAMLS)); fi
 
-cluster-init: core managerless
+# the standard way to initialize a cluster. If you are using an actually released version,
+# then you can just do "clusterctl init --infrastructure=packet" without any of this
+cluster-init: managerless release
+	clusterctl init
+	clusterctl init --config=$(MANAGERLESS_CLUSTERCTLYAML) --infrastructure=packet
+
+# this is just for those who really want to see the manual steps
+cluster-init-manual: core managerless release
 	kubectl apply --validate=false -f $(CERTMANAGER_URL)
 	# because of dependencies, this is allowed to fail once or twice
 	kubectl apply -f $(COREPATH) || kubectl apply -f $(COREPATH) || kubectl apply -f $(COREPATH)
