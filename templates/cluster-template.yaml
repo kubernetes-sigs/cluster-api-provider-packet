@@ -1,36 +1,3 @@
-# this is a temporary mock
-kind: KubeadmConfig
-apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
-metadata:
-  name: "${CLUSTER_NAME}-control-plane1-config"
-spec:
-  preKubeadmCommands:
-    - swapoff -a
-    - apt-get -y update
-    - DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
-    - curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-    - echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
-    - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-    - apt-key fingerprint 0EBFCD88
-    - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-    - apt-get update -y
-    - apt-get install -y ca-certificates socat jq ebtables apt-transport-https cloud-utils prips docker-ce docker-ce-cli containerd.io kubelet kubeadm kubectl
-    - systemctl daemon-reload
-    - systemctl enable docker
-    - systemctl start docker
-  postKubeadmCommands: 
-    - "kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://docs.projectcalico.org/v3.11/manifests/calico.yaml"
-    - "kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system packet-cloud-config --from-literal=cloud-sa.json='{\"apiKey\": \"${PACKET_API_KEY}\",\"projectID\": \"${PROJECT_ID}\"}'"
-    - "kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://raw.githubusercontent.com/packethost/packet-ccm/master/deploy/releases/v1.0.0/deployment.yaml"
-  initConfiguration:
-    nodeRegistration:
-      kubeletExtraArgs:
-        cloud-provider: external
-  clusterConfiguration:
-    controllerManager:
-      extraArgs:
-        enable-hostpath-provisioner: "true"
----
 apiVersion: cluster.x-k8s.io/v1alpha3
 kind: Cluster
 metadata:
@@ -43,6 +10,10 @@ spec:
     apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
     kind: PacketCluster
     name: "${CLUSTER_NAME}"
+  controlPlaneRef:
+    kind: KubeadmControlPlane
+    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+    name: "${CLUSTER_NAME}-control-plane"
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
 kind: PacketCluster
@@ -51,38 +22,60 @@ metadata:
 spec:
   projectID: "${PROJECT_ID}"
 ---
-apiVersion: cluster.x-k8s.io/v1alpha3
-kind: Machine
+kind: KubeadmControlPlane
+apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
 metadata:
-  name: "${CLUSTER_NAME}-master-0"
-  labels:
-    cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
-    cluster.x-k8s.io/control-plane: "true"
+  name: "${CLUSTER_NAME}-control-plane"
 spec:
-  clusterName: "${CLUSTER_NAME}"
-  bootstrap:
-    configRef:
-      kind: KubeadmConfig
-      apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
-      name: "${CLUSTER_NAME}-control-plane1-config"
-  infrastructureRef:
+  version: v1.18.2
+  replicas: 3
+  infrastructureTemplate:
     apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
-    kind: PacketMachine
-    name: "${CLUSTER_NAME}-master-0"
+    kind: PacketMachineTemplate
+    name: "${CLUSTER_NAME}-control-plane-a"
+  kubeadmConfigSpec:
+    preKubeadmCommands:
+      - swapoff -a
+      - apt-get -y update
+      - DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
+      - curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+      - echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
+      - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+      - apt-key fingerprint 0EBFCD88
+      - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+      - apt-get update -y
+      - apt-get install -y ca-certificates socat jq ebtables apt-transport-https cloud-utils prips docker-ce docker-ce-cli containerd.io kubelet kubeadm kubectl
+      - systemctl daemon-reload
+      - systemctl enable docker
+      - systemctl start docker
+    postKubeadmCommands:
+      - "kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://docs.projectcalico.org/v3.11/manifests/calico.yaml"
+      - "kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system packet-cloud-config --from-literal=cloud-sa.json='{\"apiKey\": \"${PACKET_API_KEY}\",\"projectID\": \"${PROJECT_ID}\"}'"
+      - "kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://raw.githubusercontent.com/packethost/packet-ccm/master/deploy/releases/v1.0.0/deployment.yaml"
+    initConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          cloud-provider: external
+    clusterConfiguration:
+      controllerManager:
+        extraArgs:
+          enable-hostpath-provisioner: "true"
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
-kind: PacketMachine
+kind: PacketMachineTemplate
 metadata:
-  name: "${CLUSTER_NAME}-master-0"
+  name: ${CLUSTER_NAME}-control-plane-a
 spec:
-  OS: "${NODE_OS}"
-  facility:
-  - "${FACILITY}"
-  billingCycle: hourly
-  machineType: "${MASTER_NODE_TYPE}"
-  sshKeys:
-  - "${SSH_KEY}"
-  tags: []
+  template:
+    spec:
+      OS: "${NODE_OS}"
+      facility:
+      - "${FACILITY}"
+      billingCycle: hourly
+      machineType: "${MASTER_NODE_TYPE}"
+      sshKeys:
+      - "${SSH_KEY}"
+      tags: []
 ---
 apiVersion: cluster.x-k8s.io/v1alpha3
 kind: MachineDeployment
@@ -92,6 +85,7 @@ metadata:
     cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
     pool: worker-a
 spec:
+  clusterName: "${CLUSTER_NAME}"
   replicas: 3
   selector:
     matchLabels:
@@ -103,7 +97,8 @@ spec:
         cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
         pool: worker-a
     spec:
-      version: ${KUBERNETES_VERSION}
+      version: v1.18.2
+      clusterName: "${CLUSTER_NAME}"
       bootstrap:
         configRef:
           name: ${CLUSTER_NAME}-worker-a
