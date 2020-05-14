@@ -1,5 +1,7 @@
 .PHONY: vendor test manager clusterctl run install deploy manifests generate fmt vet run kubebuilder ci cd
 
+GIT_VERSION?=$(shell git log -1 --format="%h")
+RELEASE_TAG ?= $(shell git tag --points-at HEAD)
 KUBEBUILDER_VERSION ?= 2.3.1
 # default install location for kubebuilder; can be placed elsewhere
 KUBEBUILDER_DIR ?= /usr/local/kubebuilder
@@ -8,9 +10,6 @@ CONTROLLER_GEN_VERSION ?= v0.3.0
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 
 CERTMANAGER_URL ?= https://github.com/jetstack/cert-manager/releases/download/v0.14.1/cert-manager.yaml
-
-GIT_VERSION?=$(shell git log -1 --format="%h")
-RELEASE_TAG ?= $(shell git tag --points-at HEAD)
 
 REPO_URL ?= https://github.com/packethost/cluster-api-provider-packet
 
@@ -76,7 +75,7 @@ CORE_URL ?= https://github.com/kubernetes-sigs/cluster-api/releases/download/$(C
 # useful function
 word-dot = $(word $2,$(subst ., ,$1))
 
-VERSION ?= 0.3.0
+VERSION ?= $(RELEASE_TAG)
 VERSION_CONTRACT ?= v1alpha3
 VERSION_MAJOR ?= $(call word-dot,$(VERSION),1)
 VERSION_MINOR ?= $(call word-dot,$(VERSION),2)
@@ -215,7 +214,14 @@ $(MANAGERLESS_DIR) $(MANAGERLESS_BASE):
 	mkdir -p $@
 
 .PHONY: release-clusterctl release-manifests release $(RELEASE_CLUSTERCTLYAML) $(RELEASE_MANIFEST) $(RELEASE_METADATA) $(RELEASE_CLUSTER_TEMPLATE)
-release: release-manifests release-clusterctl release-cluster-template
+manifest: release-manifests release-clusterctl release-cluster-template
+
+release:
+	goreleaser release --rm-dist --snapshot --skip-publish
+
+release/publish:
+	goreleaser release --rm-dist
+
 release-manifests: $(RELEASE_MANIFEST) $(RELEASE_METADATA) $(RELEASE_CLUSTER_TEMPLATE)
 $(RELEASE_MANIFEST): $(RELEASE_DIR) ## Builds the manifests to publish with a release
 	kustomize build config/default > $@
