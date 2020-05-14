@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"text/template"
 
 	infrastructurev1alpha3 "github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/scope"
@@ -46,12 +47,26 @@ func (p *PacketClient) GetDevice(deviceID string) (*packngo.Device, error) {
 }
 
 func (p *PacketClient) NewDevice(hostname, project string, machineScope *scope.MachineScope, extraTags []string) (*packngo.Device, error) {
-	userData, err := machineScope.GetRawBootstrapData()
+	userDataRaw, err := machineScope.GetRawBootstrapData()
 	if err != nil {
 		return nil, errors.Wrap(err, "impossible to retrieve bootstrap data from secret")
 	}
+	userData := string(userDataRaw)
 	tags := append(machineScope.PacketMachine.Spec.Tags, extraTags...)
 	if machineScope.IsControlPlane() {
+		// control plane machines should get the API key injected
+		tmpl, err := template.New("control-plane-user-data").Parse(userData)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing control-plane userdata template: %v", err)
+		}
+		stringWriter := &strings.Builder{}
+		apiKeyStruct := map[string]interface{}{
+			"apiKey": p.Client.APIKey,
+		}
+		if err := tmpl.Execute(stringWriter, apiKeyStruct); err != nil {
+			return nil, fmt.Errorf("error executing control-plane userdata template: %v", err)
+		}
+		userData = stringWriter.String()
 		tags = append(tags, infrastructurev1alpha3.MasterTag)
 	} else {
 		tags = append(tags, infrastructurev1alpha3.WorkerTag)
@@ -64,7 +79,7 @@ func (p *PacketClient) NewDevice(hostname, project string, machineScope *scope.M
 		Plan:         machineScope.PacketMachine.Spec.MachineType,
 		OS:           machineScope.PacketMachine.Spec.OS,
 		Tags:         tags,
-		UserData:     string(userData),
+		UserData:     userData,
 	}
 
 	dev, _, err := p.Client.Devices.Create(serverCreateOpts)
