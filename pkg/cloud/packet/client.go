@@ -4,15 +4,18 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"text/template"
 
-	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/util"
+	infrastructurev1alpha3 "github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
+	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/scope"
 	"github.com/packethost/packngo"
-	"k8s.io/klog"
-	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
+	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
 	apiTokenVarName = "PACKET_API_KEY"
+	clientName      = "CAPP-v1alpha3"
 )
 
 type PacketClient struct {
@@ -24,7 +27,7 @@ func NewClient(packetAPIKey string) *PacketClient {
 	token := strings.TrimSpace(packetAPIKey)
 
 	if token != "" {
-		return &PacketClient{packngo.NewClientWithAuth("gardener", token, nil)}
+		return &PacketClient{packngo.NewClientWithAuth(clientName, token, nil)}
 	}
 
 	return nil
@@ -37,40 +40,78 @@ func GetClient() (*PacketClient, error) {
 	}
 	return NewClient(token), nil
 }
-func (p *PacketClient) GetDevice(machine *clusterv1.Machine) (*packngo.Device, error) {
-	c, err := util.MachineProviderFromProviderConfig(machine.Spec.ProviderSpec)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to process config for providerSpec: %v", err)
-	}
-	// if there are no annotations, or the annotation we want does not exist, nothing to do
-	if machine.Annotations == nil {
-		klog.Infof("No annotations with machine UID for %s, machine does not exist", machine.Name)
-		return nil, nil
-	}
-	var (
-		mUID string
-		ok   bool
-	)
-	if mUID, ok = machine.Annotations[util.AnnotationUID]; !ok {
-		klog.Infof("No UID annotation %s with machine UID for %s, machine does not exist", util.AnnotationUID, machine.Name)
-		return nil, nil
-	}
-	tag := util.GenerateMachineTag(mUID)
-	return p.GetDeviceByTags(c.ProjectID, []string{tag})
+
+func (p *PacketClient) GetDevice(deviceID string) (*packngo.Device, error) {
+	dev, _, err := p.Client.Devices.Get(deviceID, nil)
+	return dev, err
 }
+
+func (p *PacketClient) NewDevice(hostname, project string, machineScope *scope.MachineScope, extraTags []string) (*packngo.Device, error) {
+	userDataRaw, err := machineScope.GetRawBootstrapData()
+	if err != nil {
+		return nil, errors.Wrap(err, "impossible to retrieve bootstrap data from secret")
+	}
+	userData := string(userDataRaw)
+	tags := append(machineScope.PacketMachine.Spec.Tags, extraTags...)
+	if machineScope.IsControlPlane() {
+		// control plane machines should get the API key injected
+		tmpl, err := template.New("control-plane-user-data").Parse(userData)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing control-plane userdata template: %v", err)
+		}
+		stringWriter := &strings.Builder{}
+		apiKeyStruct := map[string]interface{}{
+			"apiKey": p.Client.APIKey,
+		}
+		if err := tmpl.Execute(stringWriter, apiKeyStruct); err != nil {
+			return nil, fmt.Errorf("error executing control-plane userdata template: %v", err)
+		}
+		userData = stringWriter.String()
+		tags = append(tags, infrastructurev1alpha3.MasterTag)
+	} else {
+		tags = append(tags, infrastructurev1alpha3.WorkerTag)
+	}
+	serverCreateOpts := &packngo.DeviceCreateRequest{
+		Hostname:     hostname,
+		ProjectID:    project,
+		Facility:     machineScope.PacketMachine.Spec.Facility,
+		BillingCycle: machineScope.PacketMachine.Spec.BillingCycle,
+		Plan:         machineScope.PacketMachine.Spec.MachineType,
+		OS:           machineScope.PacketMachine.Spec.OS,
+		Tags:         tags,
+		UserData:     userData,
+	}
+
+	dev, _, err := p.Client.Devices.Create(serverCreateOpts)
+	return dev, err
+}
+
+func (p *PacketClient) GetDeviceAddresses(device *packngo.Device) ([]corev1.NodeAddress, error) {
+	addrs := make([]corev1.NodeAddress, 0)
+	for _, addr := range device.Network {
+		addrType := corev1.NodeInternalIP
+		if addr.IpAddressCommon.Public {
+			addrType = corev1.NodeExternalIP
+		}
+		a := corev1.NodeAddress{
+			Type:    addrType,
+			Address: addr.String(),
+		}
+		addrs = append(addrs, a)
+	}
+	return addrs, nil
+}
+
 func (p *PacketClient) GetDeviceByTags(project string, tags []string) (*packngo.Device, error) {
-	klog.Infof("getting device by tags for project %s, tags %v", project, tags)
 	devices, _, err := p.Devices.List(project, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Error retrieving devices: %v", err)
 	}
 	// returns the first one that matches all of the tags
 	for _, device := range devices {
-		if util.ItemsInList(device.Tags, tags) {
-			klog.Infof("found device %s", device.ID)
+		if ItemsInList(device.Tags, tags) {
 			return &device, nil
 		}
 	}
-	klog.Info("no devices found")
 	return nil, nil
 }

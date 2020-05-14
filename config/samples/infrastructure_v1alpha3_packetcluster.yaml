@@ -1,0 +1,7 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+kind: PacketCluster
+metadata:
+  name: packetcluster-sample
+spec:
+  # Add fields here
+  foo: bar

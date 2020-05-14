@@ -7,18 +7,13 @@ namespace: cluster-api-provider-packet-system
 # "wordpress" becomes "alices-wordpress".
 # Note that it should also match with the prefix (text before '-') of the namespace
 # field above.
-# This must match PRECISELY what is in the constant in pkg/cloud/packet/util.CAPPPrefix
 namePrefix: cluster-api-provider-packet-
 
 bases:
-- ./crds
+- ./crd
 - ./rbac
+- ./namespace
 - ./manager
 
 patches:
 - default/manager_image_patch.yaml
-
-configMapGenerator:
-- name: machine-setup
-  files:
-  - "./default/machine_configs.yaml"

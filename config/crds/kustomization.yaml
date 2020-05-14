@@ -1,5 +1,0 @@
-resources:
-- packetprovider_v1alpha1_packetclusterproviderspec.yaml
-- packetprovider_v1alpha1_packetclusterproviderstatus.yaml
-- packetprovider_v1alpha1_packetmachineproviderspec.yaml
-- packetprovider_v1alpha1_packetmachineproviderstatus.yaml

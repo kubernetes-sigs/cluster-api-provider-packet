@@ -1,16 +1,25 @@
 .PHONY: vendor test manager clusterctl run install deploy manifests generate fmt vet run kubebuilder ci cd
 
-KUBEBUILDER_VERSION ?= 2.0.0-beta.0
+KUBEBUILDER_VERSION ?= 2.3.1
 KUBEBUILDER ?= /usr/local/kubebuilder/bin/kubebuilder
+CONTROLLER_GEN_VERSION ?= v0.3.0
+CONTROLLER_GEN=$(GOBIN)/controller-gen
+
+CERTMANAGER_URL ?= https://github.com/jetstack/cert-manager/releases/download/v0.14.1/cert-manager.yaml
 
 GIT_VERSION?=$(shell git log -1 --format="%h")
 RELEASE_TAG ?= $(shell git tag --points-at HEAD)
+
+REPO_URL ?= https://github.com/packethost/cluster-api-provider-packet
 
 # BUILDARCH is the host architecture
 # ARCH is the target architecture
 # we need to keep track of them separately
 BUILDARCH ?= $(shell uname -m)
 BUILDOS ?= $(shell uname -s | tr A-Z a-z)
+
+TEST_E2E_DIR := test/e2e
+E2E_FOCUS := "functional tests"
 
 # canonicalized names for host architecture
 ifeq ($(BUILDARCH),aarch64)
@@ -34,28 +43,76 @@ endif
 # unless otherwise set, I am building for my own OS, i.e. not cross-compiling
 OS ?= $(BUILDOS)
 
-
 # Image URL to use all building/pushing image targets
 BUILD_IMAGE ?= packethost/cluster-api-provider-packet
 BUILD_IMAGE_TAG ?= $(BUILD_IMAGE):latest
 PUSH_IMAGE_TAG ?= $(BUILD_IMAGE):$(IMAGETAG)
-PROVIDERYAML ?= provider-components.yaml.template
-CLUSTERCTL ?= bin/clusterctl-$(OS)-$(ARCH)
 MANAGER ?= bin/manager-$(OS)-$(ARCH)
 KUBECTL ?= kubectl
 
 GO ?= GO111MODULE=on CGO_ENABLED=0 go
 
-all: test manager clusterctl
 
-# vendor
-vendor:
-	$(GO) mod vendor
-	./hack/update-vendor.sh
+# Image URL to use all building/pushing image targets
+IMG ?= controller:latest
+# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
+CRD_OPTIONS ?= "crd:trivialVersions=true"
+
+# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
+ifeq (,$(shell go env GOBIN))
+GOBIN=$(shell go env GOPATH)/bin
+else
+GOBIN=$(shell go env GOBIN)
+endif
+
+# where we store downloaded core
+COREPATH ?= out/core
+CORE_VERSION ?= v0.3.5
+CORE_API ?= https://api.github.com/repos/kubernetes-sigs/cluster-api/releases
+CORE_URL ?= https://github.com/kubernetes-sigs/cluster-api/releases/download/$(CORE_VERSION)
+
+# useful function
+word-dot = $(word $2,$(subst ., ,$1))
+
+VERSION ?= 0.3.0
+VERSION_CONTRACT ?= v1alpha3
+VERSION_MAJOR ?= $(call word-dot,$(VERSION),1)
+VERSION_MINOR ?= $(call word-dot,$(VERSION),2)
+
+# actual releases
+RELEASE_VERSION ?= $(VERSION)
+RELEASE_BASE := out/release/infrastructure-packet
+RELEASE_DIR := $(RELEASE_BASE)/$(RELEASE_VERSION)
+FULL_RELEASE_DIR := $(realpath .)/$(RELEASE_DIR)
+RELEASE_MANIFEST := $(RELEASE_DIR)/infrastructure-components.yaml
+RELEASE_METADATA := $(RELEASE_DIR)/metadata.yaml
+RELEASE_CLUSTER_TEMPLATE := $(RELEASE_DIR)/cluster-template.yaml
+FULL_RELEASE_MANIFEST := $(FULL_RELEASE_DIR)/infrastructure-components.yaml
+FULL_RELEASE_MANIFEST_URL := $(REPO_URL)/releases/latest/infrastructure-components.yaml
+FULL_RELEASE_CLUSTERCTLYAML := $(FULL_RELEASE_DIR)/clusterctl.yaml
+RELEASE_CLUSTERCTLYAML := $(RELEASE_BASE)/clusterctl-$(RELEASE_VERSION).yaml
+
+# managerless - for running manager locally for testing
+MANAGERLESS_VERSION ?= $(RELEASE_VERSION)
+MANAGERLESS_BASE := out/managerless/infrastructure-packet
+MANAGERLESS_DIR := $(MANAGERLESS_BASE)/$(RELEASE_VERSION)
+FULL_MANAGERLESS_DIR := $(realpath .)/$(MANAGERLESS_DIR)
+MANAGERLESS_MANIFEST := $(MANAGERLESS_DIR)/infrastructure-components.yaml
+MANAGERLESS_METADATA := $(MANAGERLESS_DIR)/metadata.yaml
+MANAGERLESS_CLUSTER_TEMPLATE := $(MANAGERLESS_DIR)/cluster-template.yaml
+FULL_MANAGERLESS_MANIFEST := $(FULL_MANAGERLESS_DIR)/infrastructure-components.yaml
+MANAGERLESS_CLUSTERCTLYAML := $(MANAGERLESS_BASE)/clusterctl-$(MANAGERLESS_VERSION).yaml
+
+# templates
+METADATA_TEMPLATE ?= templates/metadata-template.yaml
+CLUSTERCTL_TEMPLATE ?= templates/clusterctl-template.yaml
+CLUSTER_TEMPLATE ?= templates/cluster-template.yaml
+
+
+all: manager
 
 # 2 separate targets: ci-test does everything locally, does not need docker; ci includes ci-test and building the image
-ci-test: fmt vet test
-ci: ci-test image
+ci: test image
 
 imagetag:
 ifndef IMAGETAG
@@ -81,77 +138,140 @@ $(KUBEBUILDER):
 	# (you'll need to set the KUBEBUILDER_ASSETS env var if you put it somewhere else)
 	mv /tmp/kubebuilder_$(KUBEBUILDER_VERSION)_$(BUILDOS)_$(BUILDARCH) /usr/local/kubebuilder
 
-
 # Run tests
-test: vendor generate fmt vet manifests $(KUBEBUILDER)
-	$(GO) test -mod=vendor ./pkg/... ./cmd/... -coverprofile cover.out
+test: generate fmt vet manifests
+	go test ./... -coverprofile cover.out
+
+# Run e2e tests
+e2e:
+	# This is the name used inside the component.yaml for the container that runs the manager
+	# The image gets loaded inside kind from ./test/e2e/config/packet-dev.yaml
+	docker tag $(IMG) $(BUILD_IMAGE)
+	$(E2E_FLAGS) $(MAKE) -C test/e2e run
 
 # Build manager binary
 manager: $(MANAGER)
-$(MANAGER): vendor generate fmt vet
-	GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -mod=vendor -o $@ github.com/packethost/cluster-api-provider-packet/cmd/manager
-
-# Build clusterctl binary
-clusterctl: $(CLUSTERCTL)
-$(CLUSTERCTL): vendor generate fmt vet
-	GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -mod=vendor -o $@ github.com/packethost/cluster-api-provider-packet/cmd/clusterctl
+$(MANAGER): generate fmt vet
+	GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -o $@ .
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: vendor generate fmt vet
-	$(GO) run -mod=vendor ./cmd/manager/main.go
+run: generate fmt vet manifests
+	go run ./main.go
 
 # Install CRDs into a cluster
 install: manifests
-	kubectl apply -f config/crds
+	kustomize build config/crd | kubectl apply -f -
+
+# Uninstall CRDs from a cluster
+uninstall: manifests
+	kustomize build config/crd | kubectl delete -f -
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-deploy: manifests $(CLUSTERCTL)
-	generate-yaml.sh
-	$(CLUSTERCTL) create cluster --provider packet --bootstrap-type kind -c out/packet/cluster.yaml -m out/packet/machines.yaml -a out/packet/addons.yaml -p out/packet/provider-components.yaml --v=10
+deploy: manifests
+	cd config/manager && kustomize edit set image controller=${IMG}
+	kustomize build config/default | kubectl apply -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
-manifests: $(PROVIDERYAML)
-$(PROVIDERYAML):
-	# which image do we patch in? BUILD_IMAGE_TAG or PUSH_IMAGE_TAG? Depends on if it is set
-ifdef IMAGETAG
-	$(eval PATCH_IMAGE_TAG := $(PUSH_IMAGE_TAG))
-else
-	$(eval PATCH_IMAGE_TAG := $(BUILD_IMAGE_TAG))
-endif
-	# generate
-	$(GO) run -mod=vendor vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go all
-	# patch the particular image tag we will want to deploy
-	@echo "updating kustomize image patch file for manager resource"
-	sed -i'' -e 's@PATCH_ME_IMAGE@'"$(PATCH_IMAGE_TAG)"'@' ./config/default/manager_image_patch.yaml
-	# create the manifests
-	$(KUBECTL) kustomize vendor/sigs.k8s.io/cluster-api/config/default/ > $(PROVIDERYAML)
-	echo "---" >> $(PROVIDERYAML)
-	$(KUBECTL) kustomize config/ >> $(PROVIDERYAML)
-
+manifests: controller-gen
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 # Run go fmt against code
 fmt:
-	$(GO) fmt ./pkg/... ./cmd/...
+	go fmt ./...
 
 # Run go vet against code
 vet:
-	$(GO) vet -mod=vendor ./pkg/... ./cmd/...
+	go vet ./...
 
 # Generate code
-generate:
-ifndef GOPATH
-	$(error GOPATH not defined, please define GOPATH. Run "go help gopath" to learn more about GOPATH)
-endif
-	$(GO) generate -mod=vendor ./pkg/... ./cmd/...
+generate: controller-gen
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 # Build the docker image
-image: docker-build
-docker-build:
-	docker build -t $(BUILD_IMAGE_TAG) .
+image: test
+	docker build . -t ${IMG}
 
 # Push the docker image
 push:
-	docker push $(PUSH_IMAGE_TAG)
+	docker push ${IMG}
 
-image-tag:
-	@echo $(PUSH_IMAGE_TAG)
+# find or download controller-gen
+# download controller-gen if necessary
+# version must be at least the given version
+.PHONY: $(CONTROLLER_GEN)
+controller-gen: $(CONTROLLER_GEN)
+$(CONTROLLER_GEN):
+	scripts/controller-gen.sh $@ $(CONTROLLER_GEN_VERSION)
+
+## generate a cluster using clusterctl and setting defaults
+cluster:
+	./scripts/generate-cluster.sh
+
+$(RELEASE_DIR) $(RELEASE_BASE):
+	mkdir -p $@
+
+$(MANAGERLESS_DIR) $(MANAGERLESS_BASE):
+	mkdir -p $@
+
+.PHONY: release-clusterctl release-manifests release $(RELEASE_CLUSTERCTLYAML) $(RELEASE_MANIFEST) $(RELEASE_METADATA) $(RELEASE_CLUSTER_TEMPLATE)
+release: release-manifests release-clusterctl release-cluster-template
+release-manifests: $(RELEASE_MANIFEST) $(RELEASE_METADATA) $(RELEASE_CLUSTER_TEMPLATE)
+$(RELEASE_MANIFEST): $(RELEASE_DIR) ## Builds the manifests to publish with a release
+	kustomize build config/default > $@
+
+$(RELEASE_METADATA): $(RELEASE_DIR) $(METADATA_TEMPLATE)
+	cat $(METADATA_TEMPLATE) | sed 's/MAJOR/$(VERSION_MAJOR)/g' | sed 's/MINOR/$(VERSION_MINOR)/g' | sed 's/CONTRACT/$(VERSION_CONTRACT)/g' > $@
+
+release-cluster-template: $(RELEASE_CLUSTER_TEMPLATE)
+$(RELEASE_CLUSTER_TEMPLATE): $(RELEASE_DIR)
+	cp $(CLUSTER_TEMPLATE) $@
+
+release-clusterctl: $(RELEASE_CLUSTERCTLYAML) $(FULL_RELEASE_CLUSTERCTLYAML)
+$(RELEASE_CLUSTERCTLYAML): $(RELEASE_BASE)
+	cat $(CLUSTERCTL_TEMPLATE) | sed 's%URL%$(FULL_RELEASE_MANIFEST)%g' > $@
+
+$(FULL_RELEASE_CLUSTERCTLYAML): $(RELEASE_DIR)
+	cat $(CLUSTERCTL_TEMPLATE) | sed 's%URL%$(FULL_RELEASE_MANIFEST_URL)%g' > $@
+
+.PHONY: managerless-clusterctl managerless-manifests managerless $(MANAGERLESS_CLUSTERCTLYAML) $(MANAGERLESS_MANIFEST) $(MANAGERLESS_METADATA) $(MANAGERLESS_CLUSTER_TEMPLATE)
+managerless: managerless-manifests managerless-clusterctl managerless-cluster-template
+managerless-manifests: $(MANAGERLESS_MANIFEST) $(MANAGERLESS_METADATA)
+$(MANAGERLESS_MANIFEST): $(MANAGERLESS_DIR)
+	kustomize build config/managerless > $@
+
+$(MANAGERLESS_METADATA): $(MANAGERLESS_DIR) $(METADATA_TEMPLATE)
+	cat $(METADATA_TEMPLATE) | sed 's/MAJOR/$(VERSION_MAJOR)/g' | sed 's/MINOR/$(VERSION_MINOR)/g' | sed 's/CONTRACT/$(VERSION_CONTRACT)/g' > $@
+
+managerless-cluster-template: $(MANAGERLESS_CLUSTER_TEMPLATE)
+$(MANAGERLESS_CLUSTER_TEMPLATE): $(MANAGERLESS_DIR)
+	cp $(CLUSTER_TEMPLATE) $@
+
+managerless-clusterctl: $(MANAGERLESS_CLUSTERCTLYAML)
+$(MANAGERLESS_CLUSTERCTLYAML): $(MANAGERLESS_BASE)
+	@cat $(CLUSTERCTL_TEMPLATE) | sed 's%URL%$(FULL_MANAGERLESS_MANIFEST)%g' > $@
+	@echo "managerless ready, command-line is:"
+	@echo "	clusterctl --config=$@ <commands>"
+
+$(COREPATH):
+	mkdir -p $@
+
+$(COREPATH)/%:
+	curl -s -L -o $@ $(CORE_URL)/$*
+
+core: $(COREPATH)
+	# download from core
+	@$(eval YAMLS := $(shell curl -s -L $(CORE_API) | jq -r '[.[] | select(.tag_name == "$(CORE_VERSION)").assets[] | select(.name | contains("yaml")) | .name] | join(" ")'))
+	@if [ -n "$(YAMLS)" ]; then $(MAKE) $(addprefix $(COREPATH)/,$(YAMLS)); fi
+
+# the standard way to initialize a cluster. If you are using an actually released version,
+# then you can just do "clusterctl init --infrastructure=packet" without any of this
+cluster-init: managerless release
+	clusterctl init
+	clusterctl init --config=$(MANAGERLESS_CLUSTERCTLYAML) --infrastructure=packet
+
+# this is just for those who really want to see the manual steps
+cluster-init-manual: core managerless release
+	kubectl apply --validate=false -f $(CERTMANAGER_URL)
+	# because of dependencies, this is allowed to fail once or twice
+	kubectl apply -f $(COREPATH) || kubectl apply -f $(COREPATH) || kubectl apply -f $(COREPATH)
+	kubectl apply -f $(FULL_MANAGERLESS_MANIFEST)
