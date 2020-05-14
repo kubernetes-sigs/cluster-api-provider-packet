@@ -139,7 +139,7 @@ test: generate fmt vet manifests
 e2e:
 	# This is the name used inside the component.yaml for the container that runs the manager
 	# The image gets loaded inside kind from ./test/e2e/config/packet-dev.yaml
-	docker tag controller:latest packethost/cluster-api-packet-controller
+	docker tag $(IMG) $(BUILD_IMAGE)
 	$(E2E_FLAGS) $(MAKE) -C test/e2e run
 
 # Build manager binary
