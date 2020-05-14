@@ -18,6 +18,9 @@ REPO_URL ?= https://github.com/packethost/cluster-api-provider-packet
 BUILDARCH ?= $(shell uname -m)
 BUILDOS ?= $(shell uname -s | tr A-Z a-z)
 
+TEST_E2E_DIR := test/e2e
+E2E_FOCUS := "functional tests"
+
 # canonicalized names for host architecture
 ifeq ($(BUILDARCH),aarch64)
         BUILDARCH=arm64
@@ -135,10 +138,16 @@ $(KUBEBUILDER):
 	# (you'll need to set the KUBEBUILDER_ASSETS env var if you put it somewhere else)
 	mv /tmp/kubebuilder_$(KUBEBUILDER_VERSION)_$(BUILDOS)_$(BUILDARCH) /usr/local/kubebuilder
 
-
 # Run tests
 test: generate fmt vet manifests
 	go test ./... -coverprofile cover.out
+
+# Run e2e tests
+e2e:
+	# This is the name used inside the component.yaml for the container that runs the manager
+	# The image gets loaded inside kind from ./test/e2e/config/packet-dev.yaml
+	docker tag $(IMG) $(BUILD_IMAGE)
+	$(E2E_FLAGS) $(MAKE) -C test/e2e run
 
 # Build manager binary
 manager: $(MANAGER)

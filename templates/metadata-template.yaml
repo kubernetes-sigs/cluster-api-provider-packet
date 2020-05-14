@@ -1,4 +1,4 @@
 releaseSeries:
-- major: MAJOR
-  minor: MINOR
-  contract: CONTRACT
+- major: 0
+  minor: 3
+  contract: v1alpha3
