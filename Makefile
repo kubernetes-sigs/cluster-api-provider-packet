@@ -204,8 +204,8 @@ $(RELEASE_DIR) $(RELEASE_BASE):
 $(MANAGERLESS_DIR) $(MANAGERLESS_BASE):
 	mkdir -p $@
 
-.PHONY: release-clusterctl release-manifests release $(RELEASE_CLUSTERCTLYAML) $(RELEASE_MANIFEST)
-release: release-manifests release-clusterctl
+.PHONY: release-clusterctl release-manifests release $(RELEASE_CLUSTERCTLYAML) $(RELEASE_MANIFEST) $(RELEASE_METADATA) $(RELEASE_CLUSTER_TEMPLATE)
+release: release-manifests release-clusterctl release-cluster-template
 release-manifests: $(RELEASE_MANIFEST) $(RELEASE_METADATA) $(RELEASE_CLUSTER_TEMPLATE)
 $(RELEASE_MANIFEST): $(RELEASE_DIR) ## Builds the manifests to publish with a release
 	kustomize build config/default > $@
@@ -213,6 +213,7 @@ $(RELEASE_MANIFEST): $(RELEASE_DIR) ## Builds the manifests to publish with a re
 $(RELEASE_METADATA): $(RELEASE_DIR) $(METADATA_TEMPLATE)
 	cat $(METADATA_TEMPLATE) | sed 's/MAJOR/$(VERSION_MAJOR)/g' | sed 's/MINOR/$(VERSION_MINOR)/g' | sed 's/CONTRACT/$(VERSION_CONTRACT)/g' > $@
 
+release-cluster-template: $(RELEASE_CLUSTER_TEMPLATE)
 $(RELEASE_CLUSTER_TEMPLATE): $(RELEASE_DIR)
 	cp $(CLUSTER_TEMPLATE) $@
 
@@ -223,8 +224,8 @@ $(RELEASE_CLUSTERCTLYAML): $(RELEASE_BASE)
 $(FULL_RELEASE_CLUSTERCTLYAML): $(RELEASE_DIR)
 	cat $(CLUSTERCTL_TEMPLATE) | sed 's%URL%$(FULL_RELEASE_MANIFEST_URL)%g' > $@
 
-.PHONY: managerless-clusterctl managerless-manifests managerless $(MANAGERLESS_CLUSTERCTLYAML) $(MANAGERLESS_MANIFEST)
-managerless: managerless-manifests managerless-clusterctl
+.PHONY: managerless-clusterctl managerless-manifests managerless $(MANAGERLESS_CLUSTERCTLYAML) $(MANAGERLESS_MANIFEST) $(MANAGERLESS_METADATA) $(MANAGERLESS_CLUSTER_TEMPLATE)
+managerless: managerless-manifests managerless-clusterctl managerless-cluster-template
 managerless-manifests: $(MANAGERLESS_MANIFEST) $(MANAGERLESS_METADATA)
 $(MANAGERLESS_MANIFEST): $(MANAGERLESS_DIR)
 	kustomize build config/managerless > $@
@@ -232,6 +233,7 @@ $(MANAGERLESS_MANIFEST): $(MANAGERLESS_DIR)
 $(MANAGERLESS_METADATA): $(MANAGERLESS_DIR) $(METADATA_TEMPLATE)
 	cat $(METADATA_TEMPLATE) | sed 's/MAJOR/$(VERSION_MAJOR)/g' | sed 's/MINOR/$(VERSION_MINOR)/g' | sed 's/CONTRACT/$(VERSION_CONTRACT)/g' > $@
 
+managerless-cluster-template: $(MANAGERLESS_CLUSTER_TEMPLATE)
 $(MANAGERLESS_CLUSTER_TEMPLATE): $(MANAGERLESS_DIR)
 	cp $(CLUSTER_TEMPLATE) $@
 
