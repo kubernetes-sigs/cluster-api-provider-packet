@@ -29,4 +29,7 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
+        envFrom:
+        - secretRef:
+            name: manager-api-credentials
       terminationGracePeriodSeconds: 10

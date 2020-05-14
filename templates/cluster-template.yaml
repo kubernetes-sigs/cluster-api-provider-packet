@@ -18,7 +18,7 @@ spec:
     - systemctl daemon-reload
     - systemctl enable docker
     - systemctl start docker
-  postKubeadmCommands: 
+  postKubeadmCommands:
     - "kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://docs.projectcalico.org/v3.11/manifests/calico.yaml"
     - "kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system packet-cloud-config --from-literal=cloud-sa.json='{\"apiKey\": \"${PACKET_API_KEY}\",\"projectID\": \"${PROJECT_ID}\"}'"
     - "kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://raw.githubusercontent.com/packethost/packet-ccm/master/deploy/releases/v1.0.0/deployment.yaml"
@@ -92,7 +92,7 @@ metadata:
     cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
     pool: worker-a
 spec:
-  replicas: 3
+  replicas: ${WORKER_MACHINE_COUNT}
   selector:
     matchLabels:
       cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
@@ -154,4 +154,4 @@ spec:
       joinConfiguration:
         nodeRegistration:
           kubeletExtraArgs:
-            cloud-provider: external 
+            cloud-provider: external
