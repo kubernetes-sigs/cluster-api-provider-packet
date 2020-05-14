@@ -93,6 +93,7 @@ metadata:
     pool: worker-a
 spec:
   replicas: ${WORKER_MACHINE_COUNT}
+  clusterName: ${CLUSTER_NAME}
   selector:
     matchLabels:
       cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
@@ -104,6 +105,7 @@ spec:
         pool: worker-a
     spec:
       version: ${KUBERNETES_VERSION}
+      clusterName: ${CLUSTER_NAME}
       bootstrap:
         configRef:
           name: ${CLUSTER_NAME}-worker-a
