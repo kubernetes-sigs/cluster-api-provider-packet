@@ -1,7 +1,9 @@
 .PHONY: vendor test manager clusterctl run install deploy manifests generate fmt vet run kubebuilder ci cd
 
 KUBEBUILDER_VERSION ?= 2.3.1
-KUBEBUILDER ?= /usr/local/kubebuilder/bin/kubebuilder
+# default install location for kubebuilder; can be placed elsewhere
+KUBEBUILDER_DIR ?= /usr/local/kubebuilder
+KUBEBUILDER ?= $(KUBEBUILDER_DIR)/bin/kubebuilder
 CONTROLLER_GEN_VERSION ?= v0.3.0
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 
@@ -54,7 +56,7 @@ GO ?= GO111MODULE=on CGO_ENABLED=0 go
 
 
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= packethost/cluster-api-provider-packet:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
@@ -136,7 +138,7 @@ $(KUBEBUILDER):
 	curl -sL https://go.kubebuilder.io/dl/$(KUBEBUILDER_VERSION)/$(BUILDOS)/$(BUILDARCH) | tar -xz -C /tmp/
 	# move to a long-term location and put it on your path
 	# (you'll need to set the KUBEBUILDER_ASSETS env var if you put it somewhere else)
-	mv /tmp/kubebuilder_$(KUBEBUILDER_VERSION)_$(BUILDOS)_$(BUILDARCH) /usr/local/kubebuilder
+	mv /tmp/kubebuilder_$(KUBEBUILDER_VERSION)_$(BUILDOS)_$(BUILDARCH) $(KUBEBUILDER_DIR)
 
 # Run tests
 test: generate fmt vet manifests
@@ -146,7 +148,6 @@ test: generate fmt vet manifests
 e2e:
 	# This is the name used inside the component.yaml for the container that runs the manager
 	# The image gets loaded inside kind from ./test/e2e/config/packet-dev.yaml
-	docker tag $(IMG) $(BUILD_IMAGE)
 	$(E2E_FLAGS) $(MAKE) -C test/e2e run
 
 # Build manager binary
