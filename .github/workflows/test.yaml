@@ -1,0 +1,45 @@
+on: [push, pull_request]
+name: Test
+jobs:
+  test:
+    strategy:
+      matrix:
+        go-version: [1.14.x]
+        platform: [ubuntu-latest]
+    runs-on: ${{ matrix.platform }}
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v1
+      with:
+        go-version: ${{ matrix.go-version }}
+    - name: Install dependencies
+      run: apt-get install -y git jq curl build-essential
+    - name: Install kubebuilder
+      run:  make kubebuilder
+    - name: Checkout code
+      uses: actions/checkout@v1
+    - name: GoFMT
+      run: go fmt ./...
+    - name: Test
+      run: make test
+    #‐ name: docker build
+      #uses: docker/build-action@v1
+      #with:
+        #repository: packethost/cluster-api-provider-packet
+        #tags:
+          #- latest
+          #- ${{ github.sha }}
+    #‐ name: docker login
+      #if: github.ref == 'refs/heads/master'
+      #uses: docker/login-action@v1
+      #with:
+        #username: ${{ DOCKER_USERNAME }}
+        #password: ${{ DOCKER_PASSWORD }}
+    #‐ name: docker push
+      #if: github.ref == 'refs/heads/master'
+      #uses: docker/push-action@v1
+      #with:
+        #registry: packethost/cluster-api-provider-packet
+        #tags:
+          #- latest
+          #- ${{ github.sha }}
