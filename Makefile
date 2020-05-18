@@ -89,7 +89,7 @@ RELEASE_MANIFEST := $(RELEASE_DIR)/infrastructure-components.yaml
 RELEASE_METADATA := $(RELEASE_DIR)/metadata.yaml
 RELEASE_CLUSTER_TEMPLATE := $(RELEASE_DIR)/cluster-template.yaml
 FULL_RELEASE_MANIFEST := $(FULL_RELEASE_DIR)/infrastructure-components.yaml
-FULL_RELEASE_MANIFEST_URL := $(REPO_URL)/releases/latest/infrastructure-components.yaml
+FULL_RELEASE_MANIFEST_URL := $(REPO_URL)/releases/$(RELEASE_VERSION)/infrastructure-components.yaml
 FULL_RELEASE_CLUSTERCTLYAML := $(FULL_RELEASE_DIR)/clusterctl.yaml
 RELEASE_CLUSTERCTLYAML := $(RELEASE_BASE)/clusterctl-$(RELEASE_VERSION).yaml
 
@@ -213,8 +213,15 @@ $(RELEASE_DIR) $(RELEASE_BASE):
 $(MANAGERLESS_DIR) $(MANAGERLESS_BASE):
 	mkdir -p $@
 
-.PHONY: release-clusterctl release-manifests release $(RELEASE_CLUSTERCTLYAML) $(RELEASE_MANIFEST) $(RELEASE_METADATA) $(RELEASE_CLUSTER_TEMPLATE)
-manifest: release-manifests release-clusterctl release-cluster-template
+.PHONY: semver release-clusterctl release-manifests release $(RELEASE_CLUSTERCTLYAML) $(RELEASE_MANIFEST) $(RELEASE_METADATA) $(RELEASE_CLUSTER_TEMPLATE) $(FULL_RELEASE_CLUSTERCTLYAML)
+
+semver:
+ifeq (,$(VERSION))
+	$(error could not determine version to use from git tag, will not create artifacts)
+endif
+
+
+manifest: semver release-manifests release-clusterctl release-cluster-template
 
 release:
 	goreleaser release --rm-dist --snapshot --skip-publish
@@ -222,18 +229,18 @@ release:
 release/publish:
 	goreleaser release --rm-dist
 
-release-manifests: $(RELEASE_MANIFEST) $(RELEASE_METADATA) $(RELEASE_CLUSTER_TEMPLATE)
+release-manifests: semver $(RELEASE_MANIFEST) $(RELEASE_METADATA) $(RELEASE_CLUSTER_TEMPLATE)
 $(RELEASE_MANIFEST): $(RELEASE_DIR) ## Builds the manifests to publish with a release
 	kustomize build config/default > $@
 
-$(RELEASE_METADATA): $(RELEASE_DIR) $(METADATA_TEMPLATE)
+$(RELEASE_METADATA): semver $(RELEASE_DIR) $(METADATA_TEMPLATE)
 	cat $(METADATA_TEMPLATE) | sed 's/MAJOR/$(VERSION_MAJOR)/g' | sed 's/MINOR/$(VERSION_MINOR)/g' | sed 's/CONTRACT/$(VERSION_CONTRACT)/g' > $@
 
-release-cluster-template: $(RELEASE_CLUSTER_TEMPLATE)
+release-cluster-template: semver $(RELEASE_CLUSTER_TEMPLATE)
 $(RELEASE_CLUSTER_TEMPLATE): $(RELEASE_DIR)
 	cp $(CLUSTER_TEMPLATE) $@
 
-release-clusterctl: $(RELEASE_CLUSTERCTLYAML) $(FULL_RELEASE_CLUSTERCTLYAML)
+release-clusterctl: semver $(RELEASE_CLUSTERCTLYAML) $(FULL_RELEASE_CLUSTERCTLYAML)
 $(RELEASE_CLUSTERCTLYAML): $(RELEASE_BASE)
 	cat $(CLUSTERCTL_TEMPLATE) | sed 's%URL%$(FULL_RELEASE_MANIFEST)%g' > $@
 
@@ -241,19 +248,19 @@ $(FULL_RELEASE_CLUSTERCTLYAML): $(RELEASE_DIR)
 	cat $(CLUSTERCTL_TEMPLATE) | sed 's%URL%$(FULL_RELEASE_MANIFEST_URL)%g' > $@
 
 .PHONY: managerless-clusterctl managerless-manifests managerless $(MANAGERLESS_CLUSTERCTLYAML) $(MANAGERLESS_MANIFEST) $(MANAGERLESS_METADATA) $(MANAGERLESS_CLUSTER_TEMPLATE)
-managerless: managerless-manifests managerless-clusterctl managerless-cluster-template
-managerless-manifests: $(MANAGERLESS_MANIFEST) $(MANAGERLESS_METADATA)
+managerless: semver managerless-manifests managerless-clusterctl managerless-cluster-template
+managerless-manifests: semver $(MANAGERLESS_MANIFEST) $(MANAGERLESS_METADATA)
 $(MANAGERLESS_MANIFEST): $(MANAGERLESS_DIR)
 	kustomize build config/managerless > $@
 
-$(MANAGERLESS_METADATA): $(MANAGERLESS_DIR) $(METADATA_TEMPLATE)
+$(MANAGERLESS_METADATA): semver $(MANAGERLESS_DIR) $(METADATA_TEMPLATE)
 	cat $(METADATA_TEMPLATE) | sed 's/MAJOR/$(VERSION_MAJOR)/g' | sed 's/MINOR/$(VERSION_MINOR)/g' | sed 's/CONTRACT/$(VERSION_CONTRACT)/g' > $@
 
-managerless-cluster-template: $(MANAGERLESS_CLUSTER_TEMPLATE)
+managerless-cluster-template: semver $(MANAGERLESS_CLUSTER_TEMPLATE)
 $(MANAGERLESS_CLUSTER_TEMPLATE): $(MANAGERLESS_DIR)
 	cp $(CLUSTER_TEMPLATE) $@
 
-managerless-clusterctl: $(MANAGERLESS_CLUSTERCTLYAML)
+managerless-clusterctl: semver $(MANAGERLESS_CLUSTERCTLYAML)
 $(MANAGERLESS_CLUSTERCTLYAML): $(MANAGERLESS_BASE)
 	@cat $(CLUSTERCTL_TEMPLATE) | sed 's%URL%$(FULL_MANAGERLESS_MANIFEST)%g' > $@
 	@echo "managerless ready, command-line is:"
