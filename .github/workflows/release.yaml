@@ -25,10 +25,14 @@ jobs:
         uses: imranismail/setup-kustomize@v1
         with:
           kustomize-version: "3.5.4"
+      - name: manifest-debug
+        uses: make manifest
+      - name: ls-debug
+        run: ls -lsa ./out/release/infrastructure-packet
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v2.0.2
         with:
           version: latest
-          args: release --rm-dist
+          args: release --rm-dist --debug
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
