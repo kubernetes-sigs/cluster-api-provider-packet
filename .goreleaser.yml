@@ -27,9 +27,6 @@ dockers:
     dockerfile: Dockerfile.goreleaser
     goos: linux
     goarch: arm64
-    # The idea here is to add a post hook that will use the manifest tool to
-    # merge all the images and push them properly
-    skip_push: true
   - image_templates:
       - "packethost/cluster-api-provider-packet:latest-amd64"
       - "packethost/cluster-api-provider-packet:{{ .Tag }}-amd64"
@@ -40,9 +37,6 @@ dockers:
       - capp
     goos: linux
     goarch: amd64
-    # The idea here is to add a post hook that will use the manifest tool to
-    # merge all the images and push them properly
-    skip_push: true
 archives:
 - replacements:
     darwin: Darwin
