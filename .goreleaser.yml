@@ -15,7 +15,7 @@ builds:
       - arm64
 release:
   extra_files:
-    - glob: "./out/release/infrastructure-packet/{{ .Tag }}/*"
+    - glob: "./out/release/infrastructure-packet/v*/*"
 dockers:
   - image_templates:
       - "packethost/cluster-api-provider-packet:latest-arm64"
