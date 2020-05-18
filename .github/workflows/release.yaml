@@ -26,7 +26,7 @@ jobs:
         with:
           kustomize-version: "3.5.4"
       - name: manifest-debug
-        uses: make manifest
+        run: make manifest
       - name: ls-debug
         run: ls -lsa ./out/release/infrastructure-packet
       - name: Run GoReleaser
