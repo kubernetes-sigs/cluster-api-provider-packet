@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+      - name: "Unshallow (required by goreleaser)"
+        run: git fetch --prune --unshallow
       - uses: azure/docker-login@v1
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -20,15 +22,15 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.13.x
+          go-version: 1.14.x
       - name: install kustomize
         uses: imranismail/setup-kustomize@v1
         with:
           kustomize-version: "3.5.4"
       - name: manifest-debug
         run: make manifest
-      - name: ls-debug
-        run: ls -lsa ./out/release/infrastructure-packet
+      - name: find-debug
+        run: find ./out
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v2.0.2
         with:
