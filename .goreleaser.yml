@@ -47,4 +47,7 @@ publishers:
     - capp-linux
     name: "buildx"
     dir: "{{ dir .ArtifactPath }}/capp-linux_linux_{{ .Arch }}"
-    cmd: 'docker buildx build --push --platform linux/{{ .Arch }} -t packethost/cluster-api-provider-packet:latest-{{ .Arch }} -t packethost/cluster-api-provider-packet:{{ .Tag }}-{{ .Arch }} -f ../../Dockerfile.goreleaser .'
+    cmd: '../../scripts/multi_arch_docker_release.sh'
+    env:
+      - TAG={{ .Tag }}
+      - ARCH={{ .Arch }}
