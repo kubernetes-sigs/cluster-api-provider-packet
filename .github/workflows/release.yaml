@@ -43,7 +43,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Update docker manifest
         run: |
-          buildx imagetools create \
+          docker buildx imagetools create \
             -t packethost/cluster-api-provider-packet:$VERSION \
             packethost/cluster-api-provider-packet:$VERSION-amd64 \
             packethost/cluster-api-provider-packet:$VERSION-arm64
