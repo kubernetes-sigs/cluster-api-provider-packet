@@ -1,0 +1,4 @@
+FROM scratch
+ARG ARCH=arm64
+COPY manager /
+ENTRYPOINT ["/manager"]

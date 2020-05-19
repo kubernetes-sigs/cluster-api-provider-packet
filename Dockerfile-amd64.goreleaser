@@ -1,4 +1,4 @@
 FROM scratch
+ARG ARCH=amd64
 COPY manager /
 ENTRYPOINT ["/manager"]
-

@@ -24,13 +24,13 @@ dockers:
       - manager
     builds:
       - capp
-    dockerfile: Dockerfile.goreleaser
+    dockerfile: Dockerfile-arm64.goreleaser
     goos: linux
     goarch: arm64
   - image_templates:
       - "packethost/cluster-api-provider-packet:latest-amd64"
       - "packethost/cluster-api-provider-packet:{{ .Tag }}-amd64"
-    dockerfile: Dockerfile.goreleaser
+    dockerfile: Dockerfile-amd64.goreleaser
     binaries:
       - manager
     builds:
