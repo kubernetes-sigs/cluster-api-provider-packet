@@ -21,7 +21,7 @@ jobs:
         env:
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: |
-          echo "${DOCKER_PASSWORD}" | docker login --username "${{ secret.docker_username }}" --password-stdin docker.io
+          echo "${DOCKER_PASSWORD}" | docker login --username "${{ secret.DOCKER_USERNAME }}" --password-stdin docker.io
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
