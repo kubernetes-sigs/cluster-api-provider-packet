@@ -1,7 +1,13 @@
 .PHONY: vendor test manager clusterctl run install deploy manifests generate fmt vet run kubebuilder ci cd
 
-GIT_VERSION?=$(shell git log -1 --format="%h")
-RELEASE_TAG ?= $(shell git tag --points-at HEAD)
+GIT_VERSION ?= $(shell git log -1 --format="%h")
+RELEASE_TAG := $(shell git describe --abbrev=0 --tags ${TAG_COMMIT} 2>/dev/null || true)
+
+ifneq ($(shell git status --porcelain),)
+	# next is used by GoReleaser as well when --spanshot is set
+  RELEASE_TAG := $(RELEASE_TAG)-next
+endif
+
 KUBEBUILDER_VERSION ?= 2.3.1
 # default install location for kubebuilder; can be placed elsewhere
 KUBEBUILDER_DIR ?= /usr/local/kubebuilder
