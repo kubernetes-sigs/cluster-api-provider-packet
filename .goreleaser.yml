@@ -3,12 +3,20 @@ before:
     - make manifest
 builds:
   -
-    id: capp
+    id: capp-mac
     env:
       - CGO_ENABLED=0
     binary: manager
     goos:
       - darwin
+    goarch:
+      - amd64
+  -
+    id: capp-linux
+    env:
+      - CGO_ENABLED=0
+    binary: manager
+    goos:
       - linux
     goarch:
       - amd64
@@ -16,33 +24,13 @@ builds:
 release:
   extra_files:
     - glob: "./out/release/infrastructure-packet/v*/*"
-dockers:
-  - image_templates:
-      - "packethost/cluster-api-provider-packet:latest-arm64"
-      - "packethost/cluster-api-provider-packet:{{ .Tag }}-arm64"
-    binaries:
-      - manager
-    builds:
-      - capp
-    dockerfile: Dockerfile.goreleaser
-    goos: linux
-    goarch: arm64
-  - image_templates:
-      - "packethost/cluster-api-provider-packet:latest-amd64"
-      - "packethost/cluster-api-provider-packet:{{ .Tag }}-amd64"
-    dockerfile: Dockerfile.goreleaser
-    binaries:
-      - manager
-    builds:
-      - capp
-    goos: linux
-    goarch: amd64
 archives:
-- replacements:
-    darwin: Darwin
-    linux: Linux
-    386: i386
-    amd64: x86_64
+- id: capp-linux
+  builds:
+    - capp-linux
+- id: capp-mac
+  builds:
+    - capp-mac
 checksum:
   name_template: 'checksums.txt'
 snapshot:
@@ -53,3 +41,10 @@ changelog:
     exclude:
     - '^docs:'
     - '^test:'
+publishers:
+  -
+    ids:
+    - capp-linux
+    name: "buildx"
+    dir: "{{ dir .ArtifactPath }}/capp-linux_linux_{{ .Arch }}"
+    cmd: 'docker buildx build --push --platform linux/{{ .Arch }} -t packethost/cluster-api-provider-packet:latest-{{ .Arch }} -t packethost/cluster-api-provider-packet:{{ .Tag }}-{{ .Arch }} -f ../../Dockerfile.goreleaser .'

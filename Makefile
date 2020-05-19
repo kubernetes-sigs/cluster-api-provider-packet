@@ -230,7 +230,7 @@ endif
 manifest: semver release-manifests release-clusterctl release-cluster-template
 
 release:
-	goreleaser release --rm-dist --snapshot --skip-publish
+	goreleaser release --rm-dist --snapshot --skip-publish --debug
 
 release/publish:
 	goreleaser release --rm-dist
