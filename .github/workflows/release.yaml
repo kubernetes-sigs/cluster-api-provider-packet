@@ -16,7 +16,7 @@ jobs:
       - name: "Unshallow (required by goreleaser)"
         run: git fetch --prune --unshallow
       - name: Get the version
-        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+        run: echo ::set-env name=VERSION::${GITHUB_REF/refs\/tags\//}
       - uses: azure/docker-login@v1
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
