@@ -1,4 +1,0 @@
-FROM scratch
-COPY manager /
-ENTRYPOINT ["/manager"]
-
