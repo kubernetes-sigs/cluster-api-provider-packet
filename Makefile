@@ -70,6 +70,13 @@ IMAGENAME ?= $(BUILD_IMAGE):$(IMAGETAG)-$(ARCH)
 MANIFEST_VERSION ?= 1.0.0
 MANIFEST_URL = https://github.com/estesp/manifest-tool/releases/download/v$(MANIFEST_VERSION)/manifest-tool-$(BUILDOS)-$(BUILDARCH)
 
+# these macros create a list of valid architectures for pushing manifests
+space :=
+space +=
+comma := ,
+prefix_linux = $(addprefix linux/,$(strip $1))
+join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
+
 GO ?= GO111MODULE=on CGO_ENABLED=0 go
 
 
