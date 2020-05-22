@@ -8,6 +8,12 @@ ifneq ($(shell git status --porcelain),)
   RELEASE_TAG := $(RELEASE_TAG)-next
 endif
 
+# which arches can we support
+ARCHES=arm64 amd64
+
+QEMU_VERSION?=4.2.0-7
+QEMU_IMAGE?=multiarch/qemu-user-static:$(QEMU_VERSION)
+
 KUBEBUILDER_VERSION ?= 2.3.1
 # default install location for kubebuilder; can be placed elsewhere
 KUBEBUILDER_DIR ?= /usr/local/kubebuilder
@@ -56,6 +62,13 @@ BUILD_IMAGE_TAG ?= $(BUILD_IMAGE):latest
 PUSH_IMAGE_TAG ?= $(BUILD_IMAGE):$(IMAGETAG)
 MANAGER ?= bin/manager-$(OS)-$(ARCH)
 KUBECTL ?= kubectl
+FROMTAG ?= latest
+
+IMAGENAME ?= $(BUILD_IMAGE):$(IMAGETAG)-$(ARCH)
+
+# Manifest tool, until `docker manifest` is fully ready. As of this writing, it remains experimental
+MANIFEST_VERSION ?= 1.0.0
+MANIFEST_URL = https://github.com/estesp/manifest-tool/releases/download/v$(MANIFEST_VERSION)/manifest-tool-$(BUILDOS)-$(BUILDARCH)
 
 GO ?= GO111MODULE=on CGO_ENABLED=0 go
 
@@ -71,6 +84,8 @@ GOBIN=$(shell go env GOPATH)/bin
 else
 GOBIN=$(shell go env GOBIN)
 endif
+
+MANIFEST_TOOL ?= $(GOBIN)/manifest-tool
 
 # where we store downloaded core
 COREPATH ?= out/core
@@ -126,16 +141,29 @@ ifndef IMAGETAG
 	$(error IMAGETAG is undefined - run using make <target> IMAGETAG=X.Y.Z)
 endif
 
+tag-images-all: $(addprefix sub-tag-image-, $(ARCHES))
+sub-tag-image-%:
+	@$(MAKE) ARCH=$* IMAGETAG=$(IMAGETAG) tag-images
+
 tag-image: imagetag
 	docker tag $(BUILD_IMAGE_TAG) $(PUSH_IMAGE_TAG)
+tag-images: imagetag
+	docker tag $(BUILD_IMAGE):$(FROMTAG)-$(ARCH) $(IMAGENAME)
 
 confirm:
 ifndef CONFIRM
 	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
 endif
 
-cd: confirm
-	$(MAKE) tag-image push IMAGETAG=$(GIT_VERSION)
+.PHONY: branchname
+branchname:
+ifndef BRANCH_NAME
+	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
+endif
+
+cd: confirm branchname
+	$(MAKE) tag-images-all push-all push-manifest IMAGETAG=${BRANCH_NAME}
+	$(MAKE) tag-images-all push-all push-manifest IMAGETAG=${GIT_VERSION}
 
 # needed kubebuilder for tests
 kubebuilder: $(KUBEBUILDER)
@@ -193,13 +221,42 @@ vet:
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
-# Build the docker image
+## make the images for all supported ARCH
+image-all: $(addprefix sub-image-, $(ARCHES))
+sub-image-%:
+	@$(MAKE) ARCH=$* image
+
+# Build the docker image for a single arch
 image: test
-	docker build . -t ${IMG}
+	docker buildx build --load -t $(IMG)-$(ARCH) -f Dockerfile --build-arg ARCH=$(ARCH) --platform $(OS)/$(ARCH) .
+	echo "Done. image is at $(IMG)-$(ARCH)"
+
+  # Targets used when cross building.
+.PHONY: register
+# Enable binfmt adding support for miscellaneous binary formats.
+# This is only needed when running non-native binaries.
+register:
+	docker pull $(QEMU_IMAGE)
+	docker run --rm --privileged $(QEMU_IMAGE) --reset -p yes || true
+
+.PHONY: manifest-tool
+manifest-tool: $(MANIFEST_TOOL)
+$(MANIFEST_TOOL):
+	curl -L -o $@ $(MANIFEST_URL)
+	chmod +x $@
+
+## push the multi-arch manifest
+push-manifest: manifest-tool imagetag
+	# path to credentials based on manifest-tool's requirements here https://github.com/estesp/manifest-tool#sample-usage
+	$(GOBIN)/manifest-tool push from-args --platforms $(call join_platforms,$(ARCHES)) --template $(BUILD_IMAGE):$(IMAGETAG)-ARCH --target $(BUILD_IMAGE):$(IMAGETAG)
+
+push-all: imagetag $(addprefix sub-push-, $(ARCHES))
+sub-push-%:
+	@$(MAKE) ARCH=$* push IMAGETAG=$(IMAGETAG)
 
 # Push the docker image
 push:
-	docker push ${IMG}
+	docker push $(IMAGENAME)
 
 # find or download controller-gen
 # download controller-gen if necessary

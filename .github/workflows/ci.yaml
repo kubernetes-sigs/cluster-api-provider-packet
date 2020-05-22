@@ -32,8 +32,17 @@ jobs:
       run: make test KUBEBUILDER_DIR=${KUBEBUILDER_DIR}
       env:
         KUBEBUILDER_ASSETS: ${{ env.KUBEBUILDER_DIR }}/bin
+    - name: Register binfmt_misc entries for qemu-user-static
+      run: make register
+    - name: set buildx cross-builder
+      run: |
+        docker buildx create --name cross-builder
+        docker buildx use cross-builder
+        docker buildx inspect --bootstrap
+    - name: check buildx
+      run: docker buildx ls
     - name: image
-      run: make image KUBEBUILDER_DIR=${KUBEBUILDER_DIR}
+      run: make image-all KUBEBUILDER_DIR=${KUBEBUILDER_DIR}
       env:
         KUBEBUILDER_ASSETS: ${{ env.KUBEBUILDER_DIR }}/bin
     - name: hub login
