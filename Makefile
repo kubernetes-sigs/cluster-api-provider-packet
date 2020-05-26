@@ -31,8 +31,20 @@ REPO_URL ?= https://github.com/packethost/cluster-api-provider-packet
 BUILDARCH ?= $(shell uname -m)
 BUILDOS ?= $(shell uname -s | tr A-Z a-z)
 
-TEST_E2E_DIR := test/e2e
 E2E_FOCUS := "functional tests"
+
+# Directories.
+TOOLS_DIR := hack/tools
+TOOLS_BIN_DIR := $(TOOLS_DIR)/bin
+BIN_DIR := bin
+TEST_E2E_DIR := test/e2e
+
+# Binaries.
+KUSTOMIZE := $(TOOLS_BIN_DIR)/kustomize
+
+kustomize: $(KUSTOMIZE)
+$(KUSTOMIZE): $(TOOLS_DIR)/go.mod # Build kustomize from tools folder.
+	cd $(TOOLS_DIR); go build -tags=tools -o $(BIN_DIR)/kustomize sigs.k8s.io/kustomize/kustomize/v3
 
 # canonicalized names for host architecture
 ifeq ($(BUILDARCH),aarch64)
@@ -201,16 +213,16 @@ run: generate fmt vet crds
 
 # Install CRDs into a cluster
 install: crds
-	kustomize build config/crd | kubectl apply -f -
+	$(KUSTOMIZE) build config/crd | kubectl apply -f -
 
 # Uninstall CRDs from a cluster
 uninstall: crds
-	kustomize build config/crd | kubectl delete -f -
+	$(KUSTOMIZE) build config/crd | kubectl delete -f -
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: crds
-	cd config/manager && kustomize edit set image controller=${IMG}
-	kustomize build config/default | kubectl apply -f -
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	$(KUSTOMIZE) build config/default | kubectl apply -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
 crds: controller-gen
@@ -291,7 +303,7 @@ ifeq (,$(VERSION))
 endif
 
 
-manifest: semver release-manifests release-clusterctl release-cluster-template
+manifest: kustomize semver release-manifests release-clusterctl release-cluster-template
 
 release:
 	goreleaser release --rm-dist --snapshot --skip-publish --debug
@@ -301,7 +313,7 @@ release/publish:
 
 release-manifests: semver $(RELEASE_MANIFEST) $(RELEASE_METADATA) $(RELEASE_CLUSTER_TEMPLATE)
 $(RELEASE_MANIFEST): $(RELEASE_DIR) ## Builds the manifests to publish with a release
-	kustomize build config/default > $@
+	$(KUSTOMIZE) build config/default > $@
 
 $(RELEASE_METADATA): semver $(RELEASE_DIR) $(METADATA_TEMPLATE)
 	cat $(METADATA_TEMPLATE) | sed 's/MAJOR/$(VERSION_MAJOR)/g' | sed 's/MINOR/$(VERSION_MINOR)/g' | sed 's/CONTRACT/$(VERSION_CONTRACT)/g' > $@
@@ -321,7 +333,7 @@ $(FULL_RELEASE_CLUSTERCTLYAML): $(RELEASE_DIR)
 managerless: semver managerless-manifests managerless-clusterctl managerless-cluster-template
 managerless-manifests: semver $(MANAGERLESS_MANIFEST) $(MANAGERLESS_METADATA)
 $(MANAGERLESS_MANIFEST): $(MANAGERLESS_DIR)
-	kustomize build config/managerless > $@
+	$(KUSTOMIZE) build config/managerless > $@
 
 $(MANAGERLESS_METADATA): semver $(MANAGERLESS_DIR) $(METADATA_TEMPLATE)
 	cat $(METADATA_TEMPLATE) | sed 's/MAJOR/$(VERSION_MAJOR)/g' | sed 's/MINOR/$(VERSION_MINOR)/g' | sed 's/CONTRACT/$(VERSION_CONTRACT)/g' > $@
