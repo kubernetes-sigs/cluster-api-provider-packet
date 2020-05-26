@@ -1,22 +1,19 @@
 # Adds namespace to all resources.
 namespace: cluster-api-provider-packet-system
-
 # Value of this field is prepended to the
 # names of all resources, e.g. a deployment named
 # "wordpress" becomes "alices-wordpress".
 # Note that it should also match with the prefix (text before '-') of the namespace
 # field above.
 namePrefix: cluster-api-provider-packet-
-
 # Labels to add to all resources and selectors.
 commonLabels:
   cluster.x-k8s.io/provider: infrastructure-packet
-
-bases:
-- ../crd
-- ../rbac
-- ../namespace
-- ../manager
+resources:
+- ../resources/crd
+- ../resources/rbac
+- ../resources/namespace
+- ../resources/manager
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in
 # crd/kustomization.yaml
 #- ../webhook
@@ -24,10 +21,12 @@ bases:
 #- ../certmanager
 # [PROMETHEUS] To enable prometheus monitor, uncomment all sections with 'PROMETHEUS'.
 #- ../prometheus
-
+images:
+- name: packet-controller # images with this name
+  newTag: v0.3.0 # {"type":"string","x-kustomize":{"setter":{"name":"image-tag","value":"v0.3.0"}}}
+  newName: packethost/cluster-api-provider-packet # and this name
 patchesStrategicMerge:
-  # Protect the /metrics endpoint by putting it behind auth.
-  # If you want your controller-manager to expose the /metrics
-  # endpoint w/o any authn/z, please comment the following line.
+# Protect the /metrics endpoint by putting it behind auth.
+# If you want your controller-manager to expose the /metrics
+# endpoint w/o any authn/z, please comment the following line.
 - manager_auth_proxy_patch.yaml
-- manager_image_patch.yaml
