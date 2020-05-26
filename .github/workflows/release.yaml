@@ -19,6 +19,8 @@ jobs:
         run: make kubebuilder KUBEBUILDER_DIR=${KUBEBUILDER_DIR} # we use this dir because /usr/local/kubebuilder is protected
       - name: manifest
         run: make manifest KUBEBUILDER_DIR=${KUBEBUILDER_DIR} # we use this dir because /usr/local/kubebuilder is protected
+        env:
+          KUBEBUILDER_ASSETS: ${{ env.KUBEBUILDER_DIR }}/bin
       - name: Get the version
         id: get_version
         run: echo ::set-env name=VERSION::${GITHUB_REF/refs\/tags\//}
