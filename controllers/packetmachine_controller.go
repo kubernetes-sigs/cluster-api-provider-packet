@@ -61,6 +61,7 @@ type PacketMachineReconciler struct {
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=packetmachines,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=packetmachines/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;machines/status,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets;,verbs=get;list;watch
 
 func (r *PacketMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
 	ctx := context.Background()
