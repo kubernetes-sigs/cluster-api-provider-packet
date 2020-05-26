@@ -129,7 +129,7 @@ RELEASE_MANIFEST := $(RELEASE_DIR)/infrastructure-components.yaml
 RELEASE_METADATA := $(RELEASE_DIR)/metadata.yaml
 RELEASE_CLUSTER_TEMPLATE := $(RELEASE_DIR)/cluster-template.yaml
 FULL_RELEASE_MANIFEST := $(FULL_RELEASE_DIR)/infrastructure-components.yaml
-FULL_RELEASE_MANIFEST_URL := $(REPO_URL)/releases/$(RELEASE_VERSION)/infrastructure-components.yaml
+FULL_RELEASE_MANIFEST_URL := $(REPO_URL)/releases/download/$(RELEASE_VERSION)/infrastructure-components.yaml
 FULL_RELEASE_CLUSTERCTLYAML := $(FULL_RELEASE_DIR)/clusterctl.yaml
 RELEASE_CLUSTERCTLYAML := $(RELEASE_BASE)/clusterctl-$(RELEASE_VERSION).yaml
 
