@@ -1,0 +1,74 @@
+on:
+  push:
+    tags:
+    - 'v*'
+
+name: Upload Release Asset
+
+jobs:
+  build:
+    name: Upload Release Asset
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: kubebuilder-env
+        run: echo "::set-env name=KUBEBUILDER_DIR::/tmp/kubebuilder_install"
+      - name: kubebuilder
+        run: make kubebuilder KUBEBUILDER_DIR=${KUBEBUILDER_DIR} # we use this dir because /usr/local/kubebuilder is protected
+      - name: manifest
+        run: make manifest KUBEBUILDER_DIR=${KUBEBUILDER_DIR} # we use this dir because /usr/local/kubebuilder is protected
+      - name: Get the version
+        id: get_version
+        run: echo ::set-env name=VERSION::${GITHUB_REF/refs\/tags\//}
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.VERSION }}
+          release_name: ${{ env.VERSION }}
+          draft: false
+          prerelease: false
+      - name: Upload cluster-template
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+         # This pulls from the CREATE RELEASE step above, referencing it's ID to get
+         # its outputs object, which include a `upload_url`. See this blog post for
+         # more info:
+         # https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: out/release/infrastructure-packet/${{ env.VERSION }}/cluster-template.yaml
+          asset_name: cluster-template.yaml
+          asset_content_type: application/yaml
+      - name: Upload clusterctl
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: out/release/infrastructure-packet/${{ env.VERSION }}/clusterctl.yaml
+          asset_name: clusterctl.yaml
+          asset_content_type: application/yaml
+      - name: Upload infrastructure-components
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: out/release/infrastructure-packet/${{ env.VERSION }}/infrastructure-components.yaml
+          asset_name: infrastructure-components.yaml
+          asset_content_type: application/yaml
+      - name: Upload infrastructure-components
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: out/release/infrastructure-packet/${{ env.VERSION }}/metadata.yaml
+          asset_name: metadata.yaml
+          asset_content_type: application/yaml
