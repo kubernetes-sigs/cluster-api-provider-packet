@@ -1,4 +1,4 @@
-.PHONY: vendor test manager clusterctl run install deploy manifests generate fmt vet run kubebuilder ci cd
+.PHONY: vendor test manager clusterctl run install deploy crds generate fmt vet run kubebuilder ci cd
 
 GIT_VERSION ?= $(shell git log -1 --format="%h")
 RELEASE_TAG := $(shell git describe --abbrev=0 --tags ${TAG_COMMIT} 2>/dev/null || true)
@@ -181,7 +181,7 @@ $(KUBEBUILDER):
 	mv /tmp/kubebuilder_$(KUBEBUILDER_VERSION)_$(BUILDOS)_$(BUILDARCH) $(KUBEBUILDER_DIR)
 
 # Run tests
-test: generate fmt vet manifests
+test: generate fmt vet crds
 	go test ./... -coverprofile cover.out
 
 # Run e2e tests
@@ -196,24 +196,24 @@ $(MANAGER): generate fmt vet
 	GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -o $@ .
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: generate fmt vet manifests
+run: generate fmt vet crds
 	go run ./main.go
 
 # Install CRDs into a cluster
-install: manifests
+install: crds
 	kustomize build config/crd | kubectl apply -f -
 
 # Uninstall CRDs from a cluster
-uninstall: manifests
+uninstall: crds
 	kustomize build config/crd | kubectl delete -f -
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-deploy: manifests
+deploy: crds
 	cd config/manager && kustomize edit set image controller=${IMG}
 	kustomize build config/default | kubectl apply -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
-manifests: controller-gen
+crds: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 # Run go fmt against code
