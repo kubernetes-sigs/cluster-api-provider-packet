@@ -3,7 +3,19 @@
 set -e
 
 # default configure URL
-CONFIG_URL=${CONFIG_URL:-https://github.com/packethost/cluster-api-provider-packet/releases/latest/clusterctl.yaml}
+DEFAULT_CONFIG_URL=https://api.github.com/repos/packethost/cluster-api-provider-packet/releases/latest
+TMPYAML=/tmp/clusterctl-packet.yaml
+
+CONFIG_URL=${CONFIG_URL:-""}
+
+# if the config url was not provided, download it
+if [ -z "${CONFIG_URL}" ]; then
+	# because github does not have a direct link to an asset
+	# this would be easier with jq, but not everyone has jq installed
+	YAML_URL=$(curl -s ${DEFAULT_CONFIG_URL} | grep clusterctl.yaml | grep browser_download_url | cut -d ":" -f 2,3  | tr -d "\"")
+	curl -L -o ${TMPYAML} ${YAML_URL}
+	CONFIG_URL=${TMPYAML}
+fi
 
 TEMPLATE_OUT=./out/cluster.yaml
 
@@ -51,6 +63,8 @@ FACILITY=${PACKET_FACILITY}
 # and now export them all so envsubst can use them
 export PROJECT_ID FACILITY NODE_OS WORKER_NODE_TYPE MASTER_NODE_TYPE POD_CIDR SERVICE_CIDR SSH_KEY KUBERNETES_VERSION
 clusterctl --config=${CONFIG_URL} config cluster ${CLUSTER_NAME} > $TEMPLATE_OUT
+# remove any lingering config file
+rm -f ${TMPYAML}
 
 echo "Done! See output file at ${TEMPLATE_OUT}. Run:"
 echo "   kubectl apply -f ${TEMPLATE_OUT}"
