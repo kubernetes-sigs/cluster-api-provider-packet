@@ -2,11 +2,29 @@
 
 GIT_VERSION ?= $(shell git log -1 --format="%h")
 RELEASE_TAG := $(shell git describe --abbrev=0 --tags ${TAG_COMMIT} 2>/dev/null || true)
+RELEASE_VERSION ?= $(shell cat VERSION)
+IS_NEW_RELEASE ?= true
 
+# are there uncommitted files?
 ifneq ($(shell git status --porcelain),)
 	# next is used by GoReleaser as well when --spanshot is set
   RELEASE_TAG := $(RELEASE_TAG)-next
+  RELEASE_VERSION := $(RELEASE_VERSION)-dirty
+  IS_NEW_RELEASE := false
 endif
+
+# do we consider this to be a valid new release? Or are we working going forward?
+ifneq ($(shell git branch --show-current),master)
+  RELEASE_VERSION := $(RELEASE_VERSION)-next
+  IS_NEW_RELEASE := false
+else
+  ifeq ($(shell git diff HEAD~1 VERSION),)
+    RELEASE_VERSION := $(RELEASE_VERSION)-next
+    IS_NEW_RELEASE := false
+  endif
+endif
+
+VERSION ?= $(RELEASE_VERSION)
 
 # which arches can we support
 ARCHES=arm64 amd64
@@ -37,7 +55,8 @@ E2E_FOCUS := "functional tests"
 TOOLS_DIR := hack/tools
 TOOLS_BIN_DIR := $(TOOLS_DIR)/bin
 BIN_DIR := bin
-TEST_E2E_DIR := test/e2e
+TEST_DIR := test
+TEST_E2E_DIR := $(TEST_DIR)/e2e
 
 # Binaries.
 KUSTOMIZE := $(TOOLS_BIN_DIR)/kustomize
@@ -112,16 +131,10 @@ CORE_VERSION ?= v0.3.5
 CORE_API ?= https://api.github.com/repos/kubernetes-sigs/cluster-api/releases
 CORE_URL ?= https://github.com/kubernetes-sigs/cluster-api/releases/download/$(CORE_VERSION)
 
-# useful function
-word-dot = $(word $2,$(subst ., ,$1))
-
-VERSION ?= $(RELEASE_TAG)
-VERSION_CONTRACT ?= v1alpha3
-VERSION_MAJOR ?= $(call word-dot,$(VERSION),1)
-VERSION_MINOR ?= $(call word-dot,$(VERSION),2)
+# metadata file to be included in releases
+METADATA_YAML ?= metadata.yaml
 
 # actual releases
-RELEASE_VERSION ?= $(VERSION)
 RELEASE_BASE := out/release/infrastructure-packet
 RELEASE_DIR := $(RELEASE_BASE)/$(RELEASE_VERSION)
 FULL_RELEASE_DIR := $(realpath .)/$(RELEASE_DIR)
@@ -145,7 +158,6 @@ FULL_MANAGERLESS_MANIFEST := $(FULL_MANAGERLESS_DIR)/infrastructure-components.y
 MANAGERLESS_CLUSTERCTLYAML := $(MANAGERLESS_BASE)/clusterctl-$(MANAGERLESS_VERSION).yaml
 
 # templates
-METADATA_TEMPLATE ?= templates/metadata-template.yaml
 CLUSTERCTL_TEMPLATE ?= templates/clusterctl-template.yaml
 CLUSTER_TEMPLATE ?= templates/cluster-template.yaml
 
@@ -197,10 +209,11 @@ test: generate fmt vet crds
 	go test ./... -coverprofile cover.out
 
 # Run e2e tests
+.PHONY: e2e
 e2e:
 	# This is the name used inside the component.yaml for the container that runs the manager
 	# The image gets loaded inside kind from ./test/e2e/config/packet-dev.yaml
-	$(E2E_FLAGS) $(MAKE) -C test/e2e run
+	$(E2E_FLAGS) $(MAKE) -C $(TEST_E2E_DIR) run
 
 # Build manager binary
 manager: $(MANAGER)
@@ -222,11 +235,11 @@ uninstall: crds
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: crds
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default | kubectl apply -f -
+	$(KUSTOMIZE) build config/release | kubectl apply -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
 crds: controller-gen
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/resources/crd/bases
 
 # Run go fmt against code
 fmt:
@@ -297,26 +310,27 @@ $(MANAGERLESS_DIR) $(MANAGERLESS_BASE):
 
 .PHONY: semver release-clusterctl release-manifests release $(RELEASE_CLUSTERCTLYAML) $(RELEASE_MANIFEST) $(RELEASE_METADATA) $(RELEASE_CLUSTER_TEMPLATE) $(FULL_RELEASE_CLUSTERCTLYAML)
 
+check-release:
+	@echo $(IS_NEW_RELEASE)
+
 semver:
 ifeq (,$(VERSION))
-	$(error could not determine version to use from git tag, will not create artifacts)
+	$(error could not determine version to use from file, will not create artifacts)
 endif
+	@echo "release version $(VERSION)"
 
 
 manifest: kustomize semver release-manifests release-clusterctl release-cluster-template
 
-release:
-	goreleaser release --rm-dist --snapshot --skip-publish --debug
-
-release/publish:
-	goreleaser release --rm-dist
-
 release-manifests: semver $(RELEASE_MANIFEST) $(RELEASE_METADATA) $(RELEASE_CLUSTER_TEMPLATE)
-$(RELEASE_MANIFEST): $(RELEASE_DIR) ## Builds the manifests to publish with a release
-	$(KUSTOMIZE) build config/default > $@
+release-version:
+	KUSTOMIZE_ENABLE_ALPHA_COMMANDS=true $(KUSTOMIZE) config set config/release image-tag $(VERSION)
 
-$(RELEASE_METADATA): semver $(RELEASE_DIR) $(METADATA_TEMPLATE)
-	cat $(METADATA_TEMPLATE) | sed 's/MAJOR/$(VERSION_MAJOR)/g' | sed 's/MINOR/$(VERSION_MINOR)/g' | sed 's/CONTRACT/$(VERSION_CONTRACT)/g' > $@
+$(RELEASE_MANIFEST): $(RELEASE_DIR) release-version ## Builds the manifests to publish with a release
+	$(KUSTOMIZE) build config/release > $@
+
+$(RELEASE_METADATA): semver $(RELEASE_DIR)
+	cp $(METADATA_YAML) $@
 
 release-cluster-template: semver $(RELEASE_CLUSTER_TEMPLATE)
 $(RELEASE_CLUSTER_TEMPLATE): $(RELEASE_DIR)
@@ -335,8 +349,8 @@ managerless-manifests: semver $(MANAGERLESS_MANIFEST) $(MANAGERLESS_METADATA)
 $(MANAGERLESS_MANIFEST): $(MANAGERLESS_DIR)
 	$(KUSTOMIZE) build config/managerless > $@
 
-$(MANAGERLESS_METADATA): semver $(MANAGERLESS_DIR) $(METADATA_TEMPLATE)
-	cat $(METADATA_TEMPLATE) | sed 's/MAJOR/$(VERSION_MAJOR)/g' | sed 's/MINOR/$(VERSION_MINOR)/g' | sed 's/CONTRACT/$(VERSION_CONTRACT)/g' > $@
+$(MANAGERLESS_METADATA): semver $(MANAGERLESS_DIR)
+	cp $(METADATA_YAML) $@
 
 managerless-cluster-template: semver $(MANAGERLESS_CLUSTER_TEMPLATE)
 $(MANAGERLESS_CLUSTER_TEMPLATE): $(MANAGERLESS_DIR)

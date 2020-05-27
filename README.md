@@ -8,7 +8,8 @@ The following section describes how to use the cluster-api provider for packet (
 You do _not_ need to clone this repository, or install any special tools, other than the standard
 `kubectl` and `clusterctl`; see below.
 
-To build CAPP, release it, and to deploy individual components, see [docs/BUILD.md](./docs/BUILD.md).
+* To build CAPP and to deploy individual components, see [docs/BUILD.md](./docs/BUILD.md).
+* To build CAPP and to cut a proper release, see [docs/RELEASE.md](./docs/RELEASE.md).
 
 ### Requirements
 
