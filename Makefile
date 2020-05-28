@@ -3,26 +3,19 @@
 GIT_VERSION ?= $(shell git log -1 --format="%h")
 RELEASE_TAG := $(shell git describe --abbrev=0 --tags ${TAG_COMMIT} 2>/dev/null || true)
 RELEASE_VERSION ?= $(shell cat VERSION)
-IS_NEW_RELEASE ?= true
 
 # are there uncommitted files?
 ifneq ($(shell git status --porcelain),)
 	# next is used by GoReleaser as well when --spanshot is set
   RELEASE_TAG := $(RELEASE_TAG)-next
   RELEASE_VERSION := $(RELEASE_VERSION)-dirty
-  IS_NEW_RELEASE := false
 endif
 
-# do we consider this to be a valid new release? Or are we working going forward?
-ifneq ($(shell git branch --show-current),master)
-  RELEASE_VERSION := $(RELEASE_VERSION)-next
-  IS_NEW_RELEASE := false
-else
-  ifeq ($(shell git diff HEAD~1 VERSION),)
-    RELEASE_VERSION := $(RELEASE_VERSION)-next
-    IS_NEW_RELEASE := false
-  endif
-endif
+# this is being kept, as in the future, we may check the diff of VERSION from the previous to determine
+# whether or not to cut a release, rather than relying on git tags
+#ifeq ($(shell git diff HEAD~1 VERSION),)
+#  RELEASE_VERSION := $(RELEASE_VERSION)-next
+#endif
 
 VERSION ?= $(RELEASE_VERSION)
 
@@ -309,9 +302,6 @@ $(MANAGERLESS_DIR) $(MANAGERLESS_BASE):
 	mkdir -p $@
 
 .PHONY: semver release-clusterctl release-manifests release $(RELEASE_CLUSTERCTLYAML) $(RELEASE_MANIFEST) $(RELEASE_METADATA) $(RELEASE_CLUSTER_TEMPLATE) $(FULL_RELEASE_CLUSTERCTLYAML)
-
-check-release:
-	@echo $(IS_NEW_RELEASE)
 
 semver:
 ifeq (,$(VERSION))

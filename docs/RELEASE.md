@@ -30,18 +30,8 @@ When building the manifests via `make manifests`, `make managerless`, or `make r
 
 * Take the version from the contents of [VERSION](./VERSION)
 * If there are any uncommitted files, append `-dirty`
-* If not on `master` branch, or if on `master` branch but the [VERSION](./VERSION) file is unchanged from the last commit on `master` branch, append `-next`
 
-The net of the above, is that the version will be treated as "clean" only when all of the following are true:
-
-* there are no "dirty" uncommitted files
-* the current commit is on `master` branch
-* the `VERSION` is different from the previous commit
-
-Thie encourages - requires - changes to a version, and therefore a release, to consist entirely of a single commit or merge to master,
-whose entire change is the `VERSION` file and, optionally, in the same commit, the `APIVERSION` file.
-
-To see what version you would get, run `make semver`. To see if this is a new release, run `make check-release`.
+To see what version you would get, run `make semver`.
 
 We are aware that this is a somewhat duplicative process, but there is no other way, as multiple stages
 depend on having the versions in checked-in files and do not support environment variable or command-line
