@@ -39,7 +39,8 @@ BIN_DIR := bin
 TOOLS_BIN_DIR := $(TOOLS_DIR)/$(BIN_DIR)
 GINKGO := $(TOOLS_BIN_DIR)/ginkgo
 
-ginkgo: $(GINKGO)
+.PHONY: ginkgo
+ginkgo:
 	cd $(TOOLS_DIR) && go build -tags=tools -o $(BIN_DIR)/ginkgo github.com/onsi/ginkgo/ginkgo
 
 ## --------------------------------------
