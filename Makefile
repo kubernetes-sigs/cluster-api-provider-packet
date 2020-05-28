@@ -1,6 +1,6 @@
 .PHONY: vendor test manager clusterctl run install deploy crds generate fmt vet run kubebuilder ci cd
 
-GIT_VERSION ?= $(shell git log -1 --format="%h")
+GIT_VERSION ?= $(shell git log -1 --format="%H")
 RELEASE_TAG := $(shell git describe --abbrev=0 --tags ${TAG_COMMIT} 2>/dev/null || true)
 RELEASE_VERSION ?= $(shell cat VERSION)
 
