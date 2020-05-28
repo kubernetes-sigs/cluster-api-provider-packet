@@ -25,7 +25,7 @@ jobs:
     - name: check for docker image on hub
       run: docker buildx imagetools inspect ${IMAGENAME}:${COMMIT}
     - name: report
-      run: ready for release; the docker image ${IMAGENAME}:${COMMIT} is available
+      run: echo "ready for release; the docker image ${IMAGENAME}:${COMMIT} is available"
 
   release:
     name: Upload Release Asset
