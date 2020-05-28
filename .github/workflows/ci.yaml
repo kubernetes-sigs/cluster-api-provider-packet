@@ -4,7 +4,7 @@ on:
    types: [opened, synchronize, reopened]
  push:
    branches:
-     - master
+   - master
 
 jobs:
   report:
@@ -15,7 +15,7 @@ jobs:
       run: echo ${{ github.ref }}
     - name: event_name
       run: echo ${{ github.event_name }}
-  build:
+  build-test-deploy-release:
     name: Build
     runs-on: ubuntu-latest
     steps:
@@ -45,12 +45,12 @@ jobs:
       run: make image-all KUBEBUILDER_DIR=${KUBEBUILDER_DIR}
       env:
         KUBEBUILDER_ASSETS: ${{ env.KUBEBUILDER_DIR }}/bin
-    - name: hub login
-      if: (github.event_name == 'push' && endsWith(github.ref,'/master')) || (github.event_name == 'create' && startsWith(github.ref,'refs/tags/'))
+
+    # these next steps are used for merge to master (push the images)
+    # they really should be separate workflows or jobs, but github actions is awful about sharing between them, so it must be one job
+    - name: docker login
+      if: github.event_name == 'push' && endsWith(github.ref,'/master')
       run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
     - name: deploy   # when merged into master, tag master and push - ideally, this would be a separate job, but you cannot share docker build cache between jobs
       if: github.event_name == 'push' && endsWith(github.ref,'/master')
       run: make cd CONFIRM=true BRANCH_NAME=master
-    - name: release  # when based on a tag, tag master and push - ideally, this would be a separate job, but you cannot share docker build cache between jobs
-      if: github.event_name == 'create' && startsWith(github.ref,'refs/tags/')
-      run: make release CONFIRM=true
