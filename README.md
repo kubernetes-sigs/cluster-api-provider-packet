@@ -76,6 +76,7 @@ To generate your cluster yaml:
    * `SERVICE_CIDR` - The CIDR to use for your services; if not set, see defaults below
    * `MASTER_NODE_TYPE` - The Packet node type to use for control plane nodes; if not set, see defaults below
    * `WORKER_NODE_TYPE` - The Packet node type to use for worker nodes; if not set, see defaults below
+   * `WORKER_MACHINE_COUNT` - The number of worker machines to deploy; if not set, cluster-api itself (not the Packet implementation) defaults to 0 workers.
 1. Run the cluster generation command:
 
 ```
