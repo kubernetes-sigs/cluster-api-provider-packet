@@ -6,6 +6,9 @@ set -e
 DEFAULT_CONFIG_URL=https://api.github.com/repos/packethost/cluster-api-provider-packet/releases/latest
 TMPYAML=/tmp/clusterctl-packet.yaml
 
+# might want to use a specific path to clusterctl
+CLUSTERCTL=${CLUSTERCTL:-clusterctl}
+
 CONFIG_URL=${CONFIG_URL:-""}
 
 # if the config url was not provided, download it
@@ -62,7 +65,7 @@ FACILITY=${PACKET_FACILITY}
 
 # and now export them all so envsubst can use them
 export PROJECT_ID FACILITY NODE_OS WORKER_NODE_TYPE MASTER_NODE_TYPE POD_CIDR SERVICE_CIDR SSH_KEY KUBERNETES_VERSION
-clusterctl --config=${CONFIG_URL} config cluster ${CLUSTER_NAME} > $TEMPLATE_OUT
+${CLUSTERCTL} --config=${CONFIG_URL} config cluster ${CLUSTER_NAME} > $TEMPLATE_OUT
 # remove any lingering config file
 rm -f ${TMPYAML}
 
