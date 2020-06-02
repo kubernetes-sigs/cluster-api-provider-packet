@@ -51,15 +51,8 @@ To initialize the cluster, you need to provider it with the path to the config f
 1. Use the config file.
 
 ```
-VERSION=v0.3.0
-curl -L -o clusterctl.yaml https://github.com/packethost/cluster-api-provider-packet/releases/download/${VERSION}/clusterctl.yaml
-clusterctl --config=./clusterctl.yaml init --infrastructure=packet
+clusterctl init --infrastructure=packet
 ```
-
-Unfortunately, clusterctl itself does not support passing a URL to `--config`, see [this issue](https://github.com/kubernetes-sigs/cluster-api/issues/3099).
-
-Additionally, we are in the process of working with the core cluster-api team, so that you will not need the
-`--config=` option, hopefully soon.
 
 #### Generate Cluster yaml
 
@@ -80,7 +73,7 @@ To generate your cluster yaml:
 1. Run the cluster generation command:
 
 ```
-clusterctl --config=./clusterctl.yaml config cluster <cluster-name> > out/cluster.yaml
+clusterctl config cluster <cluster-name> > out/cluster.yaml
 ```
 
 Note that the above command will make _all_ of the environment variables required. This is a limitation of
