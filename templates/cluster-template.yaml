@@ -19,7 +19,6 @@ spec:
     - systemctl enable docker
     - systemctl start docker
   postKubeadmCommands:
-    - "kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://docs.projectcalico.org/v3.11/manifests/calico.yaml"
     - "kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system packet-cloud-config --from-literal=cloud-sa.json='{\"apiKey\": \"{{ .apiKey }}\",\"projectID\": \"${PROJECT_ID}\"}'"
     - "kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://raw.githubusercontent.com/packethost/packet-ccm/master/deploy/releases/v1.0.0/deployment.yaml"
   initConfiguration:
