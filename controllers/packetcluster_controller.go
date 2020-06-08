@@ -80,6 +80,11 @@ func (r *PacketClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, re
 		}, nil
 	}
 
+	if util.IsPaused(cluster, packetcluster) {
+		logger.Info("PacketCluster or linked Cluster is marked as paused. Won't reconcile")
+		return ctrl.Result{}, nil
+	}
+
 	// Create the cluster scope
 	clusterScope, err := scope.NewClusterScope(scope.ClusterScopeParams{
 		Logger:        logger,
