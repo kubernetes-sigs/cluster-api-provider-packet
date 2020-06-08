@@ -99,6 +99,11 @@ func (r *PacketMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, re
 
 	logger = logger.WithValues("cluster", cluster.Name)
 
+	if util.IsPaused(cluster, machine) {
+		logger.Info("PacketMachine or linked Cluster is marked as paused. Won't reconcile")
+		return ctrl.Result{}, nil
+	}
+
 	packetcluster := &infrastructurev1alpha3.PacketCluster{}
 	packetclusterNamespacedName := client.ObjectKey{
 		Namespace: packetmachine.Namespace,
