@@ -88,14 +88,15 @@ func (p *PacketClient) NewDevice(hostname, project string, machineScope *scope.M
 		tags = append(tags, infrastructurev1alpha3.WorkerTag)
 	}
 	serverCreateOpts := &packngo.DeviceCreateRequest{
-		Hostname:     hostname,
-		ProjectID:    project,
-		Facility:     machineScope.PacketMachine.Spec.Facility,
-		BillingCycle: machineScope.PacketMachine.Spec.BillingCycle,
-		Plan:         machineScope.PacketMachine.Spec.MachineType,
-		OS:           machineScope.PacketMachine.Spec.OS,
-		Tags:         tags,
-		UserData:     userData,
+		Hostname:              hostname,
+		ProjectID:             project,
+		Facility:              machineScope.PacketMachine.Spec.Facility,
+		BillingCycle:          machineScope.PacketMachine.Spec.BillingCycle,
+		HardwareReservationID: machineScope.PacketMachine.Spec.HardwareReservationID,
+		Plan:                  machineScope.PacketMachine.Spec.MachineType,
+		OS:                    machineScope.PacketMachine.Spec.OS,
+		Tags:                  tags,
+		UserData:              userData,
 	}
 
 	dev, _, err := p.Client.Devices.Create(serverCreateOpts)

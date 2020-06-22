@@ -41,6 +41,12 @@ type PacketMachineSpec struct {
 	BillingCycle string   `json:"billingCycle"`
 	MachineType  string   `json:"machineType"`
 	SshKeys      []string `json:"sshKeys,omitempty"`
+
+	// HardwareReservationID is the unique device hardware reservation ID or `next-available` to
+	// automatically let the Packet api determine one.
+	// +optional
+	HardwareReservationID string `json:"hardwareReservationID,omitempty"`
+
 	// ProviderID is the unique identifier as specified by the cloud provider.
 	// +optional
 	ProviderID *string `json:"providerID,omitempty"`
