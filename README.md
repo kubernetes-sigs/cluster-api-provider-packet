@@ -162,3 +162,20 @@ Important notes:
 ## References
 
 * [kubeadm yaml api](https://godoc.org/k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta2)
+
+## Community, discussion, contribution, and support
+
+Learn how to engage with the Kubernetes community on the [community page](http://kubernetes.io/community/).
+
+You can reach the maintainers of this project at:
+
+- Chat with us on [Slack](http://slack.k8s.io/) in the [#cluster-api][#cluster-api slack] channel
+- Subscribe to the [SIG Cluster Lifecycle](https://groups.google.com/forum/#!forum/kubernetes-sig-cluster-lifecycle) Google Group for access to documents and calendars
+
+### Code of conduct
+
+Participation in the Kubernetes community is governed by the [Kubernetes Code of Conduct](code-of-conduct.md).
+
+[owners]: https://git.k8s.io/community/contributors/guide/owners.md
+[Creative Commons 4.0]: https://git.k8s.io/website/LICENSE
+[#cluster-api slack]: https://kubernetes.slack.com/archives/C8TSNPY4T
