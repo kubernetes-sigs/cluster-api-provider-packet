@@ -67,6 +67,11 @@ spec:
               items:
                 type: string
               type: array
+            hardwareReservationID:
+              description: HardwareReservationID is the unique device hardware reservation
+                ID or `next-available` to automatically let the Packet api determine
+                one.
+              type: string
             machineType:
               type: string
             providerID:
