@@ -1,21 +1,21 @@
 # See the OWNERS docs: https://github.com/kubernetes/community/blob/master/contributors/guide/owners.md
-
 aliases:
   sig-cluster-lifecycle-leads:
+    - neolit123
     - justinsb
-    - luxas
     - timothysc
+    - fabriziopandini
   cluster-api-admins:
+    - justinsb
+    - detiber
     - davidewatson
-    - detiber
-    - justinsb
+    - vincepri
   cluster-api-maintainers:
-    - detiber
     - justinsb
+    - detiber
     - ncdc
     - vincepri
-    - chuckha
-  cluster-api-packet-maintainers
+  cluster-api-packet-maintainers:
     - deitch
     - gianarb
     - jacobsmith928
