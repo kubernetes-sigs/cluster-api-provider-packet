@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -33,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
 	infrastructurev1alpha3 "github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
 	packet "github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
 	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/scope"
@@ -102,28 +102,42 @@ func (r *PacketClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, re
 		}
 	}()
 
-	clusterScope.PacketCluster.Status.Ready = true
+	// Handle deleted clusters
+	if !cluster.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(clusterScope)
+	}
 
-	address, err := r.getIP(clusterScope.PacketCluster)
-	_, isNoMachine := err.(*MachineNotFound)
-	_, isNoIP := err.(*MachineNoIP)
-	switch {
-	case err != nil && isNoMachine:
-		logger.Info("Control plane device not found. Requeueing...")
-		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
-	case err != nil && isNoIP:
-		logger.Info("Control plane device not found. Requeueing...")
-		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
-	case err != nil:
-		logger.Error(err, "error getting a control plane ip")
-		return ctrl.Result{}, err
-	case err == nil:
+	return r.reconcileNormal(packetcluster, clusterScope)
+}
+
+func (r *PacketClusterReconciler) reconcileNormal(packetcluster *v1alpha3.PacketCluster, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
+	if ipReserv, err := r.PacketClient.GetIPByClusterIdentifier(clusterScope.Namespace(), clusterScope.Name(), packetcluster.Spec.ProjectID); err == packet.ErrControlPlanEndpointNotFound {
+		// There is not an ElasticIP with the right tags, at this point we can create one
+		ip, err := r.PacketClient.CreateIP(clusterScope.Namespace(), clusterScope.Name(), packetcluster.Spec.ProjectID, packetcluster.Spec.Facility)
+		if err != nil {
+			r.Log.Error(err, "error reserving an ip")
+			return ctrl.Result{}, err
+		}
 		clusterScope.PacketCluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
-			Host: address,
+			Host: ip.To4().String(),
+			Port: 6443,
+		}
+	} else {
+		// If there is an ElasticIP with the right tag just use it again
+		clusterScope.PacketCluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
+			Host: ipReserv.Address,
 			Port: 6443,
 		}
 	}
+	clusterScope.PacketCluster.Status.Ready = true
+	return ctrl.Result{}, nil
+}
 
+func (r *PacketClusterReconciler) reconcileDelete(clusterScope *scope.ClusterScope) (ctrl.Result, error) {
+	// Initially I created this handler to remove an elastic IP when a cluster
+	// gets delete, but it does not sound like a good idea.  It is better to
+	// leave to the users the ability to decide if they want to keep and resign
+	// the IP or if they do not need it anymore
 	return ctrl.Result{}, nil
 }
 
@@ -137,30 +151,6 @@ func (r *PacketClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			},
 		).
 		Complete(r)
-}
-
-func (r *PacketClusterReconciler) getIP(cluster *infrastructurev1alpha3.PacketCluster) (string, error) {
-	if cluster == nil {
-		return "", fmt.Errorf("cannot get IP of machine in nil cluster")
-	}
-	tags := []string{
-		packet.GenerateClusterTag(string(cluster.Name)),
-		infrastructurev1alpha3.MasterTag,
-	}
-	device, err := r.PacketClient.GetDeviceByTags(cluster.Spec.ProjectID, tags)
-	if err != nil {
-		return "", fmt.Errorf("error retrieving machine: %v", err)
-	}
-	if device == nil {
-		return "", &MachineNotFound{err: fmt.Sprintf("machine does not exist")}
-	}
-	if device.Network == nil || len(device.Network) == 0 || device.Network[0].Address == "" {
-		return "", &MachineNoIP{err: "machine does not yet have an IP address"}
-	}
-	// TODO: validate that this address exists, so we don't hit nil pointer
-	// TODO: check which address to return
-	// TODO: check address format (cidr, subnet, etc.)
-	return device.Network[0].Address, nil
 }
 
 // MachineNotFound error representing that the requested device was not yet found

@@ -1,10 +1,34 @@
-# this is a temporary mock
-kind: KubeadmConfig
-apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+kind: KubeadmControlPlane
+apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
 metadata:
-  name: "${CLUSTER_NAME}-control-plane1-config"
+  name: "${CLUSTER_NAME}-control-plane"
 spec:
-  preKubeadmCommands:
+  version: ${KUBERNETES_VERSION}
+  replicas: ${CONTROL_PLANE_MACHINE_COUNT}
+  infrastructureTemplate:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+    kind: PacketMachineTemplate
+    name: "${CLUSTER_NAME}-control-plane"
+  kubeadmConfigSpec:
+    initConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          cloud-provider: external
+    clusterConfiguration:
+      apiServer:
+        extraArgs:
+          cloud-provider: external
+      controllerManager:
+        extraArgs:
+          cloud-provider: external
+    joinConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          cloud-provider: external
+    postKubeadmCommands:
+    - 'kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system packet-cloud-config --from-literal=cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "f2a2d7ad-886e-4207-bf38-10ebdf49cf84"}'''
+    - kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://raw.githubusercontent.com/packethost/packet-ccm/master/deploy/releases/v1.0.0/deployment.yaml
+    preKubeadmCommands:
     - swapoff -a
     - apt-get -y update
     - DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
@@ -18,17 +42,28 @@ spec:
     - systemctl daemon-reload
     - systemctl enable docker
     - systemctl start docker
-  postKubeadmCommands:
-    - "kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system packet-cloud-config --from-literal=cloud-sa.json='{\"apiKey\": \"{{ .apiKey }}\",\"projectID\": \"${PROJECT_ID}\"}'"
-    - "kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://raw.githubusercontent.com/packethost/packet-ccm/master/deploy/releases/v1.0.0/deployment.yaml"
-  initConfiguration:
-    nodeRegistration:
-      kubeletExtraArgs:
-        cloud-provider: external
-  clusterConfiguration:
-    controllerManager:
-      extraArgs:
-        enable-hostpath-provisioner: "true"
+    - |
+        cat <<EOF >> /etc/network/interfaces
+        auto lo:0
+        iface lo:0 inet static
+          address $(curl -s https://metadata.packet.net/metadata | jq -r '.network.addresses[] | select(.address_family == 4 and .public == true and .management == false) | .address')
+          netmask 255.255.255.255
+        EOF
+    - systemctl restart networking
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+kind: PacketMachineTemplate
+metadata:
+  name: "${CLUSTER_NAME}-control-plane"
+spec:
+  template:
+    spec:
+      OS: "${NODE_OS}"
+      billingCycle: hourly
+      machineType: "${WORKER_NODE_TYPE}"
+      sshKeys:
+      - "${SSH_KEY}"
+      tags: []
 ---
 apiVersion: cluster.x-k8s.io/v1alpha3
 kind: Cluster
@@ -42,6 +77,10 @@ spec:
     apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
     kind: PacketCluster
     name: "${CLUSTER_NAME}"
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+    kind: KubeadmControlPlane
+    name: "${CLUSTER_NAME}-control-plane"
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
 kind: PacketCluster
@@ -50,37 +89,6 @@ metadata:
 spec:
   projectID: "${PROJECT_ID}"
   facility: "${FACILITY}"
----
-apiVersion: cluster.x-k8s.io/v1alpha3
-kind: Machine
-metadata:
-  name: "${CLUSTER_NAME}-master-0"
-  labels:
-    cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
-    cluster.x-k8s.io/control-plane: "true"
-spec:
-  clusterName: "${CLUSTER_NAME}"
-  bootstrap:
-    configRef:
-      kind: KubeadmConfig
-      apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
-      name: "${CLUSTER_NAME}-control-plane1-config"
-  infrastructureRef:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
-    kind: PacketMachine
-    name: "${CLUSTER_NAME}-master-0"
----
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
-kind: PacketMachine
-metadata:
-  name: "${CLUSTER_NAME}-master-0"
-spec:
-  OS: "${NODE_OS}"
-  billingCycle: hourly
-  machineType: "${MASTER_NODE_TYPE}"
-  sshKeys:
-  - "${SSH_KEY}"
-  tags: []
 ---
 apiVersion: cluster.x-k8s.io/v1alpha3
 kind: MachineDeployment

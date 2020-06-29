@@ -17,3 +17,5 @@ require (
 	sigs.k8s.io/cluster-api v0.3.5
 	sigs.k8s.io/controller-runtime v0.5.2
 )
+
+replace github.com/packethost/packngo => github.com/deitch/packngo v0.2.1-0.20200628082620-d644bb21e1f3
