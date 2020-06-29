@@ -33,10 +33,6 @@ const (
 
 // PacketMachineSpec defines the desired state of PacketMachine
 type PacketMachineSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	Facility     []string `json:"facility,omitempty"`
 	OS           string   `json:"OS"`
 	BillingCycle string   `json:"billingCycle"`
 	MachineType  string   `json:"machineType"`
