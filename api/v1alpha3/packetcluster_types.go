@@ -29,8 +29,11 @@ type PacketClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of PacketCluster. Edit PacketCluster_types.go to remove/update
+	// ProjectID represents the Packet Project where this cluster will be placed into
 	ProjectID string `json:"projectID"`
+
+	// Facility represents the Packet facility for this cluster
+	Facility string `json:"facility,omitempty"`
 
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
 	// +optional

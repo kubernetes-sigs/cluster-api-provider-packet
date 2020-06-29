@@ -90,7 +90,7 @@ func (p *PacketClient) NewDevice(hostname, project string, machineScope *scope.M
 	serverCreateOpts := &packngo.DeviceCreateRequest{
 		Hostname:              hostname,
 		ProjectID:             project,
-		Facility:              machineScope.PacketMachine.Spec.Facility,
+		Facility:              []string{machineScope.PacketCluster.Spec.Facility},
 		BillingCycle:          machineScope.PacketMachine.Spec.BillingCycle,
 		HardwareReservationID: machineScope.PacketMachine.Spec.HardwareReservationID,
 		Plan:                  machineScope.PacketMachine.Spec.MachineType,

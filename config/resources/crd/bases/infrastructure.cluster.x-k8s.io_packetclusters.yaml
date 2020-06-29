@@ -51,9 +51,12 @@ spec:
               - host
               - port
               type: object
+            facility:
+              description: Facility represents the Packet facility for this cluster
+              type: string
             projectID:
-              description: Foo is an example field of PacketCluster. Edit PacketCluster_types.go
-                to remove/update
+              description: ProjectID represents the Packet Project where this cluster
+                will be placed into
               type: string
           required:
           - projectID
