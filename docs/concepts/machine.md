@@ -10,8 +10,6 @@ metadata:
   name: "qa-master-0"
 spec:
   OS: "ubuntu_18_04"
-  facility:
-  - "dfw2"
   billingCycle: hourly
   machineType: "t2.small"
   sshKeys:

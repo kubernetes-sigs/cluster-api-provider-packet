@@ -18,6 +18,8 @@ package packet
 
 import (
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"strings"
 	"text/template"
@@ -33,6 +35,8 @@ const (
 	apiTokenVarName = "PACKET_API_KEY"
 	clientName      = "CAPP-v1alpha3"
 )
+
+var ErrControlPlanEndpointNotFound = errors.New("contorl plane not found")
 
 type PacketClient struct {
 	*packngo.Client
@@ -62,11 +66,12 @@ func (p *PacketClient) GetDevice(deviceID string) (*packngo.Device, error) {
 	return dev, err
 }
 
-func (p *PacketClient) NewDevice(hostname, project string, machineScope *scope.MachineScope, extraTags []string) (*packngo.Device, error) {
+func (p *PacketClient) NewDevice(machineScope *scope.MachineScope, extraTags []string) (*packngo.Device, error) {
 	userDataRaw, err := machineScope.GetRawBootstrapData()
 	if err != nil {
 		return nil, errors.Wrap(err, "impossible to retrieve bootstrap data from secret")
 	}
+
 	userData := string(userDataRaw)
 	tags := append(machineScope.PacketMachine.Spec.Tags, extraTags...)
 	if machineScope.IsControlPlane() {
@@ -88,8 +93,8 @@ func (p *PacketClient) NewDevice(hostname, project string, machineScope *scope.M
 		tags = append(tags, infrastructurev1alpha3.WorkerTag)
 	}
 	serverCreateOpts := &packngo.DeviceCreateRequest{
-		Hostname:              hostname,
-		ProjectID:             project,
+		Hostname:              machineScope.Name(),
+		ProjectID:             machineScope.PacketCluster.Spec.ProjectID,
 		Facility:              []string{machineScope.PacketCluster.Spec.Facility},
 		BillingCycle:          machineScope.PacketMachine.Spec.BillingCycle,
 		HardwareReservationID: machineScope.PacketMachine.Spec.HardwareReservationID,
@@ -131,4 +136,47 @@ func (p *PacketClient) GetDeviceByTags(project string, tags []string) (*packngo.
 		}
 	}
 	return nil, nil
+}
+
+// CreateIP reserves an IP via Packet API. The request fails straight if no IP are available for the specified project.
+// This prevent the cluster to become ready.
+func (p *PacketClient) CreateIP(namespace, clusterName, projectID, facility string) (net.IP, error) {
+	req := packngo.IPReservationRequest{
+		Type:                   packngo.PublicIPv4,
+		Quantity:               1,
+		Facility:               &facility,
+		FailOnApprovalRequired: true,
+		Tags:                   []string{namespace + "/" + clusterName},
+	}
+
+	r, resp, err := p.ProjectIPs.Request(projectID, &req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusUnprocessableEntity {
+		return nil, fmt.Errorf("Could not create an Elastic IP due to quota limits on the account. Please contact Packet support.")
+	}
+
+	ip := net.ParseIP(r.Address)
+	if ip == nil {
+		return nil, fmt.Errorf("impossible to parse IP: %s. IP not valid.", r.Address)
+	}
+	return ip, nil
+}
+
+func (p *PacketClient) GetIPByClusterIdentifier(namespace, name, projectID string) (packngo.IPAddressReservation, error) {
+	var err error
+	var reservedIP packngo.IPAddressReservation
+	reservedIPs, _, err := p.ProjectIPs.List(projectID)
+	if err != nil {
+		return reservedIP, err
+	}
+	for _, reservedIP := range reservedIPs {
+		for _, v := range reservedIP.Tags {
+			if v == namespace+"/"+name {
+				return reservedIP, nil
+			}
+		}
+	}
+	return reservedIP, ErrControlPlanEndpointNotFound
 }

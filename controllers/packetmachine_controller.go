@@ -22,6 +22,8 @@ import (
 	"net/http"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 	"github.com/packethost/packngo"
@@ -47,6 +49,7 @@ import (
 
 const (
 	providerName = "packet"
+	force        = true
 )
 
 // PacketMachineReconciler reconciles a PacketMachine object
@@ -192,8 +195,10 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 
 	providerID := machineScope.GetInstanceID()
 	var (
-		dev *packngo.Device
-		err error
+		dev                  *packngo.Device
+		addrs                []corev1.NodeAddress
+		err                  error
+		controlPlaneEndpoint packngo.IPAddressReservation
 	)
 	// if we have no provider ID, then we are creating
 	if providerID != "" {
@@ -203,17 +208,35 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		}
 	}
 	if dev == nil {
-		// generate a unique UID that will survive pivot, i.e. is not tied to the cluster itself
 		mUID := uuid.New().String()
 		tags := []string{
 			packet.GenerateMachineTag(mUID),
 			packet.GenerateClusterTag(clusterScope.Name()),
 		}
 
-		name := machineScope.Name()
-		dev, err = r.PacketClient.NewDevice(name, clusterScope.PacketCluster.Spec.ProjectID, machineScope, tags)
+		// when the node is a control plan we should check if the elastic ip
+		// for this cluster is not assigned. If it is free we can prepare the
+		// current node to use it.
+		if machineScope.IsControlPlane() {
+			controlPlaneEndpoint, _ = r.PacketClient.GetIPByClusterIdentifier(
+				clusterScope.Namespace(),
+				clusterScope.Name(),
+				clusterScope.PacketCluster.Spec.ProjectID)
+			if len(controlPlaneEndpoint.Assignments) == 0 {
+				a := corev1.NodeAddress{
+					Type:    corev1.NodeExternalIP,
+					Address: controlPlaneEndpoint.Address,
+				}
+				addrs = append(addrs, a)
+				// This tag is currently not used. I placed it there to easely localize the device that currently has the IP attached.
+				// Probably it is not neeed but I wil get back to it when working at #141.
+				tags = append(tags, fmt.Sprintf("capp.control-plane-endpoint=%s", controlPlaneEndpoint.Address))
+			}
+		}
+
+		dev, err = r.PacketClient.NewDevice(machineScope, tags)
 		if err != nil {
-			errs := fmt.Errorf("failed to create machine %s: %v", name, err)
+			errs := fmt.Errorf("failed to create machine %s: %v", machineScope.Name(), err)
 			machineScope.SetErrorReason(capierrors.CreateMachineError)
 			machineScope.SetErrorMessage(errs)
 			return ctrl.Result{}, errs
@@ -224,12 +247,13 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	machineScope.SetProviderID(dev.ID)
 	machineScope.SetInstanceStatus(infrastructurev1alpha3.PacketResourceStatus(dev.State))
 
-	addrs, err := r.PacketClient.GetDeviceAddresses(dev)
+	deviceAddr, err := r.PacketClient.GetDeviceAddresses(dev)
 	if err != nil {
 		machineScope.SetErrorMessage(errors.New("failed to getting device addresses"))
 		return ctrl.Result{}, err
 	}
-	machineScope.SetAddresses(addrs)
+
+	machineScope.SetAddresses(append(addrs, deviceAddr...))
 
 	// Proceed to reconcile the PacketMachine state.
 	var result = ctrl.Result{}
@@ -240,6 +264,25 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		result = ctrl.Result{RequeueAfter: 10 * time.Second}
 	case infrastructurev1alpha3.PacketResourceStatusRunning:
 		machineScope.Info("Machine instance is active", "instance-id", machineScope.GetInstanceID())
+
+		// This logic is here because an elastic ip can be assigned only an
+		// active node. It needs to be a control plane and the IP should not be
+		// assigned to anything at this point.
+		controlPlaneEndpoint, _ = r.PacketClient.GetIPByClusterIdentifier(
+			clusterScope.Namespace(),
+			clusterScope.Name(),
+			clusterScope.PacketCluster.Spec.ProjectID)
+		if len(controlPlaneEndpoint.Assignments) == 0 && machineScope.IsControlPlane() {
+			if _, _, err := r.PacketClient.DeviceIPs.Assign(dev.ID, &packngo.AddressStruct{
+				Address: controlPlaneEndpoint.Address,
+			}); err != nil {
+				r.Log.Error(err, "err assigining elastic ip to control plane. retrying...")
+				return ctrl.Result{
+					Requeue:      true,
+					RequeueAfter: time.Second * 20,
+				}, nil
+			}
+		}
 		machineScope.SetReady()
 		result = ctrl.Result{}
 	default:
@@ -279,7 +322,7 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 		return ctrl.Result{}, fmt.Errorf("machine does not exist: %s", packetmachine.Name)
 	}
 
-	_, err = r.PacketClient.Devices.Delete(device.ID)
+	_, err = r.PacketClient.Devices.Delete(device.ID, force)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to delete the machine: %v", err)
 	}
