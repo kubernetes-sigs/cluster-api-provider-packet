@@ -34,6 +34,7 @@ import (
 const (
 	apiTokenVarName = "PACKET_API_KEY"
 	clientName      = "CAPP-v1alpha3"
+	ipxeOS          = "custom_ipxe"
 )
 
 var ErrControlPlanEndpointNotFound = errors.New("contorl plane not found")
@@ -102,6 +103,15 @@ func (p *PacketClient) NewDevice(machineScope *scope.MachineScope, extraTags []s
 		OS:                    machineScope.PacketMachine.Spec.OS,
 		Tags:                  tags,
 		UserData:              userData,
+	}
+
+	// Update server options to pass pxe url if specified
+	if machineScope.PacketMachine.Spec.IPXEUrl != "" {
+		// Error if pxe url and OS conflict
+		if machineScope.PacketMachine.Spec.OS != ipxeOS {
+			return nil, fmt.Errorf("os should be set to custom_pxe when using pxe urls")
+		}
+		serverCreateOpts.IPXEScriptURL = machineScope.PacketMachine.Spec.IPXEUrl
 	}
 
 	dev, _, err := p.Client.Devices.Create(serverCreateOpts)

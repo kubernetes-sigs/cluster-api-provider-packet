@@ -19,18 +19,13 @@ spec:
   scope: Namespaced
   validation:
     openAPIV3Schema:
-      description: PacketMachineTemplate is the Schema for the packetmachinetemplates
-        API
+      description: PacketMachineTemplate is the Schema for the packetmachinetemplates API
       properties:
         apiVersion:
-          description: 'APIVersion defines the versioned schema of this representation
-            of an object. Servers should convert recognized schemas to the latest
-            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+          description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
           type: string
         kind:
-          description: 'Kind is a string value representing the REST resource this
-            object represents. Servers may infer this from the endpoint the client
-            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+          description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
           type: string
         metadata:
           type: object
@@ -38,35 +33,32 @@ spec:
           description: PacketMachineTemplateSpec defines the desired state of PacketMachineTemplate
           properties:
             template:
-              description: PacketMachineTemplateResource describes the data needed
-                to create am PacketMachine from a template
+              description: PacketMachineTemplateResource describes the data needed to create am PacketMachine from a template
               properties:
                 spec:
-                  description: Spec is the specification of the desired behavior of
-                    the machine.
+                  description: Spec is the specification of the desired behavior of the machine.
                   properties:
                     OS:
                       type: string
                     billingCycle:
                       type: string
                     hardwareReservationID:
-                      description: HardwareReservationID is the unique device hardware
-                        reservation ID or `next-available` to automatically let the
-                        Packet api determine one.
+                      description: HardwareReservationID is the unique device hardware reservation ID or `next-available` to automatically let the Packet api determine one.
+                      type: string
+                    ipxeURL:
+                      description: IPXEUrl can be used to set the pxe boot url when using custom OSes with this provider. Note that OS should also be set to "custom_ipxe" if using this value.
                       type: string
                     machineType:
                       type: string
                     providerID:
-                      description: ProviderID is the unique identifier as specified
-                        by the cloud provider.
+                      description: ProviderID is the unique identifier as specified by the cloud provider.
                       type: string
                     sshKeys:
                       items:
                         type: string
                       type: array
                     tags:
-                      description: Tags is an optional set of tags to add to Packet
-                        resources managed by the Packet provider.
+                      description: Tags is an optional set of tags to add to Packet resources managed by the Packet provider.
                       items:
                         type: string
                       type: array
