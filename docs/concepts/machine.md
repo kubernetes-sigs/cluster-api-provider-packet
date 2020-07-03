@@ -7,7 +7,7 @@ This is an example of it:
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
 kind: PacketMachine
 metadata:
-  name: "qa-master-0"
+  name: "qa-controlplane-0"
 spec:
   OS: "ubuntu_18_04"
   billingCycle: hourly
@@ -42,7 +42,7 @@ You can specify the reservation ID using the field `hardwareReservationID`:
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
 kind: PacketMachine
 metadata:
-  name: "qa-master-0"
+  name: "qa-controlplane-0"
 spec:
   OS: "ubuntu_18_04"
   facility:
