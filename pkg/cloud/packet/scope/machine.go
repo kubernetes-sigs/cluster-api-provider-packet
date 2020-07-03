@@ -122,7 +122,7 @@ func (m *MachineScope) IsControlPlane() bool {
 // Role returns the machine role from the labels.
 func (m *MachineScope) Role() string {
 	if util.IsControlPlaneMachine(m.Machine) {
-		return infrav1.MasterTag
+		return infrav1.ControlPlaneTag
 	}
 	return infrav1.WorkerTag
 }

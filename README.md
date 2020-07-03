@@ -67,7 +67,7 @@ To generate your cluster yaml:
    * `SSH_KEY` - The path to an ssh public key to place on all of the machines. If not set, it will use whichever ssh keys are defined for your project.
    * `POD_CIDR` - The CIDR to use for your pods; if not set, see defaults below
    * `SERVICE_CIDR` - The CIDR to use for your services; if not set, see defaults below
-   * `MASTER_NODE_TYPE` - The Packet node type to use for control plane nodes; if not set, see defaults below
+   * `CONTROLPLANE_NODE_TYPE` - The Packet node type to use for control plane nodes; if not set, see defaults below
    * `WORKER_NODE_TYPE` - The Packet node type to use for worker nodes; if not set, see defaults below
    * `WORKER_MACHINE_COUNT` - The number of worker machines to deploy; if not set, cluster-api itself (not the Packet implementation) defaults to 0 workers.
 1. Run the cluster generation command:
@@ -100,9 +100,9 @@ If you do not change the generated `yaml` files, it will use defaults. You can l
 * pod CIDR: `172.26.0.0/16`
 * service domain: `cluster.local`
 * cluster name: `test1-<random>`, where random is a random 5-character string containing the characters `a-z0-9`
-* master node type: `t1.small`
+* control plane node type: `t1.small`
 * worker node type: `t1.small`
-* worker and master OS type: `ubuntu_18_04`
+* worker and control plane OS type: `ubuntu_18_04`
 
 #### Apply Your Cluster
 
@@ -128,7 +128,7 @@ The actual machines are deployed using `kubeadm`. The deployment process uses th
 
 1. When a new `Cluster` is created:
    * if the appropriate `Secret` does not include a CA key/certificate pair, create one and save it in that `Secret`
-2. When a new master `Machine` is created:
+2. When a new control plane `Machine` is created:
    * retrieve the CA certificate and key from the appropriate Kubernetes `Secret`
    * launch a new server instance on Packet
    * set the `cloud-init` on the instance to run `kubeadm init`, passing it the CA certificate and key
@@ -156,7 +156,7 @@ When trying to install a new machine, the logic is as follows:
 Important notes:
 
 * There can be multiple `machineParams` entries for each `userdata`, enabling one userdata script to be used for more than one combination of OS and Kubernetes versions.
-* There are versions both for `controlPlane` and `kubelet`. `master` servers will match both `controlPlane` and `kubelet`; worker nodes will have no `controlPlane` entry.
+* There are versions both for `controlPlane` and `kubelet`. `control plane` servers will match both `controlPlane` and `kubelet`; worker nodes will have no `controlPlane` entry.
 * The `containerRuntime` is installed as is. The value of `containerRuntime` will be passed to the userdata script as `${CR_PACKAGE}`, to be installed as desired.
 
 ## References

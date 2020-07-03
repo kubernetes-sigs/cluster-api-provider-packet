@@ -88,7 +88,7 @@ func (p *PacketClient) NewDevice(machineScope *scope.MachineScope, extraTags []s
 			return nil, fmt.Errorf("error executing control-plane userdata template: %v", err)
 		}
 		userData = stringWriter.String()
-		tags = append(tags, infrastructurev1alpha3.MasterTag)
+		tags = append(tags, infrastructurev1alpha3.ControlPlaneTag)
 	} else {
 		tags = append(tags, infrastructurev1alpha3.WorkerTag)
 	}
