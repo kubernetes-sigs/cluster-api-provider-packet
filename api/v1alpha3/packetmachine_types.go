@@ -38,6 +38,11 @@ type PacketMachineSpec struct {
 	MachineType  string   `json:"machineType"`
 	SshKeys      []string `json:"sshKeys,omitempty"`
 
+	// IPXEUrl can be used to set the pxe boot url when using custom OSes with this provider.
+	// Note that OS should also be set to "custom_ipxe" if using this value.
+	// +optional
+	IPXEUrl string `json:"ipxeURL,omitempty"`
+
 	// HardwareReservationID is the unique device hardware reservation ID or `next-available` to
 	// automatically let the Packet api determine one.
 	// +optional
