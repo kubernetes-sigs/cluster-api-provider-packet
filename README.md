@@ -92,6 +92,10 @@ This will:
 1. Generate the output
 1. Tell you where it is an the `kubectl apply` command to run
 
+If you want to use your own cluster template or modify the default one
+extensively, [this document](./docs/experiences/custom-cluster-template.md)
+describes how to do so.
+
 ##### Defaults
 
 If you do not change the generated `yaml` files, it will use defaults. You can look in the [templates/cluster-template.yaml](./templates/cluster.yaml) file for details.
