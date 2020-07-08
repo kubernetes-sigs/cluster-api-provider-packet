@@ -29,7 +29,9 @@ spec:
     - 'kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system packet-cloud-config --from-literal=cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "f2a2d7ad-886e-4207-bf38-10ebdf49cf84"}'''
     - kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://raw.githubusercontent.com/packethost/packet-ccm/master/deploy/releases/v1.0.0/deployment.yaml
     preKubeadmCommands:
+    - sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
     - swapoff -a
+    - mount -a
     - apt-get -y update
     - DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
     - curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
@@ -144,7 +146,9 @@ spec:
   template:
     spec:
       preKubeadmCommands:
+        - sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
         - swapoff -a
+        - mount -a
         - apt-get -y update
         - DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
         - curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
