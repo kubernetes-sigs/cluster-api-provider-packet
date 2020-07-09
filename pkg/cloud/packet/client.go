@@ -156,7 +156,7 @@ func (p *PacketClient) CreateIP(namespace, clusterName, projectID, facility stri
 		Quantity:               1,
 		Facility:               &facility,
 		FailOnApprovalRequired: true,
-		Tags:                   []string{namespace + "/" + clusterName},
+		Tags:                   []string{generateElasticIPIdentifier(clusterName)},
 	}
 
 	r, resp, err := p.ProjectIPs.Request(projectID, &req)
@@ -183,10 +183,14 @@ func (p *PacketClient) GetIPByClusterIdentifier(namespace, name, projectID strin
 	}
 	for _, reservedIP := range reservedIPs {
 		for _, v := range reservedIP.Tags {
-			if v == namespace+"/"+name {
+			if v == generateElasticIPIdentifier(name) {
 				return reservedIP, nil
 			}
 		}
 	}
 	return reservedIP, ErrControlPlanEndpointNotFound
+}
+
+func generateElasticIPIdentifier(name string) string {
+	return fmt.Sprintf("cluster-api-provider-packet:cluster-id:%s", name)
 }
