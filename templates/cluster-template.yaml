@@ -26,6 +26,14 @@ spec:
         kubeletExtraArgs:
           cloud-provider: external
     postKubeadmCommands:
+    - |
+        cat <<EOF >> /etc/network/interfaces
+        auto lo:0
+        iface lo:0 inet static
+          address {{ .controlPlaneEndpoint }}
+          netmask 255.255.255.255
+        EOF
+    - systemctl restart networking
     - 'kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system packet-cloud-config --from-literal=cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}"}'''
     - kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://raw.githubusercontent.com/packethost/packet-ccm/9779a5b1dcaa039c40159a6a2c2e57b8ab4874d8/deploy/releases/v1.0.1/deployment.yaml
     preKubeadmCommands:
@@ -44,14 +52,7 @@ spec:
     - systemctl daemon-reload
     - systemctl enable docker
     - systemctl start docker
-    - |
-        cat <<EOF >> /etc/network/interfaces
-        auto lo:0
-        iface lo:0 inet static
-          address $(curl -s https://metadata.packet.net/metadata | jq -r '.network.addresses[] | select(.address_family == 4 and .public == true and .management == false) | .address')
-          netmask 255.255.255.255
-        EOF
-    - systemctl restart networking
+    - ping -c 3 -q {{ .controlPlaneEndpoint }} && echo OK || ip addr add {{ .controlPlaneEndpoint }} dev lo
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
 kind: PacketMachineTemplate
