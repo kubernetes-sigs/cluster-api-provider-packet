@@ -208,6 +208,9 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		}
 	}
 	if dev == nil {
+		createDeviceReq := packet.CreateDeviceRequest{
+			MachineScope: machineScope,
+		}
 		mUID := uuid.New().String()
 		tags := []string{
 			packet.GenerateMachineTag(mUID),
@@ -228,13 +231,13 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 					Address: controlPlaneEndpoint.Address,
 				}
 				addrs = append(addrs, a)
-				// This tag is currently not used. I placed it there to easely localize the device that currently has the IP attached.
-				// Probably it is not neeed but I wil get back to it when working at #141.
-				tags = append(tags, fmt.Sprintf("capp.control-plane-endpoint=%s", controlPlaneEndpoint.Address))
 			}
+			createDeviceReq.ControlPlaneEndpoint = controlPlaneEndpoint.Address
 		}
 
-		dev, err = r.PacketClient.NewDevice(machineScope, tags)
+		createDeviceReq.ExtraTags = tags
+
+		dev, err = r.PacketClient.NewDevice(createDeviceReq)
 		if err != nil {
 			errs := fmt.Errorf("failed to create machine %s: %v", machineScope.Name(), err)
 			machineScope.SetErrorReason(capierrors.CreateMachineError)

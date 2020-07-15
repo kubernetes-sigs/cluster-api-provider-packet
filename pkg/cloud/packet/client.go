@@ -67,15 +67,21 @@ func (p *PacketClient) GetDevice(deviceID string) (*packngo.Device, error) {
 	return dev, err
 }
 
-func (p *PacketClient) NewDevice(machineScope *scope.MachineScope, extraTags []string) (*packngo.Device, error) {
-	userDataRaw, err := machineScope.GetRawBootstrapData()
+type CreateDeviceRequest struct {
+	ExtraTags            []string
+	MachineScope         *scope.MachineScope
+	ControlPlaneEndpoint string
+}
+
+func (p *PacketClient) NewDevice(req CreateDeviceRequest) (*packngo.Device, error) {
+	userDataRaw, err := req.MachineScope.GetRawBootstrapData()
 	if err != nil {
 		return nil, errors.Wrap(err, "impossible to retrieve bootstrap data from secret")
 	}
 
 	userData := string(userDataRaw)
-	tags := append(machineScope.PacketMachine.Spec.Tags, extraTags...)
-	if machineScope.IsControlPlane() {
+	tags := append(req.MachineScope.PacketMachine.Spec.Tags, req.ExtraTags...)
+	if req.MachineScope.IsControlPlane() {
 		// control plane machines should get the API key injected
 		tmpl, err := template.New("control-plane-user-data").Parse(userData)
 		if err != nil {
@@ -84,6 +90,9 @@ func (p *PacketClient) NewDevice(machineScope *scope.MachineScope, extraTags []s
 		stringWriter := &strings.Builder{}
 		apiKeyStruct := map[string]interface{}{
 			"apiKey": p.Client.APIKey,
+		}
+		if req.ControlPlaneEndpoint != "" {
+			apiKeyStruct["controlPlaneEndpoint"] = req.ControlPlaneEndpoint
 		}
 		if err := tmpl.Execute(stringWriter, apiKeyStruct); err != nil {
 			return nil, fmt.Errorf("error executing control-plane userdata template: %v", err)
@@ -94,24 +103,24 @@ func (p *PacketClient) NewDevice(machineScope *scope.MachineScope, extraTags []s
 		tags = append(tags, infrastructurev1alpha3.WorkerTag)
 	}
 	serverCreateOpts := &packngo.DeviceCreateRequest{
-		Hostname:              machineScope.Name(),
-		ProjectID:             machineScope.PacketCluster.Spec.ProjectID,
-		Facility:              []string{machineScope.PacketCluster.Spec.Facility},
-		BillingCycle:          machineScope.PacketMachine.Spec.BillingCycle,
-		HardwareReservationID: machineScope.PacketMachine.Spec.HardwareReservationID,
-		Plan:                  machineScope.PacketMachine.Spec.MachineType,
-		OS:                    machineScope.PacketMachine.Spec.OS,
+		Hostname:              req.MachineScope.Name(),
+		ProjectID:             req.MachineScope.PacketCluster.Spec.ProjectID,
+		Facility:              []string{req.MachineScope.PacketCluster.Spec.Facility},
+		BillingCycle:          req.MachineScope.PacketMachine.Spec.BillingCycle,
+		HardwareReservationID: req.MachineScope.PacketMachine.Spec.HardwareReservationID,
+		Plan:                  req.MachineScope.PacketMachine.Spec.MachineType,
+		OS:                    req.MachineScope.PacketMachine.Spec.OS,
 		Tags:                  tags,
 		UserData:              userData,
 	}
 
 	// Update server options to pass pxe url if specified
-	if machineScope.PacketMachine.Spec.IPXEUrl != "" {
+	if req.MachineScope.PacketMachine.Spec.IPXEUrl != "" {
 		// Error if pxe url and OS conflict
-		if machineScope.PacketMachine.Spec.OS != ipxeOS {
+		if req.MachineScope.PacketMachine.Spec.OS != ipxeOS {
 			return nil, fmt.Errorf("os should be set to custom_pxe when using pxe urls")
 		}
-		serverCreateOpts.IPXEScriptURL = machineScope.PacketMachine.Spec.IPXEUrl
+		serverCreateOpts.IPXEScriptURL = req.MachineScope.PacketMachine.Spec.IPXEUrl
 	}
 
 	dev, _, err := p.Client.Devices.Create(serverCreateOpts)
