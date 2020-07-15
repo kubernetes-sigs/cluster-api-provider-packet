@@ -98,7 +98,7 @@ describes how to do so.
 
 ##### Defaults
 
-If you do not change the generated `yaml` files, it will use defaults. You can look in the [templates/cluster-template.yaml](./templates/cluster.yaml) file for details.
+If you do not change the generated `yaml` files, it will use defaults. You can look in the [templates/cluster-template.yaml](./templates/cluster-template.yaml) file for details.
 
 * service CIDR: `172.25.0.0/16`
 * pod CIDR: `172.26.0.0/16`
