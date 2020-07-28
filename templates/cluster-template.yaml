@@ -35,7 +35,7 @@ spec:
         EOF
     - systemctl restart networking
     - 'kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system packet-cloud-config --from-literal=cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}"}'''
-    - kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://raw.githubusercontent.com/packethost/packet-ccm/9779a5b1dcaa039c40159a6a2c2e57b8ab4874d8/deploy/releases/v1.0.1/deployment.yaml
+    - kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://github.com/packethost/packet-ccm/releases/download/v1.1.0/deployment.yaml
     preKubeadmCommands:
     - sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
     - swapoff -a
