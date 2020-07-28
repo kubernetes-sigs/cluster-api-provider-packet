@@ -136,7 +136,7 @@ func (p *PacketClient) GetDeviceAddresses(device *packngo.Device) ([]corev1.Node
 		}
 		a := corev1.NodeAddress{
 			Type:    addrType,
-			Address: addr.String(),
+			Address: addr.Address,
 		}
 		addrs = append(addrs, a)
 	}
