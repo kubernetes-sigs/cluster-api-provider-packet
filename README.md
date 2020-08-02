@@ -1,5 +1,11 @@
 # Packet cluster-api Provider
 
+[![GitHub release](https://img.shields.io/github/release/kubernetes-sigs/cluster-api-provider-packet/all.svg?style=flat-square)](https://github.com/kubernetes-sigs/cluster-api-provider-packet/releases)
+![Continuous Integration](https://github.com/kubernetes-sigs/cluster-api-provider-packet/workflows/Continuous%20Integration/badge.svg)
+[![GoDoc](https://godoc.org/sigs.k8s.io/cluster-api-provider-packet?status.svg)](https://pkg.go.dev/sigs.k8s.io/cluster-api-provider-packet?tab=overview)
+[![Go Report Card](https://goreportcard.com/badge/sigs.k8s.io/cluster-api-provider-packet)](https://goreportcard.com/report/sigs.k8s.io/cluster-api-provider-packet)
+[![Docker Pulls](https://img.shields.io/docker/pulls/packethost/cluster-api-provider-packet.svg)](https://hub.docker.com/r/packethost/cluster-api-provider-packet/)
+
 This is the official [cluster-api](https://github.com/kubernetes-sigs/cluster-api) provider for [Packet](https://packet.com). It implements cluster-api provider version v1alpha3.
 
 ## Using
