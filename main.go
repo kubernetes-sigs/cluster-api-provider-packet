@@ -26,10 +26,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	packet "github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
+	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 
-	infrastructurev1alpha3 "github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
-	"github.com/packethost/cluster-api-provider-packet/controllers"
+	infrastructurev1alpha3 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
+	"sigs.k8s.io/cluster-api-provider-packet/controllers"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	// +kubebuilder:scaffold:imports
 )

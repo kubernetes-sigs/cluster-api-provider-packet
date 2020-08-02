@@ -32,10 +32,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
-	infrastructurev1alpha3 "github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
-	packet "github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
-	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/scope"
+	"sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
+	infrastructurev1alpha3 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
+	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
+	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
 )
 
 // PacketClusterReconciler reconciles a PacketCluster object

@@ -1,4 +1,4 @@
-module github.com/packethost/cluster-api-provider-packet
+module sigs.k8s.io/cluster-api-provider-packet
 
 go 1.13
 

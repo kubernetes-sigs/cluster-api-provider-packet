@@ -1,5 +1,5 @@
 domain: cluster.x-k8s.io
-repo: github.com/packethost/cluster-api-provider-packet
+repo: sigs.k8s.io/cluster-api-provider-packet
 resources:
 - group: infrastructure
   kind: PacketCluster

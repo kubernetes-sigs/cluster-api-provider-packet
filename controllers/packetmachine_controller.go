@@ -39,12 +39,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	packet "github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet"
-	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/scope"
+	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
+	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
 
-	infrastructurev1alpha3 "github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
+	infrastructurev1alpha3 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
 )
 
 const (
