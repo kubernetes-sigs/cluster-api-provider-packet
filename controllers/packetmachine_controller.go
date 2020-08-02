@@ -49,8 +49,7 @@ import (
 )
 
 const (
-	providerName = "packet"
-	force        = true
+	force = true
 )
 
 // PacketMachineReconciler reconciles a PacketMachine object
@@ -260,7 +259,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	machineScope.SetAddresses(append(addrs, deviceAddr...))
 
 	// Proceed to reconcile the PacketMachine state.
-	var result = ctrl.Result{}
+	var result reconcile.Result
 
 	switch infrastructurev1alpha3.PacketResourceStatus(dev.State) {
 	case infrastructurev1alpha3.PacketResourceStatusNew, infrastructurev1alpha3.PacketResourceStatusQueued, infrastructurev1alpha3.PacketResourceStatusProvisioning:
