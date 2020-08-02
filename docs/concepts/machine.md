@@ -25,6 +25,8 @@ full list of supported parameters as part of the OpenAPI definition available
 [here](config/resources/crd/bases/infrastructure.cluster.x-k8s.io_packetmachines.yaml)
 searching for `kind: PacketMachine`.
 
+The `PacketMachine`, `PacketCluster`, and `PacketMachineTemplate` CRD specs are also documented at [docs.crds.dev](https://doc.crds.dev/github.com/kubernetes-sigs/cluster-api-provider-packet).
+
 ## Reserved instances
 
 Packet provides the possibility to [reserve

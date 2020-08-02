@@ -1,4 +1,4 @@
-module github.com/packethost/cluster-api-provider-packet/hack/tools
+module sigs.k8s.io/cluster-api-provider-packet/hack/tools
 
 go 1.14
 

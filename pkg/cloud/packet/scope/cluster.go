@@ -22,7 +22,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 
-	infrav1 "github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
 
 	"k8s.io/klog/klogr"
 

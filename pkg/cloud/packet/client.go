@@ -24,11 +24,11 @@ import (
 	"strings"
 	"text/template"
 
-	infrastructurev1alpha3 "github.com/packethost/cluster-api-provider-packet/api/v1alpha3"
-	"github.com/packethost/cluster-api-provider-packet/pkg/cloud/packet/scope"
 	"github.com/packethost/packngo"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	infrastructurev1alpha3 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
+	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
 )
 
 const (
