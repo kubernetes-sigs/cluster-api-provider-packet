@@ -8,6 +8,8 @@
 
 This is the official [cluster-api](https://github.com/kubernetes-sigs/cluster-api) provider for [Packet](https://packet.com). It implements cluster-api provider version v1alpha3.
 
+![Packetbot works hard to keep Kubernetes cluster in a good shape](./docs/banner.png)
+
 ## Using
 
 The following section describes how to use the cluster-api provider for packet (CAPP) as a regular user.
