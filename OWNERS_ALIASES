@@ -18,5 +18,6 @@ aliases:
   cluster-api-packet-maintainers:
     - deitch
     - gianarb
+    - thebsdbox
     - jacobsmith928
     - mrmrcoleman
