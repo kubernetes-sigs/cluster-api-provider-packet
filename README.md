@@ -67,12 +67,12 @@ clusterctl init --infrastructure=packet
 To generate your cluster yaml:
 
 1. Set the required environment variables:
-   * `PACKET_PROJECT_ID` - Packet project ID
-   * `PACKET_FACILITY` - The Packet facility where you wantto deploy the cluster. If not set, it will default to `ewr1`.
+   * `PROJECT_ID` - Packet project ID
+   * `CLUSTER_NAME` - The created cluster will have this name.
+   * `SSH_KEY` - The name of an ssh public key to use.
 1. (Optional) Set the optional environment variables:
-   * `CLUSTER_NAME` - The created cluster will have this name. If not set, it will generate one for you, see defaults below.
+   * `FACILITY` - The Packet facility where you wantto deploy the cluster. If not set, it will default to `ewr1`.
    * `NODE_OS` - The operating system to use for the node. If not set, see defaults below.
-   * `SSH_KEY` - The path to an ssh public key to place on all of the machines. If not set, it will use whichever ssh keys are defined for your project.
    * `POD_CIDR` - The CIDR to use for your pods; if not set, see defaults below
    * `SERVICE_CIDR` - The CIDR to use for your services; if not set, see defaults below
    * `CONTROLPLANE_NODE_TYPE` - The Packet node type to use for control plane nodes; if not set, see defaults below
@@ -84,22 +84,6 @@ To generate your cluster yaml:
 clusterctl config cluster <cluster-name> > out/cluster.yaml
 ```
 
-Note that the above command will make _all_ of the environment variables required. This is a limitation of
-`clusterctl` that is in the process of being fixed. If you want to use the defaults, instead of running
-the above `clusterctl` command, run:
-
-```
-make cluster
-```
-
-This will:
-
-1. Generate a random cluster name
-1. Set the defaults
-1. Accept any of your overrides for those defaults
-1. Generate the output
-1. Tell you where it is an the `kubectl apply` command to run
-
 If you want to use your own cluster template or modify the default one
 extensively, [this document](./docs/experiences/custom-cluster-template.md)
 describes how to do so.
@@ -109,7 +93,7 @@ describes how to do so.
 If you do not change the generated `yaml` files, it will use defaults. You can look in the [templates/cluster-template.yaml](./templates/cluster-template.yaml) file for details.
 
 * service CIDR: `172.25.0.0/16`
-* pod CIDR: `172.26.0.0/16`
+* pod CIDR: `192.168.0.0/16`
 * service domain: `cluster.local`
 * cluster name: `test1-<random>`, where random is a random 5-character string containing the characters `a-z0-9`
 * control plane node type: `t1.small`
@@ -119,7 +103,7 @@ If you do not change the generated `yaml` files, it will use defaults. You can l
 #### Apply Your Cluster
 
 ```
-kubectl apply -f cluster.yaml
+kubectl apply -f out/cluster.yaml
 ```
 
 Now wait for it to come up. You can check the status with any of the following commands:
