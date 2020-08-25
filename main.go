@@ -51,15 +51,23 @@ func init() {
 func main() {
 
 	var (
-		enableLeaderElection bool
-		healthAddr           string
-		metricsAddr          string
-		webhookPort          int
+		enableLeaderElection    bool
+		leaderElectionNamespace string
+		healthAddr              string
+		metricsAddr             string
+		webhookPort             int
 	)
 
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+
+	flag.StringVar(
+		&leaderElectionNamespace,
+		"leader-election-namespace",
+		"",
+		"Namespace that the controller performs leader election in. If unspecified, the controller will discover which namespace it is running in.",
+	)
 
 	flag.StringVar(&healthAddr,
 		"health-addr",
@@ -86,13 +94,14 @@ func main() {
 	})
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   webhookPort,
-		EventBroadcaster:       broadcaster,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "cad3ba79.cluster.x-k8s.io",
-		HealthProbeBindAddress: healthAddr,
+		Scheme:                  scheme,
+		MetricsBindAddress:      metricsAddr,
+		Port:                    webhookPort,
+		EventBroadcaster:        broadcaster,
+		LeaderElection:          enableLeaderElection,
+		LeaderElectionID:        "controller-leader-election-capp",
+		LeaderElectionNamespace: leaderElectionNamespace,
+		HealthProbeBindAddress:  healthAddr,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
