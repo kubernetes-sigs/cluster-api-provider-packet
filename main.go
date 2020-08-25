@@ -58,6 +58,7 @@ func main() {
 		metricsAddr             string
 		webhookPort             int
 		syncPeriod              time.Duration
+		watchNamespace          string
 	)
 
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
@@ -85,6 +86,13 @@ func main() {
 		"The minimum interval at which watched resources are reconciled (e.g. 15m)",
 	)
 
+	flag.StringVar(
+		&watchNamespace,
+		"namespace",
+		"",
+		"Namespace that the controller watches to reconcile cluster-api objects. If unspecified, the controller watches for cluster-api objects across all namespaces.",
+	)
+
 	flag.IntVar(&webhookPort,
 		"webhook-port",
 		0,
@@ -94,6 +102,10 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+
+	if watchNamespace != "" {
+		setupLog.Info("Watching cluster-api objects only in namespace for reconciliation", "namespace", watchNamespace)
+	}
 
 	// Machine and cluster operations can create enough events to trigger the event recorder spam filter
 	// Setting the burst size higher ensures all events will be recorded and submitted to the API
@@ -109,6 +121,7 @@ func main() {
 		LeaderElection:          enableLeaderElection,
 		LeaderElectionID:        "controller-leader-election-capp",
 		LeaderElectionNamespace: leaderElectionNamespace,
+		Namespace:               watchNamespace,
 		SyncPeriod:              &syncPeriod,
 		HealthProbeBindAddress:  healthAddr,
 	})
