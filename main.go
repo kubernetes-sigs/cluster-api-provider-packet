@@ -16,6 +16,7 @@ limitations under the License.
 package main
 
 import (
+	"errors"
 	"flag"
 	"os"
 
@@ -50,12 +51,11 @@ func init() {
 func main() {
 
 	var (
-		metricsAddr          string
-		healthAddr           string
 		enableLeaderElection bool
+		healthAddr           string
+		metricsAddr          string
+		webhookPort          int
 	)
-
-	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
@@ -65,6 +65,14 @@ func main() {
 		"health-addr",
 		":9440",
 		"The address the health endpoint binds to.",
+	)
+
+	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+
+	flag.IntVar(&webhookPort,
+		"webhook-port",
+		0,
+		"Webhook Server port, disabled by default. When enabled, the manager will only work as webhook server, no reconcilers are installed.",
 	)
 
 	flag.Parse()
@@ -80,7 +88,7 @@ func main() {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
+		Port:                   webhookPort,
 		EventBroadcaster:       broadcaster,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "cad3ba79.cluster.x-k8s.io",
@@ -98,24 +106,30 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.PacketClusterReconciler{
-		Client:       mgr.GetClient(),
-		Log:          ctrl.Log.WithName("controllers").WithName("PacketCluster"),
-		Recorder:     mgr.GetEventRecorderFor("packetcluster-controller"),
-		PacketClient: client,
-		Scheme:       mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "PacketCluster")
-		os.Exit(1)
-	}
-	if err = (&controllers.PacketMachineReconciler{
-		Client:       mgr.GetClient(),
-		Log:          ctrl.Log.WithName("controllers").WithName("PacketMachine"),
-		Scheme:       mgr.GetScheme(),
-		Recorder:     mgr.GetEventRecorderFor("packetmachine-controller"),
-		PacketClient: client,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "PacketMachine")
+	if webhookPort == 0 {
+		if err = (&controllers.PacketClusterReconciler{
+			Client:       mgr.GetClient(),
+			Log:          ctrl.Log.WithName("controllers").WithName("PacketCluster"),
+			Recorder:     mgr.GetEventRecorderFor("packetcluster-controller"),
+			PacketClient: client,
+			Scheme:       mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "PacketCluster")
+			os.Exit(1)
+		}
+		if err = (&controllers.PacketMachineReconciler{
+			Client:       mgr.GetClient(),
+			Log:          ctrl.Log.WithName("controllers").WithName("PacketMachine"),
+			Scheme:       mgr.GetScheme(),
+			Recorder:     mgr.GetEventRecorderFor("packetmachine-controller"),
+			PacketClient: client,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "PacketMachine")
+			os.Exit(1)
+		}
+	} else {
+		// TODO: add the webhook configuration
+		setupLog.Error(errors.New("webhook not implemented"), "webhook", "not available")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
