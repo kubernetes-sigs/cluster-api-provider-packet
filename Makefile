@@ -134,7 +134,7 @@ MANIFEST_TOOL ?= $(GOBIN)/manifest-tool
 
 # where we store downloaded core
 COREPATH ?= out/core
-CORE_VERSION ?= v0.3.5
+CORE_VERSION ?= v0.3.8
 CORE_API ?= https://api.github.com/repos/kubernetes-sigs/cluster-api/releases
 CORE_URL ?= https://github.com/kubernetes-sigs/cluster-api/releases/download/$(CORE_VERSION)
 
