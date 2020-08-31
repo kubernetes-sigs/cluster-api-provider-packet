@@ -19,6 +19,7 @@ import (
 	"errors"
 	"flag"
 	"os"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -56,6 +57,7 @@ func main() {
 		healthAddr              string
 		metricsAddr             string
 		webhookPort             int
+		syncPeriod              time.Duration
 	)
 
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
@@ -76,6 +78,12 @@ func main() {
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+
+	flag.DurationVar(&syncPeriod,
+		"sync-period",
+		10*time.Minute,
+		"The minimum interval at which watched resources are reconciled (e.g. 15m)",
+	)
 
 	flag.IntVar(&webhookPort,
 		"webhook-port",
@@ -101,6 +109,7 @@ func main() {
 		LeaderElection:          enableLeaderElection,
 		LeaderElectionID:        "controller-leader-election-capp",
 		LeaderElectionNamespace: leaderElectionNamespace,
+		SyncPeriod:              &syncPeriod,
 		HealthProbeBindAddress:  healthAddr,
 	})
 	if err != nil {
