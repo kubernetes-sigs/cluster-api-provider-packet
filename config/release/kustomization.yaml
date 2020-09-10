@@ -24,7 +24,7 @@ resources:
 images:
 - name: packet-controller # images with this name
   newTag: v0.3.2 # {"type":"string","x-kustomize":{"setter":{"name":"image-tag","value":"v0.3.2"}}}
-  newName: packethost/cluster-api-provider-packet # and this name
+  newName: docker.io/packethost/cluster-api-provider-packet # and this name
 patchesStrategicMerge:
 # Protect the /metrics endpoint by putting it behind auth.
 # If you want your controller-manager to expose the /metrics
