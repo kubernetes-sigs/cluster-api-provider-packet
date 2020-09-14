@@ -2,7 +2,4 @@ module sigs.k8s.io/cluster-api-provider-packet/hack/tools
 
 go 1.14
 
-require (
-	github.com/onsi/ginkgo v1.12.0
-	sigs.k8s.io/kustomize/kustomize/v3 v3.5.4
-)
+require sigs.k8s.io/kustomize/kustomize/v3 v3.8.2 // indirect

@@ -328,7 +328,7 @@ manifest: kustomize semver release-manifests release-clusterctl release-cluster-
 
 release-manifests: semver $(RELEASE_MANIFEST) $(RELEASE_METADATA) $(RELEASE_CLUSTER_TEMPLATE)
 release-version:
-	KUSTOMIZE_ENABLE_ALPHA_COMMANDS=true $(KUSTOMIZE) config set config/release image-tag $(VERSION)
+	KUSTOMIZE_ENABLE_ALPHA_COMMANDS=true $(KUSTOMIZE) cfg set config/release image-tag $(VERSION)
 
 $(RELEASE_MANIFEST): $(RELEASE_DIR) release-version ## Builds the manifests to publish with a release
 	$(KUSTOMIZE) build config/release > $@
