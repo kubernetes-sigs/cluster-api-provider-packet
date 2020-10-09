@@ -26,35 +26,35 @@ spec:
         kubeletExtraArgs:
           cloud-provider: external
     postKubeadmCommands:
-    - |
+      - |
         cat <<EOF >> /etc/network/interfaces
         auto lo:0
         iface lo:0 inet static
           address {{ .controlPlaneEndpoint }}
           netmask 255.255.255.255
         EOF
-    - systemctl restart networking
-    - 'kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system packet-cloud-config --from-literal=cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "eipTag": "cluster-api-provider-packet:cluster-id:${CLUSTER_NAME}"}'''
-    - kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://github.com/packethost/packet-ccm/releases/download/v1.1.0/deployment.yaml
+      - systemctl restart networking
+      - 'kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system packet-cloud-config --from-literal=cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "eipTag": "cluster-api-provider-packet:cluster-id:${CLUSTER_NAME}"}'''
+      - kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://github.com/packethost/packet-ccm/releases/download/v1.1.0/deployment.yaml
     preKubeadmCommands:
-    - sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
-    - swapoff -a
-    - mount -a
-    - apt-get -y update
-    - DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
-    - curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-    - echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
-    - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-    - apt-key fingerprint 0EBFCD88
-    - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-    - apt-get update -y
-    - TRIMMED_KUBERNETES_VERSION=$(echo $KUBERNETES_VERSION | sed 's/\./\\./g' | sed 's/^v//')
-    - RESOLVED_KUBERNETES_VERSION=$(apt-cache policy kubelet | awk -v "VERSION=${TRIMMED_KUBERNETES_VERSION}" '$1~ VERSION { print $1 }' | head -n1)
-    - apt-get install -y ca-certificates socat jq ebtables apt-transport-https cloud-utils prips docker-ce docker-ce-cli containerd.io kubelet=${RESOLVED_KUBERNETES_VERSION} kubeadm=${RESOLVED_KUBERNETES_VERSION} kubectl=${RESOLVED_KUBERNETES_VERSION}
-    - systemctl daemon-reload
-    - systemctl enable docker
-    - systemctl start docker
-    - ping -c 3 -q {{ .controlPlaneEndpoint }} && echo OK || ip addr add {{ .controlPlaneEndpoint }} dev lo
+      - sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
+      - swapoff -a
+      - mount -a
+      - apt-get -y update
+      - DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
+      - curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+      - echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
+      - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+      - apt-key fingerprint 0EBFCD88
+      - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+      - apt-get update -y
+      - TRIMMED_KUBERNETES_VERSION=$(echo $KUBERNETES_VERSION | sed 's/\./\\./g' | sed 's/^v//')
+      - RESOLVED_KUBERNETES_VERSION=$(apt-cache policy kubelet | awk -v VERSION=${TRIMMED_KUBERNETES_VERSION} '$1~ VERSION { print $1 }' | head -n1)
+      - apt-get install -y ca-certificates socat jq ebtables apt-transport-https cloud-utils prips docker-ce docker-ce-cli containerd.io kubelet=${RESOLVED_KUBERNETES_VERSION} kubeadm=${RESOLVED_KUBERNETES_VERSION} kubectl=${RESOLVED_KUBERNETES_VERSION}
+      - systemctl daemon-reload
+      - systemctl enable docker
+      - systemctl start docker
+      - ping -c 3 -q {{ .controlPlaneEndpoint }} && echo OK || ip addr add {{ .controlPlaneEndpoint }} dev lo
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
 kind: PacketMachineTemplate
@@ -67,7 +67,7 @@ spec:
       billingCycle: hourly
       machineType: "${WORKER_NODE_TYPE}"
       sshKeys:
-      - "${SSH_KEY}"
+        - "${SSH_KEY}"
       tags: []
 ---
 apiVersion: cluster.x-k8s.io/v1alpha3
@@ -140,7 +140,7 @@ spec:
       billingCycle: hourly
       machineType: "${WORKER_NODE_TYPE}"
       sshKeys:
-      - "${SSH_KEY}"
+        - "${SSH_KEY}"
       tags: []
 ---
 kind: KubeadmConfigTemplate
@@ -163,7 +163,7 @@ spec:
         - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
         - apt-get update -y
         - TRIMMED_KUBERNETES_VERSION=$(echo $KUBERNETES_VERSION | sed 's/\./\\./g' | sed 's/^v//')
-        - RESOLVED_KUBERNETES_VERSION=$(apt-cache policy kubelet | awk -v "VERSION=${TRIMMED_KUBERNETES_VERSION}" '$1~ VERSION { print $1 }' | head -n1)
+        - RESOLVED_KUBERNETES_VERSION=$(apt-cache policy kubelet | awk -v VERSION=${TRIMMED_KUBERNETES_VERSION} '$1~ VERSION { print $1 }' | head -n1)
         - apt-get install -y ca-certificates socat jq ebtables apt-transport-https cloud-utils prips docker-ce docker-ce-cli containerd.io kubelet=${RESOLVED_KUBERNETES_VERSION} kubeadm=${RESOLVED_KUBERNETES_VERSION} kubectl=${RESOLVED_KUBERNETES_VERSION}
         - systemctl daemon-reload
         - systemctl enable docker
