@@ -186,7 +186,9 @@ func (p *PacketClient) CreateIP(namespace, clusterName, projectID, facility stri
 func (p *PacketClient) GetIPByClusterIdentifier(namespace, name, projectID string) (packngo.IPAddressReservation, error) {
 	var err error
 	var reservedIP packngo.IPAddressReservation
-	reservedIPs, _, err := p.ProjectIPs.List(projectID)
+
+	listOpts := &packngo.ListOptions{}
+	reservedIPs, _, err := p.ProjectIPs.List(projectID, listOpts)
 	if err != nil {
 		return reservedIP, err
 	}
