@@ -65,7 +65,7 @@ spec:
     spec:
       OS: "${NODE_OS}"
       billingCycle: hourly
-      machineType: "${WORKER_NODE_TYPE}"
+      machineType: "${CONTROLPLANE_NODE_TYPE}"
       sshKeys:
         - "${SSH_KEY}"
       tags: []
