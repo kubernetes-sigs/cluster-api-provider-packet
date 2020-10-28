@@ -39,3 +39,6 @@ _artifacts
 
 # Goreleaser
 dist
+
+# Tilt
+.tiltbuild/

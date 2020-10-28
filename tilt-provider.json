@@ -1,0 +1,9 @@
+{
+    "name": "packet",
+    "config": {
+        "image": "packethost/cluster-api-provider-packet",
+        "live_reload_deps": [
+            "main.go", "go.mod", "go.sum", "api", "controllers", "pkg"
+        ]
+    }
+}
