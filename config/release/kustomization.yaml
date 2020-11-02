@@ -23,7 +23,7 @@ resources:
 #- ../prometheus
 images:
 - name: packet-controller # images with this name
-  newTag: v0.3.4 # {"type":"string","x-kustomize":{"setter":{"name":"image-tag","value":"v0.3.4"}}}
+  newTag: v0.3.5 # {"type":"string","x-kustomize":{"setter":{"name":"image-tag","value":"v0.3.5"}}}
   newName: docker.io/packethost/cluster-api-provider-packet # and this name
 patchesStrategicMerge:
 # Protect the /metrics endpoint by putting it behind auth.
