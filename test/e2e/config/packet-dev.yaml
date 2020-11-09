@@ -57,7 +57,7 @@ providers:
     - old: "--enable-leader-election"
       new: "--enable-leader-election=false"
   files:
-  - sourcePath: "../../../../metadata.yaml"
+  - sourcePath: "../../../metadata.yaml"
     targetName: "metadata.yaml"
   - sourcePath: "../../../templates/cluster-template.yaml"
 
