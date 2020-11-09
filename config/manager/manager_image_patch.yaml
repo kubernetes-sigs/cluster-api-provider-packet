@@ -8,5 +8,5 @@ spec:
     spec:
       containers:
       # Change the value of image field below to your controller image URL
-      - image: packethost/cluster-api-provider-packet
+      - image: docker.io/packethost/cluster-api-provider-packet:e2e
         name: manager

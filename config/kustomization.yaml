@@ -12,6 +12,6 @@ bases:
 #- webhook # Disable this if you're not using the webhook functionality.
 - default
 images:
-- name: packet-controller # images with this name
+- name: docker.io/packethost/cluster-api-provider-packet:e2e # images with this name
   newTag: v0.3.5 # {"type":"string","x-kustomize":{"setter":{"name":"image-tag","value":"v0.3.5"}}}
   newName: docker.io/packethost/cluster-api-provider-packet # and this name
