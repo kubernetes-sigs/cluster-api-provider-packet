@@ -43,8 +43,6 @@ KUBEBUILDER_VERSION ?= 2.3.1
 # default install location for kubebuilder; can be placed elsewhere
 KUBEBUILDER_DIR ?= /usr/local/kubebuilder
 KUBEBUILDER ?= $(KUBEBUILDER_DIR)/bin/kubebuilder
-CONTROLLER_GEN_VERSION ?= v0.3.0
-CONTROLLER_GEN=$(GOBIN)/controller-gen
 
 CERTMANAGER_URL ?= https://github.com/jetstack/cert-manager/releases/download/v0.14.1/cert-manager.yaml
 
@@ -56,6 +54,9 @@ REPO_URL ?= https://github.com/packethost/cluster-api-provider-packet
 BUILDARCH ?= $(shell uname -m)
 BUILDOS ?= $(shell uname -s | tr A-Z a-z)
 
+# Allow overriding the imagePullPolicy
+PULL_POLICY ?= Always
+
 E2E_FOCUS := "functional tests"
 
 # Directories.
@@ -64,9 +65,21 @@ TOOLS_BIN_DIR := $(TOOLS_DIR)/bin
 BIN_DIR := bin
 TEST_DIR := test
 TEST_E2E_DIR := $(TEST_DIR)/e2e
+ENVSUBST_BIN := bin/envsubst
+ENVSUBST := $(TOOLS_DIR)/$(ENVSUBST_BIN)
 
 # Binaries.
-KUSTOMIZE := $(TOOLS_BIN_DIR)/kustomize
+KUSTOMIZE := $(abspath $(TOOLS_BIN_DIR)/kustomize)
+CONTROLLER_GEN := $(abspath $(TOOLS_BIN_DIR)/controller-gen)
+ENVSUBST := $(abspath $(TOOLS_BIN_DIR)/envsubst)
+
+envsubst: $(ENVSUBST) ## Build a local copy of envsubst.
+$(ENVSUBST): $(TOOLS_DIR)/go.mod
+	cd $(TOOLS_DIR) && go build -tags=tools -o $(ENVSUBST_BIN) github.com/drone/envsubst/cmd/envsubst
+
+controller-gen: $(CONTROLLER_GEN) ## Build a local copy of controller-gen.
+$(CONTROLLER_GEN): $(TOOLS_DIR)/go.mod
+	cd $(TOOLS_DIR) && go build -tags=tools -o $(BIN_DIR)/controller-gen sigs.k8s.io/controller-tools/cmd/controller-gen
 
 kustomize: $(KUSTOMIZE)
 $(KUSTOMIZE): $(TOOLS_DIR)/go.mod # Build kustomize from tools folder.
@@ -120,8 +133,6 @@ GO ?= GO111MODULE=on CGO_ENABLED=0 go
 
 # Image URL to use all building/pushing image targets
 IMG ?= packethost/cluster-api-provider-packet:latest
-# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:trivialVersions=true"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -245,8 +256,15 @@ deploy: crds
 	$(KUSTOMIZE) build config/release | kubectl apply -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
-crds: controller-gen
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/resources/crd/bases
+crds: $(CONTROLLER_GEN)
+	$(CONTROLLER_GEN) \
+		paths=./api/... \
+		paths=./controllers/... \
+		crd:crdVersions=v1 \
+		rbac:roleName=manager-role \
+		output:crd:dir=./config/crd/bases \
+		output:webhook:dir=./config/webhook \
+		webhook
 
 # Run go fmt against code
 fmt:
@@ -257,7 +275,7 @@ vet:
 	go vet ./...
 
 # Generate code
-generate: controller-gen
+generate: $(CONTROLLER_GEN)
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 ## make the images for all supported ARCH
@@ -297,14 +315,6 @@ sub-push-%:
 push:
 	docker push $(IMAGENAME)
 
-# find or download controller-gen
-# download controller-gen if necessary
-# version must be at least the given version
-.PHONY: $(CONTROLLER_GEN)
-controller-gen: $(CONTROLLER_GEN)
-$(CONTROLLER_GEN):
-	scripts/controller-gen.sh $@ $(CONTROLLER_GEN_VERSION)
-
 ## generate a cluster using clusterctl and setting defaults
 cluster:
 	./scripts/generate-cluster.sh
@@ -328,10 +338,10 @@ manifest: kustomize semver release-manifests release-clusterctl release-cluster-
 
 release-manifests: semver $(RELEASE_MANIFEST) $(RELEASE_METADATA) $(RELEASE_CLUSTER_TEMPLATE)
 release-version:
-	KUSTOMIZE_ENABLE_ALPHA_COMMANDS=true $(KUSTOMIZE) cfg set config/release image-tag $(VERSION)
+	KUSTOMIZE_ENABLE_ALPHA_COMMANDS=true $(KUSTOMIZE) cfg set config image-tag $(VERSION)
 
 $(RELEASE_MANIFEST): $(RELEASE_DIR) release-version ## Builds the manifests to publish with a release
-	$(KUSTOMIZE) build config/release > $@
+	$(KUSTOMIZE) build config > $@
 
 $(RELEASE_METADATA): semver $(RELEASE_DIR)
 	cp $(METADATA_YAML) $@
@@ -389,3 +399,8 @@ cluster-init-manual: core managerless release
 	# because of dependencies, this is allowed to fail once or twice
 	kubectl apply -f $(COREPATH) || kubectl apply -f $(COREPATH) || kubectl apply -f $(COREPATH)
 	kubectl apply -f $(FULL_MANAGERLESS_MANIFEST)
+
+.PHONY: modules
+modules: ## Runs go mod to ensure modules are up to date.
+	go mod tidy
+	cd $(TOOLS_DIR); go mod tidy
