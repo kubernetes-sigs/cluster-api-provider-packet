@@ -3,13 +3,13 @@
 # - cluster-api
 # - bootstrap kubeadm
 # - control-plane kubeadm
+# - packet
 
 images:
-- name: "packethost/cluster-api-packet-controller"
+- name: "docker.io/packethost/cluster-api-provider-packet:e2e"
   loadBehavior: mustLoad
 
 providers:
-
 - name: cluster-api
   type: CoreProvider
   versions:
@@ -51,13 +51,8 @@ providers:
   versions:
   - name: v0.3.0
     value: "../../../config"
-    replacements:
-    - old: "imagePullPolicy: Always"
-      new: "imagePullPolicy: IfNotPresent"
-    - old: "--enable-leader-election"
-      new: "--enable-leader-election=false"
   files:
-  - sourcePath: "../../../../metadata.yaml"
+  - sourcePath: "../../../metadata.yaml"
     targetName: "metadata.yaml"
   - sourcePath: "../../../templates/cluster-template.yaml"
 

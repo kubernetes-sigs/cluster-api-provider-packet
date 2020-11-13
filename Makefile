@@ -226,9 +226,13 @@ $(KUBEBUILDER):
 test: generate fmt vet crds
 	go test ./... -coverprofile cover.out
 
+.PHONY: e2e-image
+e2e-image:
+	docker build --tag=docker.io/packethost/cluster-api-provider-packet:e2e .
+
 # Run e2e tests
 .PHONY: e2e
-e2e:
+e2e: e2e-image
 	# This is the name used inside the component.yaml for the container that runs the manager
 	# The image gets loaded inside kind from ./test/e2e/config/packet-dev.yaml
 	$(E2E_FLAGS) $(MAKE) -C $(TEST_E2E_DIR) run
