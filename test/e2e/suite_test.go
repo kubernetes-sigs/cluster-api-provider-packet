@@ -31,9 +31,9 @@ import (
 	"github.com/onsi/ginkgo/config"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	e2ecapi "sigs.k8s.io/cluster-api/test/e2e"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/test/framework/bootstrap"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
@@ -87,7 +87,7 @@ func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
 	junitPath := filepath.Join(artifactFolder, fmt.Sprintf("junit.e2e_suite.%d.xml", config.GinkgoConfig.ParallelNode))
 	junitReporter := reporters.NewJUnitReporter(junitPath)
-	RunSpecsWithDefaultAndCustomReporters(t, "capi-e2e", []Reporter{junitReporter})
+	RunSpecsWithDefaultAndCustomReporters(t, "capp-e2e", []Reporter{junitReporter})
 }
 
 // Using a SynchronizedBeforeSuite for controlling how to create resources shared across ParallelNodes (~ginkgo threads).
@@ -101,10 +101,10 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	By("Initializing a runtime.Scheme with all the GVK relevant for this test")
 	scheme := initScheme()
 
-	e2ecapi.Byf("Loading the e2e test configuration from %q", configPath)
+	Byf("Loading the e2e test configuration from %q", configPath)
 	e2eConfig = loadE2EConfig(configPath)
 
-	e2ecapi.Byf("Creating a clusterctl local repository into %q", artifactFolder)
+	Byf("Creating a clusterctl local repository into %q", artifactFolder)
 	clusterctlConfigPath = createClusterctlLocalRepository(e2eConfig, filepath.Join(artifactFolder, "repository"))
 
 	By("Setting up the bootstrap cluster")
@@ -159,6 +159,11 @@ func initScheme() *runtime.Scheme {
 func loadE2EConfig(configPath string) *clusterctl.E2EConfig {
 	config := clusterctl.LoadE2EConfig(context.TODO(), clusterctl.LoadE2EConfigInput{ConfigPath: configPath})
 	Expect(config).ToNot(BeNil(), "Failed to load E2E config from %s", configPath)
+
+	// Read CNI file and set CNI_RESOURCES environmental variable
+	Expect(config.Variables).To(HaveKey(capi_e2e.CNIPath), "Missing %s variable in the config", capi_e2e.CNIPath)
+	clusterctl.SetCNIEnvVar(config.GetVariable(capi_e2e.CNIPath), capi_e2e.CNIResources)
+
 	return config
 }
 
