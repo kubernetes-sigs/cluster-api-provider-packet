@@ -49,9 +49,10 @@ ginkgo:
 
 TEST_E2E_DIR := $(REPO_ROOT)/test/e2e
 
-GINKGO_FOCUS  ?=
+# Allow overriding the e2e configurations
+GINKGO_FOCUS ?= Workload cluster creation
 GINKGO_NODES  ?= 1
-E2E_CONF_FILE  ?= ${REPO_ROOT}/test/e2e/config/packet-dev.yaml
+E2E_CONF_FILE  ?= ${REPO_ROOT}/test/e2e/config/packet-ci.yaml
 ARTIFACTS ?= ${REPO_ROOT}/_artifacts
 SKIP_RESOURCE_CLEANUP ?= false
 USE_EXISTING_CLUSTER ?= false
