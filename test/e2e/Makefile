@@ -57,10 +57,22 @@ ARTIFACTS ?= ${REPO_ROOT}/_artifacts
 SKIP_RESOURCE_CLEANUP ?= false
 USE_EXISTING_CLUSTER ?= false
 GINKGO_NOCOLOR ?= false
+E2E_DATA_DIR ?= $(TEST_E2E_DIR)/data
+KUBETEST_CONF_PATH ?= $(abspath $(E2E_DATA_DIR)/kubetest/conformance.yaml)
 
 .PHONY: run
 run: ginkgo ## Run the end-to-end tests
 	cd $(TEST_E2E_DIR); $(GINKGO) -v -trace -tags=e2e -focus=$(GINKGO_FOCUS) -nodes=$(GINKGO_NODES) --noColor=$(GINKGO_NOCOLOR) . -- \
 	    -e2e.artifacts-folder="$(ARTIFACTS)" \
 	    -e2e.config="$(E2E_CONF_FILE)" \
-	    -e2e.skip-resource-cleanup=$(SKIP_RESOURCE_CLEANUP) -e2e.use-existing-cluster=$(USE_EXISTING_CLUSTER)
+	    -e2e.skip-resource-cleanup=$(SKIP_RESOURCE_CLEANUP) \
+			-e2e.use-existing-cluster=$(USE_EXISTING_CLUSTER)
+
+.PHONY: run-conformance
+run-conformance: ginkgo ## Run the conformance tests
+	cd $(TEST_E2E_DIR); $(GINKGO) -v -trace -stream -progress -tags=e2e -focus='Conformance Tests' -nodes=$(GINKGO_NODES) --noColor=$(GINKGO_NOCOLOR) . -- \
+	    -e2e.artifacts-folder="$(ARTIFACTS)" \
+	    -e2e.config="$(E2E_CONF_FILE)" \
+			-kubetest.config-file=$(KUBETEST_CONF_PATH) \
+	    -e2e.skip-resource-cleanup=$(SKIP_RESOURCE_CLEANUP) \
+			-e2e.use-existing-cluster=$(USE_EXISTING_CLUSTER)

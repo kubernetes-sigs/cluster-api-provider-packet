@@ -82,10 +82,8 @@ func dumpSpecResourcesAndCleanup(ctx context.Context, specName string, clusterPr
 			Deleter: bootstrapClusterProxy.GetClient(),
 			Name:    namespace.Name,
 		})
-
-		// Will call the clean resources just to make sure we clean everything
-		By(fmt.Sprintf("Making sure there is no leftover running for %s", cluster.Name))
 	}
+
 	cancelWatches()
 	redactLogs()
 }
