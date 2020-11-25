@@ -6,6 +6,9 @@ on:
    branches:
    - master
 
+env:
+  KUBEBUILDER_DIR: /tmp/kubebuilder_install
+
 jobs:
   report:
     name: Report
@@ -24,8 +27,6 @@ jobs:
     - uses: actions/setup-go@v2
       with:
         go-version: '1.14.2' # The Go version to download (if necessary) and use.
-    - name: kubebuilder-env
-      run: echo "::set-env name=KUBEBUILDER_DIR::/tmp/kubebuilder_install"
     - name: kubebuilder
       run: make kubebuilder KUBEBUILDER_DIR=${KUBEBUILDER_DIR} # we use this dir because /usr/local/kubebuilder is protected
     - name: test
