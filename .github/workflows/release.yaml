@@ -6,18 +6,20 @@ on:
     - 'v*'
 
 name: Upload Release Asset
+env:
+  IMAGENAME: packethost/cluster-api-provider-packet
+  KUBEBUILDER_DIR: /tmp/kubebuilder_install
 
 jobs:
   readiness:
     name: check for appropriate image
     runs-on: ubuntu-latest
     steps:
-    - name: Set version and imagename
+    - name: Set version
       id: get_version
       run: | 
-        echo ::set-env name=VERSION::${GITHUB_REF/refs\/tags\//}
-        echo ::set-env name=IMAGENAME::packethost/cluster-api-provider-packet
-        echo ::set-env name=COMMIT::${GITHUB_SHA}
+        echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
+        echo "COMMIT=${GITHUB_SHA}" >> $GITHUB_ENV
     - name: information
       run: echo "checking for existence of image ${IMAGENAME}:${COMMIT}. If it does not exist, this will fail; wait for an earlier PR merge action to complete and re-run this job."
     - name: docker login
@@ -36,8 +38,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: kubebuilder-env
-        run: echo "::set-env name=KUBEBUILDER_DIR::/tmp/kubebuilder_install"
       - name: kubebuilder
         run: make kubebuilder KUBEBUILDER_DIR=${KUBEBUILDER_DIR} # we use this dir because /usr/local/kubebuilder is protected
       - name: manifest
@@ -46,7 +46,8 @@ jobs:
           KUBEBUILDER_ASSETS: ${{ env.KUBEBUILDER_DIR }}/bin
       - name: Get the version
         id: get_version
-        run: echo ::set-env name=VERSION::${GITHUB_REF/refs\/tags\//}
+        run: | 
+          echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -108,9 +109,8 @@ jobs:
     - name: Set version and imagename
       id: get_version
       run: | 
-        echo ::set-env name=VERSION::${GITHUB_REF/refs\/tags\//}
-        echo ::set-env name=IMAGENAME::packethost/cluster-api-provider-packet
-        echo ::set-env name=COMMIT::${GITHUB_SHA}
+        echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
+        echo "COMMIT=${GITHUB_SHA}" >> $GITHUB_ENV
     - name: get-image
       run: docker image pull ${IMAGENAME}:${COMMIT}
     - name: release-latest
