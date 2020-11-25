@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -238,8 +239,14 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		createDeviceReq.ExtraTags = tags
 
 		dev, err = r.PacketClient.NewDevice(createDeviceReq)
-		if err != nil {
-			errs := fmt.Errorf("failed to create machine %s: %v", machineScope.Name(), err)
+
+		switch {
+		// TODO: find a better way than parsing the error messages for this.
+		case strings.Contains(err.Error(), " no available hardware reservations "):
+			// Do not treat an error indicating there are no hardware reservations available as fatal
+			return ctrl.Result{}, fmt.Errorf("failed to create machine %s: %w", machineScope.Name(), err)
+		case err != nil:
+			errs := fmt.Errorf("failed to create machine %s: %w", machineScope.Name(), err)
 			machineScope.SetErrorReason(capierrors.CreateMachineError)
 			machineScope.SetErrorMessage(errs)
 			return ctrl.Result{}, errs
@@ -280,10 +287,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 				Address: controlPlaneEndpoint.Address,
 			}); err != nil {
 				r.Log.Error(err, "err assigining elastic ip to control plane. retrying...")
-				return ctrl.Result{
-					Requeue:      true,
-					RequeueAfter: time.Second * 20,
-				}, nil
+				return ctrl.Result{RequeueAfter: time.Second * 20}, nil
 			}
 		}
 		machineScope.SetReady()
