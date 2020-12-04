@@ -37,7 +37,7 @@ const (
 	ipxeOS          = "custom_ipxe"
 )
 
-var ErrControlPlanEndpointNotFound = errors.New("contorl plane not found")
+var ErrControlPlanEndpointNotFound = errors.New("control plane not found")
 
 type PacketClient struct {
 	*packngo.Client
