@@ -242,7 +242,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 
 		switch {
 		// TODO: find a better way than parsing the error messages for this.
-		case strings.Contains(err.Error(), " no available hardware reservations "):
+		case err != nil && strings.Contains(err.Error(), " no available hardware reservations "):
 			// Do not treat an error indicating there are no hardware reservations available as fatal
 			return ctrl.Result{}, fmt.Errorf("failed to create machine %s: %w", machineScope.Name(), err)
 		case err != nil:
