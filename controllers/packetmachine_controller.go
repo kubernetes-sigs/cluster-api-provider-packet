@@ -191,12 +191,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	}
 
 	providerID := machineScope.GetInstanceID()
-
-	defaultTags := []string{
-		packet.GenerateClusterTag(clusterScope.Name()),
-		packet.GenerateMachineNameTag(machineScope.Name()),
-		packet.GenerateNamespaceTag(machineScope.Namespace()),
-	}
+	defaultTags := defaultTags(machineScope.Namespace(), machineScope.Name(), clusterScope.Name())
 
 	var (
 		dev                  *packngo.Device
@@ -330,24 +325,41 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 
 func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineScope *scope.MachineScope, clusterScope *scope.ClusterScope, logger logr.Logger) (ctrl.Result, error) {
 	logger.Info("Deleting machine")
+
 	packetmachine := machineScope.PacketMachine
 	providerID := machineScope.GetInstanceID()
+	defaultTags := defaultTags(machineScope.Namespace(), machineScope.Name(), clusterScope.Name())
+
 	if providerID == "" {
-		logger.Info("no provider ID provided, nothing to delete")
+		logger.Info("no provider ID provided, checking for device by tags")
+
+		device, err := r.PacketClient.GetDeviceByTags(machineScope.PacketCluster.Spec.ProjectID, defaultTags)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if device != nil {
+			if err := r.deleteDevice(device.ID, force); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to delete the machine: %w", err)
+			}
+		}
+
 		controllerutil.RemoveFinalizer(packetmachine, infrastructurev1alpha3.MachineFinalizer)
 		return ctrl.Result{}, nil
 	}
 
 	device, err := r.PacketClient.GetDevice(providerID)
 	if err != nil {
-		if err.(*packngo.ErrorResponse).Response != nil && err.(*packngo.ErrorResponse).Response.StatusCode == http.StatusNotFound {
+		var perr *packngo.ErrorResponse
+		if errors.As(err, &perr) && perr.Response != nil && perr.Response.StatusCode == http.StatusNotFound {
 			// When the server does not exist we do not have anything left to do.
 			// Probably somebody manually deleted the server from the UI or via API.
 			logger.Info("Server not found, nothing left to do")
 			controllerutil.RemoveFinalizer(packetmachine, infrastructurev1alpha3.MachineFinalizer)
 			return ctrl.Result{}, nil
 		}
-		return ctrl.Result{}, fmt.Errorf("error retrieving machine status %s: %v", packetmachine.Name, err)
+
+		return ctrl.Result{}, fmt.Errorf("error retrieving machine status %s: %w", packetmachine.Name, err)
 	}
 
 	// We should never get there but this is a safetly check
@@ -356,11 +368,26 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 		return ctrl.Result{}, fmt.Errorf("machine does not exist: %s", packetmachine.Name)
 	}
 
-	_, err = r.PacketClient.Devices.Delete(device.ID, force)
-	if err != nil {
+	if err := r.deleteDevice(device.ID, force); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to delete the machine: %v", err)
 	}
 
 	controllerutil.RemoveFinalizer(packetmachine, infrastructurev1alpha3.MachineFinalizer)
 	return ctrl.Result{}, nil
+}
+
+func (r *PacketMachineReconciler) deleteDevice(id string, force bool) error {
+	if _, err := r.PacketClient.Devices.Delete(id, force); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func defaultTags(namespace, name, clusterName string) []string {
+	return []string{
+		packet.GenerateClusterTag(clusterName),
+		packet.GenerateMachineNameTag(name),
+		packet.GenerateNamespaceTag(namespace),
+	}
 }
