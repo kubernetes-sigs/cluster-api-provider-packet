@@ -211,6 +211,15 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		// and we successfully recorded the providerID.
 		dev, err = r.PacketClient.GetDevice(providerID)
 		if err != nil {
+			var perr *packngo.ErrorResponse
+			if errors.As(err, &perr) && perr.Response != nil && perr.Response.StatusCode == http.StatusNotFound {
+				errs := fmt.Errorf("device does not exist: %s", providerID)
+
+				machineScope.SetErrorReason(capierrors.UpdateMachineError)
+				machineScope.SetErrorMessage(errs)
+				return ctrl.Result{}, errs
+			}
+
 			return ctrl.Result{}, err
 		}
 	}
