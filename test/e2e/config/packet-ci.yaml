@@ -51,10 +51,17 @@ providers:
   versions:
   - name: v0.3.0
     value: "../../../config"
+    replacements:
+    - old: "imagePullPolicy: .*"
+      new: "imagePullPolicy: Never"
+    - old: "--enable-leader-election"
+      new: "--enable-leader-election=false"
+    - old: "docker.io/packethost/cluster-api-provider-packet:v.*"
+      new: "docker.io/packethost/cluster-api-provider-packet:e2e"
   files:
   - sourcePath: "../../../metadata.yaml"
     targetName: "metadata.yaml"
-  - sourcePath: "../../../templates/cluster-template.yaml"
+  - sourcePath: "../../../templates/cluster-template-ci.yaml"
     targetName: "cluster-template.yaml"
 
 variables:
