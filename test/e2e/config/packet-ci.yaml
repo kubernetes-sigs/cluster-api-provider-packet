@@ -61,7 +61,7 @@ providers:
   files:
   - sourcePath: "../../../metadata.yaml"
     targetName: "metadata.yaml"
-  - sourcePath: "../../../templates/cluster-template.yaml"
+  - sourcePath: "../../../templates/cluster-template-ci.yaml"
     targetName: "cluster-template.yaml"
 
 variables:
