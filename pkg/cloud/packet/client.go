@@ -27,6 +27,7 @@ import (
 	"github.com/packethost/packngo"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/pointer"
 	infrastructurev1alpha3 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
 )
@@ -79,29 +80,38 @@ func (p *PacketClient) NewDevice(req CreateDeviceRequest) (*packngo.Device, erro
 		return nil, errors.Wrap(err, "impossible to retrieve bootstrap data from secret")
 	}
 
+	stringWriter := &strings.Builder{}
 	userData := string(userDataRaw)
+	userDataValues := map[string]interface{}{
+		"kubernetesVersion": pointer.StringPtrDerefOr(req.MachineScope.Machine.Spec.Version, ""),
+	}
+
 	tags := append(req.MachineScope.PacketMachine.Spec.Tags, req.ExtraTags...)
+
+	tmpl, err := template.New("user-data").Parse(userData)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing userdata template: %v", err)
+	}
+
 	if req.MachineScope.IsControlPlane() {
 		// control plane machines should get the API key injected
-		tmpl, err := template.New("control-plane-user-data").Parse(userData)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing control-plane userdata template: %v", err)
-		}
-		stringWriter := &strings.Builder{}
-		apiKeyStruct := map[string]interface{}{
-			"apiKey": p.Client.APIKey,
-		}
+		userDataValues["apiKey"] = p.Client.APIKey
+
 		if req.ControlPlaneEndpoint != "" {
-			apiKeyStruct["controlPlaneEndpoint"] = req.ControlPlaneEndpoint
+			userDataValues["controlPlaneEndpoint"] = req.ControlPlaneEndpoint
 		}
-		if err := tmpl.Execute(stringWriter, apiKeyStruct); err != nil {
-			return nil, fmt.Errorf("error executing control-plane userdata template: %v", err)
-		}
-		userData = stringWriter.String()
+
 		tags = append(tags, infrastructurev1alpha3.ControlPlaneTag)
 	} else {
 		tags = append(tags, infrastructurev1alpha3.WorkerTag)
 	}
+
+	if err := tmpl.Execute(stringWriter, userDataValues); err != nil {
+		return nil, fmt.Errorf("error executing userdata template: %v", err)
+	}
+
+	userData = stringWriter.String()
+
 	serverCreateOpts := &packngo.DeviceCreateRequest{
 		Hostname:              req.MachineScope.Name(),
 		ProjectID:             req.MachineScope.PacketCluster.Spec.ProjectID,
