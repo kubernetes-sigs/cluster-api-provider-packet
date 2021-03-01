@@ -40,6 +40,7 @@ type PacketMachineSpec struct {
 
 	// Facility represents the Packet facility for this cluster.
 	// Override from the PacketCluster spec.
+	// +optional
 	Facility string `json:"facility,omitempty"`
 
 	// IPXEUrl can be used to set the pxe boot url when using custom OSes with this provider.
