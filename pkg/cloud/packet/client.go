@@ -112,10 +112,16 @@ func (p *PacketClient) NewDevice(req CreateDeviceRequest) (*packngo.Device, erro
 
 	userData = stringWriter.String()
 
+	// Allow to override the facility for each PacketMachineTemplate
+	var facility = req.MachineScope.PacketCluster.Spec.Facility
+	if req.MachineScope.PacketMachine.Spec.Facility != "" {
+		facility = req.MachineScope.PacketMachine.Spec.Facility
+	}
+
 	serverCreateOpts := &packngo.DeviceCreateRequest{
 		Hostname:              req.MachineScope.Name(),
 		ProjectID:             req.MachineScope.PacketCluster.Spec.ProjectID,
-		Facility:              []string{req.MachineScope.PacketCluster.Spec.Facility},
+		Facility:              []string{facility},
 		BillingCycle:          req.MachineScope.PacketMachine.Spec.BillingCycle,
 		HardwareReservationID: req.MachineScope.PacketMachine.Spec.HardwareReservationID,
 		Plan:                  req.MachineScope.PacketMachine.Spec.MachineType,
