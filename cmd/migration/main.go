@@ -14,238 +14,178 @@ limitations under the License.
 package main
 
 import (
-	"bytes"
 	"context"
+	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
-	"strings"
 	"sync"
+	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/spf13/cobra"
-	"golang.org/x/term"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/retry"
+	"sigs.k8s.io/cluster-api-provider-packet/cmd/migration/util"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
-	"sigs.k8s.io/cluster-api/controllers/remote"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var (
-	kubeconfig   string            //nolint:gochecknoglobals
-	migrationCmd = &cobra.Command{ //nolint:exhaustivestruct,gochecknoglobals
-		Use:          "migration",
-		SilenceUsage: true,
-		Short:        "migration is used to handle migration tasks for cluster-api-provider-packet",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runMigration(context.TODO())
-		},
-	}
+	kubeconfig             string                 //nolint:gochecknoglobals
+	migrationOutputBuffers *util.OutputBuffers    //nolint:gochecknoglobals
+	migrationOutput        *util.OutputCollection //nolint:gochecknoglobals
+	migrationErrors        *util.ErrorCollection  //nolint:gochecknoglobals
+	clusters               []clusterv1.Cluster    //nolint:gochecknoglobals
+	buffMutex              sync.Mutex             //nolint:gochecknoglobals
 )
 
-func getManagementClient(kubeconfig string) (client.Client, error) {
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	if kubeconfig != "" {
-		loadingRules.ExplicitPath = kubeconfig
-	}
+func copyBuffers() {
+	buffMutex.Lock()
+	defer buffMutex.Unlock()
 
-	configOverrides := &clientcmd.ConfigOverrides{} //nolint:exhaustivestruct
-	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
-
-	config, err := kubeConfig.ClientConfig()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create client configuration for management cluster: %w", err)
-	}
-
-	scheme := runtime.NewScheme()
-	_ = clientgoscheme.AddToScheme(scheme)
-	_ = clusterv1.AddToScheme(scheme)
-
-	return client.New(config, client.Options{Scheme: scheme}) //nolint:exhaustivestruct,wrapcheck
-}
-
-func runMigration(ctx context.Context) error {
-	mgmtClient, err := getManagementClient(kubeconfig)
-	if err != nil {
-		return fmt.Errorf("failed to create client for management cluster: %w", err)
-	}
-
-	clusterList := &clusterv1.ClusterList{} //nolint:exhaustivestruct
-	if err := mgmtClient.List(ctx, clusterList); err != nil {
-		return fmt.Errorf("failed to list workload clusters in management cluster: %w", err)
-	}
-
-	var (
-		wg sync.WaitGroup
-		mu sync.Mutex
-	)
-
-	migrationOutput := make(map[string]*bytes.Buffer, len(clusterList.Items))
-	migrationErrors := make(map[string]error, len(clusterList.Items))
-
-	for i, c := range clusterList.Items {
+	for _, c := range clusters {
 		outputKey := fmt.Sprintf("%s/%s", c.Namespace, c.Name)
 
-		clusterKey, err := client.ObjectKeyFromObject(&clusterList.Items[i])
+		out, err := ioutil.ReadAll(migrationOutputBuffers.Get(outputKey))
 		if err != nil {
-			mu.Lock()
-			migrationErrors[outputKey] = fmt.Errorf("failed to create object key: %w", err)
-			mu.Unlock()
-
 			continue
 		}
 
-		var buf bytes.Buffer
-
-		mu.Lock()
-		migrationOutput[outputKey] = &buf
-		mu.Unlock()
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
-			if err := migrateWorkloadCluster(context.TODO(), clusterKey, mgmtClient, &buf); err != nil {
-				mu.Lock()
-				migrationErrors[outputKey] = err
-				mu.Unlock()
-
-				return
-			}
-		}()
+		migrationOutput.Append(outputKey, string(out))
 	}
+}
+
+func runMigration() tea.Msg {
+	mgmtClient, err := util.GetManagementClient(kubeconfig)
+	if err != nil {
+		return fatalErr(fmt.Errorf("failed to create client for management cluster: %w", err))
+	}
+
+	clusterList := &clusterv1.ClusterList{} //nolint:exhaustivestruct
+	if err := mgmtClient.List(context.TODO(), clusterList); err != nil {
+		return fatalErr(fmt.Errorf("failed to list workload clusters in management cluster: %w", err))
+	}
+
+	var wg sync.WaitGroup
+
+	clusters = clusterList.Items
+	migrationOutputBuffers, migrationErrors = util.RunMigration(context.TODO(), mgmtClient, clusterList.Items, &wg)
+	migrationOutput = util.NewOutputCollection(len(clusters))
 
 	wg.Wait()
 
-	if outputResults(clusterList.Items, migrationOutput, migrationErrors) {
-		return fmt.Errorf("failed to run migration to completion") //nolint:goerr113
-	}
-
-	return nil
+	return cleanQuit()
 }
 
-func outputResults(
-	clusters []clusterv1.Cluster,
-	migrationOutput map[string]*bytes.Buffer,
-	migrationErrors map[string]error,
-) bool {
-	doc := strings.Builder{}
-	physicalWidth, _, _ := term.GetSize(int(os.Stdout.Fd()))
+type model struct {
+	spinner spinner.Model
+	err     error
+}
+
+type fatalErr error
+
+func cleanQuit() tea.Msg {
+	copyBuffers()
+
+	// This is to ensure that the buffers are flushed to stdout prior to exiting
+	time.Sleep(time.Second)
+
+	return tea.Quit()
+}
+
+func initialModel() model {
+	s := spinner.NewModel()
+	s.Spinner = spinner.Pulse
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+
+	return model{spinner: s} //nolint:exhaustivestruct
+}
+
+func (m model) Init() tea.Cmd {
+	return tea.Batch(runMigration, spinner.Tick)
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "esc":
+			cmd = cleanQuit
+		}
+	case fatalErr:
+		m.err = msg
+		cmd = cleanQuit
+	default:
+		copyBuffers()
+
+		m.spinner, cmd = m.spinner.Update(msg)
+	}
+
+	return m, cmd
+}
+
+func (m model) View() string {
+	// TODO: handle window size detection and text wrapping
 	errorColor := lipgloss.Color("#dc322f")
 	infoColor := lipgloss.Color("#859900")
 	headingColor := lipgloss.Color("#268bd2")
-	docStyle := lipgloss.NewStyle().Padding(1, 2, 1, 2)
 	clusterStyle := lipgloss.NewStyle().Foreground(headingColor)
 	outputHeadings := clusterStyle.Copy().PaddingLeft(4)                           //nolint:gomnd
 	clusterOutputStyle := lipgloss.NewStyle().PaddingLeft(8).Foreground(infoColor) //nolint:gomnd
 	clusterErrorStyle := lipgloss.NewStyle().PaddingLeft(4).Foreground(errorColor) //nolint:gomnd
 
-	encounteredErrors := false
+	s := "CAPP Migration\n\n"
+
+	s += fmt.Sprintf("%s Running...\n\n", m.spinner.View())
+
+	if m.err != nil {
+		s += fmt.Sprintf("Error: %v\n", m.err)
+	}
 
 	for _, c := range clusters {
 		outputKey := fmt.Sprintf("%s/%s", c.Namespace, c.Name)
-		doc.WriteString(clusterStyle.Render(fmt.Sprintf("Cluster %s:", outputKey)) + "\n")
+		s += clusterStyle.Render(fmt.Sprintf("Cluster %s:", outputKey)) + "\n"
 
-		out, err := ioutil.ReadAll(migrationOutput[outputKey])
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading output for cluster %s: %v\n", outputKey, err)
-		}
+		out := migrationOutput.Get(outputKey)
 
 		if len(out) > 0 {
-			doc.WriteString(outputHeadings.Render("Output:") + "\n")
-			doc.WriteString(clusterOutputStyle.Render(string(out)) + "\n")
+			s += outputHeadings.Render("Output:") + "\n"
+			s += clusterOutputStyle.Render(out) + "\n"
 		}
 
-		if err, ok := migrationErrors[outputKey]; ok {
-			encounteredErrors = true
-
-			doc.WriteString(clusterErrorStyle.Render(fmt.Sprintf("Error: %s", err.Error())) + "\n\n")
+		if err, ok := migrationErrors.Load(outputKey); ok {
+			s += clusterErrorStyle.Render(fmt.Sprintf("Error: %s", err.Error())) + "\n"
 		}
 	}
 
-	if physicalWidth > 0 {
-		docStyle = docStyle.MaxWidth(physicalWidth)
-	} else if physicalWidth < 0 {
-		docStyle = docStyle.MaxWidth(80) //nolint:gomnd
-	}
-
-	fmt.Println(docStyle.Render(doc.String())) //nolint:forbidigo
-
-	return encounteredErrors
-}
-
-func migrateWorkloadCluster(
-	ctx context.Context,
-	clusterKey client.ObjectKey,
-	mgmtClient client.Client,
-	stdout io.Writer,
-) error {
-	c, err := remote.NewClusterClient(ctx, mgmtClient, clusterKey, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
-	}
-
-	nodeList := &corev1.NodeList{} //nolint:exhaustivestruct
-	if err := c.List(ctx, nodeList); err != nil {
-		return fmt.Errorf("failed to list nodes: %w", err)
-	}
-
-	for _, node := range nodeList.Items {
-		// TODO: should this stop at first error, or attempt to continue?
-		// TODO: should probably give some additional safety to users since this will be
-		// deleting and re-creating Node resources
-		if err := migrateNode(ctx, node, c, stdout); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func migrateNode(ctx context.Context, node corev1.Node, workloadClient client.Client, stdout io.Writer) error {
-	if strings.HasPrefix(node.Spec.ProviderID, "equinixmetal") {
-		fmt.Fprintf(stdout, "✔ Node %s already has the updated providerID\n", node.Name)
-
-		return nil
-	}
-
-	if err := workloadClient.Delete(ctx, &node); err != nil {
-		return fmt.Errorf("failed to delete existing node resource: %w", err)
-	}
-
-	node.SetResourceVersion("")
-	node.Spec.ProviderID = strings.Replace(node.Spec.ProviderID, "packet", "equinixmetal", 1)
-
-	if err := retry.OnError(
-		retry.DefaultRetry,
-		func(err error) bool {
-			return true
-		},
-		func() error {
-			return workloadClient.Create(ctx, &node) //nolint:wrapcheck
-		},
-	); err != nil {
-		return fmt.Errorf("failed to create replacement node resource: %w", err)
-	}
-
-	fmt.Fprintf(stdout, "✅ Node %s has been successfully migrated\n", node.Name)
-
-	return nil
-}
-
-func init() { //nolint:gochecknoinits
-	migrationCmd.Flags().StringVar(&kubeconfig, "kubeconfig", "",
-		"Path to the kubeconfig for the management cluster. If unspecified, default discovery rules apply.")
+	return s
 }
 
 func main() {
-	if err := migrationCmd.Execute(); err != nil {
+	rand.Seed(time.Now().UTC().UnixNano())
+
+	var showHelp bool
+
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+
+	flag.StringVar(&kubeconfig, "kubeconfig", "",
+		"Path to the kubeconfig for the management cluster. If unspecified, default discovery rules apply.")
+	flag.BoolVar(&showHelp, "h", false, "show help")
+	flag.Parse()
+
+	if showHelp {
+		flag.Usage()
+		os.Exit(0)
+	}
+
+	m := initialModel()
+
+	p := tea.NewProgram(m)
+	if err := p.Start(); err != nil {
+		fmt.Println("Error starting Bubble Tea program:", err) //nolint: forbidigo
 		os.Exit(1)
 	}
 }
