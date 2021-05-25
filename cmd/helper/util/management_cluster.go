@@ -14,10 +14,7 @@ limitations under the License.
 package util
 
 import (
-	"bytes"
-	"context"
 	"fmt"
-	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -45,42 +42,4 @@ func GetManagementClient(kubeconfig string) (client.Client, error) {
 	_ = clusterv1.AddToScheme(scheme)
 
 	return client.New(config, client.Options{Scheme: scheme}) //nolint:exhaustivestruct,wrapcheck
-}
-
-func RunMigration(
-	ctx context.Context,
-	mgmtClient client.Client,
-	clusters []clusterv1.Cluster,
-	wg *sync.WaitGroup,
-) (*OutputBuffers, *ErrorCollection) {
-	migrationOutputBuffers := NewOutputBuffers(len(clusters))
-	migrationErrors := NewErrorCollection(len(clusters))
-
-	for i, c := range clusters {
-		outputKey := fmt.Sprintf("%s/%s", c.Namespace, c.Name)
-
-		clusterKey, err := client.ObjectKeyFromObject(&clusters[i])
-		if err != nil {
-			migrationErrors.Store(outputKey, fmt.Errorf("failed to create object key: %w", err))
-
-			continue
-		}
-
-		var buf bytes.Buffer
-
-		migrationOutputBuffers.Store(outputKey, &buf)
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
-			if err := migrateWorkloadCluster(context.TODO(), clusterKey, mgmtClient, &buf); err != nil {
-				migrationErrors.Store(outputKey, err)
-
-				return
-			}
-		}()
-	}
-
-	return migrationOutputBuffers, migrationErrors
 }

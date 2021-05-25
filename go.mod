@@ -3,6 +3,7 @@ module sigs.k8s.io/cluster-api-provider-packet
 go 1.13
 
 require (
+	github.com/blang/semver v3.5.1+incompatible
 	github.com/charmbracelet/bubbles v0.7.9
 	github.com/charmbracelet/bubbletea v0.13.4
 	github.com/charmbracelet/lipgloss v0.2.1
@@ -12,6 +13,7 @@ require (
 	github.com/onsi/gomega v1.11.0
 	github.com/packethost/packngo v0.13.0
 	github.com/pkg/errors v0.9.1
+	github.com/spf13/cobra v1.1.3
 	k8s.io/api v0.17.17
 	k8s.io/apimachinery v0.17.17
 	k8s.io/client-go v0.17.17
