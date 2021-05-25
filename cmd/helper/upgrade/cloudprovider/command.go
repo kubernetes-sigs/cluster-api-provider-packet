@@ -11,7 +11,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package providerid
+package cloudprovider
 
 import (
 	"context"
@@ -19,8 +19,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
-	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/migrate/providerid/migrator"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/ui"
+	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/upgrade/cloudprovider/upgrader"
 )
 
 type Command struct {
@@ -29,8 +29,8 @@ type Command struct {
 
 func (c *Command) Command() *cobra.Command {
 	return &cobra.Command{ //nolint:exhaustivestruct
-		Use:   "providerid",
-		Short: "ProviderID migration utility for CAPP",
+		Use:   "cloudprovider",
+		Short: "Cloud Provider upgrade utility for CAPP",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return c.RunE()
 		},
@@ -38,13 +38,13 @@ func (c *Command) Command() *cobra.Command {
 }
 
 func (c *Command) RunE() error {
-	migrator := new(migrator.Migrator)
+	upgrader := new(upgrader.Upgrader)
 
-	if err := migrator.Initialize(context.TODO(), c.KubeConfig); err != nil {
-		return fmt.Errorf("failed to initialize migration utility: %w", err)
+	if err := upgrader.Initialize(context.TODO(), c.KubeConfig); err != nil {
+		return fmt.Errorf("failed to initialize upgrade utility: %w", err)
 	}
 
-	m, err := ui.NewModel("CAPP ProviderID Migration", migrator)
+	m, err := ui.NewModel("CAPP ProviderID Migration", upgrader)
 	if err != nil {
 		return err
 	}

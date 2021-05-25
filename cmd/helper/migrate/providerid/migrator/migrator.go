@@ -14,11 +14,9 @@ limitations under the License.
 package migrator
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"strings"
 	"sync"
 
@@ -27,34 +25,20 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/util/retry"
-	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/util"
+	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
-	"sigs.k8s.io/cluster-api/controllers/remote"
 	capiutil "sigs.k8s.io/cluster-api/util"
 	containerutil "sigs.k8s.io/cluster-api/util/container"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func clusterToKey(c *clusterv1.Cluster) string {
-	return fmt.Sprintf("%s/%s", c.Name, c.Namespace)
-}
-
 type Migrator struct {
-	Clusters []*clusterv1.Cluster
-
-	kubeconfig string
-	mgmtClient client.Client
-
-	mu              sync.Mutex
-	workloadClients map[string]client.Client
-	errors          map[string]error
-	outputBuffers   map[string]*bytes.Buffer
-	outputContents  map[string]string
-	nodeStatus      map[string]map[string]bool
+	base.Tool
+	mu         sync.Mutex
+	nodeStatus map[string]map[string]bool
 }
 
 var (
-	ErrMissingKubeConfig        = errors.New("kubeconfig was nil")
 	ErrMissingCPEMDeployment    = errors.New("cloud-provider-equinix-metal Deployment not found")
 	ErrMissingCAPPDeployment    = errors.New("cluster-api-proviider-packet-controller-manager Deployment not found")
 	ErrPacketCloudProviderFound = errors.New("packet-cloud-controller-manager found, run: " +
@@ -64,52 +48,27 @@ var (
 		"clusterctl upgrade apply --management-group capi-system/cluster-api --contract v1alpha3")
 )
 
-func NewMigrator(ctx context.Context, kubeconfig *string) (*Migrator, error) {
-	if kubeconfig == nil {
-		return nil, ErrMissingKubeConfig
+func (m *Migrator) Initialize(ctx context.Context, kubeconfig *string) error {
+	if err := m.Tool.Initialize(ctx, kubeconfig); err != nil {
+		return err
 	}
 
-	mgmtClient, err := util.GetManagementClient(*kubeconfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create management cluster client: %w", err)
-	}
+	m.nodeStatus = make(map[string]map[string]bool, len(m.Clusters))
 
-	clusterList := new(clusterv1.ClusterList)
-	if err := mgmtClient.List(ctx, clusterList); err != nil {
-		return nil, fmt.Errorf("failed to list workload clusters in management cluster: %w", err)
-	}
-
-	size := len(clusterList.Items)
-
-	migrator := &Migrator{
-		kubeconfig:      *kubeconfig,
-		mgmtClient:      mgmtClient,
-		Clusters:        make([]*clusterv1.Cluster, 0, size),
-		mu:              sync.Mutex{},
-		workloadClients: make(map[string]client.Client, size),
-		errors:          make(map[string]error, size),
-		outputBuffers:   make(map[string]*bytes.Buffer, size),
-		outputContents:  make(map[string]string, size),
-		nodeStatus:      make(map[string]map[string]bool, size),
-	}
-
-	for i := range clusterList.Items {
-		cluster := &clusterList.Items[i]
-		migrator.Clusters = append(migrator.Clusters, cluster)
-
-		nodes, err := migrator.getNodes(ctx, cluster)
+	for _, c := range m.Clusters {
+		nodes, err := m.getNodes(ctx, c)
 		if err != nil {
-			migrator.addErrorFor(cluster, err)
+			m.AddErrorFor(c, err)
 
 			continue
 		}
 
 		for i := range nodes.Items {
-			migrator.updateNodeStatus(cluster, &nodes.Items[i], false)
+			m.updateNodeStatus(c, &nodes.Items[i], false)
 		}
 	}
 
-	return migrator, nil
+	return nil
 }
 
 func (m *Migrator) CheckPrerequisites(ctx context.Context) error {
@@ -124,7 +83,7 @@ func (m *Migrator) CheckPrerequisites(ctx context.Context) error {
 			defer wg.Done()
 
 			if err := m.validateCloudProviderForCluster(ctx, c); err != nil {
-				m.addErrorFor(c, err)
+				m.AddErrorFor(c, err)
 			}
 		}()
 	}
@@ -133,7 +92,7 @@ func (m *Migrator) CheckPrerequisites(ctx context.Context) error {
 
 	cappDeployment, err := getDeployment(
 		ctx,
-		m.mgmtClient,
+		m.MgmtClient,
 		"cluster-api-provider-packet-system",
 		"cluster-api-provider-packet-controller-manager",
 	)
@@ -172,12 +131,12 @@ func containerImageGTE(container corev1.Container, version semver.Version) (bool
 }
 
 func (m *Migrator) validateCloudProviderForCluster(ctx context.Context, c *clusterv1.Cluster) error {
-	if m.hasError(c) {
-		// Return early if the processing for the cluster has already hit an error
+	// Return early if the processing for the cluster has already hit an error
+	if m.HasError(c) {
 		return nil
 	}
 
-	workloadClient, err := m.getWorkloadClient(ctx, c)
+	workloadClient, err := m.GetWorkloadClient(ctx, c)
 	if err != nil {
 		return err
 	}
@@ -242,7 +201,7 @@ func (m *Migrator) CalculatePercentage() float64 {
 	var totalNodes, doneNodes int
 
 	for _, c := range m.Clusters {
-		clusterKey := clusterToKey(c)
+		clusterKey := base.ClusterToKey(c)
 
 		if m.nodeStatus[clusterKey] == nil {
 			m.nodeStatus[clusterKey] = make(map[string]bool)
@@ -282,30 +241,6 @@ func (m *Migrator) Run(ctx context.Context) {
 	wg.Wait()
 }
 
-func (m *Migrator) hasError(c *clusterv1.Cluster) bool {
-	return m.GetErrorFor(c) != nil
-}
-
-func (m *Migrator) GetErrorFor(c *clusterv1.Cluster) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.errors == nil {
-		return nil
-	}
-
-	return m.errors[clusterToKey(c)]
-}
-
-func (m *Migrator) GetOutputFor(c *clusterv1.Cluster) string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.flushBuffers()
-
-	return m.outputContents[clusterToKey(c)]
-}
-
 func (m *Migrator) updateNodeStatus(c *clusterv1.Cluster, n *corev1.Node, done bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -314,7 +249,7 @@ func (m *Migrator) updateNodeStatus(c *clusterv1.Cluster, n *corev1.Node, done b
 		m.nodeStatus = make(map[string]map[string]bool)
 	}
 
-	clusterKey := clusterToKey(c)
+	clusterKey := base.ClusterToKey(c)
 
 	if m.nodeStatus[clusterKey] == nil {
 		m.nodeStatus[clusterKey] = make(map[string]bool)
@@ -323,85 +258,11 @@ func (m *Migrator) updateNodeStatus(c *clusterv1.Cluster, n *corev1.Node, done b
 	m.nodeStatus[clusterKey][n.Name] = done
 }
 
-func (m *Migrator) addErrorFor(c *clusterv1.Cluster, err error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.errors == nil {
-		m.errors = make(map[string]error)
-	}
-
-	m.errors[clusterToKey(c)] = err
-}
-
-func (m *Migrator) getBufferFor(c *clusterv1.Cluster) *bytes.Buffer {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.outputBuffers == nil {
-		m.outputBuffers = make(map[string]*bytes.Buffer)
-	}
-
-	key := clusterToKey(c)
-
-	if m.outputBuffers[key] == nil {
-		m.outputBuffers[key] = new(bytes.Buffer)
-	}
-
-	return m.outputBuffers[key]
-}
-
-func (m *Migrator) flushBuffers() {
-	if m.outputBuffers == nil {
-		m.outputBuffers = make(map[string]*bytes.Buffer)
-	}
-
-	if m.outputContents == nil {
-		m.outputContents = make(map[string]string)
-	}
-
-	for key, buf := range m.outputBuffers {
-		out, err := ioutil.ReadAll(buf)
-		if err != nil {
-			continue
-		}
-
-		m.outputContents[key] += string(out)
-	}
-}
-
-func (m *Migrator) getWorkloadClient(
-	ctx context.Context,
-	cluster *clusterv1.Cluster,
-) (client.Client, error) {
-	if m.workloadClients == nil {
-		m.workloadClients = make(map[string]client.Client)
-	}
-
-	key := clusterToKey(cluster)
-
-	if _, ok := m.workloadClients[key]; !ok {
-		clusterKey, err := client.ObjectKeyFromObject(cluster)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create object key: %w", err)
-		}
-
-		workloadClient, err := remote.NewClusterClient(ctx, m.mgmtClient, clusterKey, nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create client: %w", err)
-		}
-
-		m.workloadClients[key] = workloadClient
-	}
-
-	return m.workloadClients[key], nil
-}
-
 func (m *Migrator) getNodes(
 	ctx context.Context,
 	cluster *clusterv1.Cluster,
 ) (*corev1.NodeList, error) {
-	workloadClient, err := m.getWorkloadClient(ctx, cluster)
+	workloadClient, err := m.GetWorkloadClient(ctx, cluster)
 	if err != nil {
 		return nil, err
 	}
@@ -419,13 +280,13 @@ func (m *Migrator) migrateWorkloadCluster(
 	cluster *clusterv1.Cluster,
 ) {
 	// Return early if cluster has already hit an error
-	if m.hasError(cluster) {
+	if m.HasError(cluster) {
 		return
 	}
 
 	nodeList, err := m.getNodes(ctx, cluster)
 	if err != nil {
-		m.addErrorFor(cluster, fmt.Errorf("failed to list nodes: %w", err))
+		m.AddErrorFor(cluster, fmt.Errorf("failed to list nodes: %w", err))
 
 		return
 	}
@@ -435,7 +296,7 @@ func (m *Migrator) migrateWorkloadCluster(
 		// TODO: should probably give some additional safety to users since this will be
 		// deleting and re-creating Node resources
 		if err := m.migrateNode(ctx, n, cluster); err != nil {
-			m.addErrorFor(cluster, err)
+			m.AddErrorFor(cluster, err)
 
 			return
 		}
@@ -447,7 +308,7 @@ func (m *Migrator) migrateNode(
 	node corev1.Node,
 	cluster *clusterv1.Cluster,
 ) error {
-	stdout := m.getBufferFor(cluster)
+	stdout := m.GetBufferFor(cluster)
 	if strings.HasPrefix(node.Spec.ProviderID, "equinixmetal") {
 		fmt.Fprintf(stdout, "✔ Node %s already has the updated providerID\n", node.Name)
 		m.updateNodeStatus(cluster, &node, true)
@@ -455,7 +316,7 @@ func (m *Migrator) migrateNode(
 		return nil
 	}
 
-	workloadClient, err := m.getWorkloadClient(ctx, cluster)
+	workloadClient, err := m.GetWorkloadClient(ctx, cluster)
 	if err != nil {
 		return err
 	}

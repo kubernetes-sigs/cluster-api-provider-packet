@@ -11,7 +11,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package providerid
+package ui
 
 import (
 	"context"
@@ -21,7 +21,7 @@ import (
 	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/migrate/providerid/migrator"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 )
 
 const (
@@ -30,60 +30,59 @@ const (
 	maxWidth = 80
 )
 
-func cleanQuit() tea.Msg {
-	// This is to ensure that the buffers are flushed to stdout prior to exiting
-	time.Sleep(time.Second)
-
-	return tea.Quit()
+type Tool interface {
+	CalculatePercentage() float64
+	GetClusters() []*clusterv1.Cluster
+	GetOutputFor(*clusterv1.Cluster) string
+	GetErrorFor(*clusterv1.Cluster) error
+	Run(context.Context)
+	CheckPrerequisites(context.Context) error
 }
 
-func initialModel(ctx context.Context, kubeconfig *string) (model, error) {
-	migrator, err := migrator.NewMigrator(ctx, kubeconfig)
-	if err != nil {
-		return model{}, fmt.Errorf("failed to initialize migration utility: %w", err)
-	}
-
+func NewModel(title string, tool Tool) (Model, error) {
 	prog, err := progress.NewModel(progress.WithScaledGradient("#FF7CCB", "#FDFF8C"))
 	if err != nil {
-		return model{}, fmt.Errorf("failed to generate progress bar: %w", err)
+		return Model{}, fmt.Errorf("failed to generate progress bar: %w", err)
 	}
 
-	return model{ //nolint:exhaustivestruct
-		migrator: migrator,
+	return Model{
+		title:    title,
+		Tool:     tool,
 		progress: prog,
 	}, nil
 }
 
-func (m model) runMigration() tea.Msg {
-	m.migrator.Run(context.TODO())
-
-	return cleanQuit()
-}
-
-func (m model) checkPrerequisites() tea.Msg {
-	return m.migrator.CheckPrerequisites(context.TODO()) //nolint: wrapcheck
-}
-
-type model struct {
-	migrator *migrator.Migrator
+type Model struct {
+	title    string
+	Tool     Tool
 	progress *progress.Model
 	percent  float64
 	err      error
 }
 
-type tickMsg time.Time
+type TickMsg time.Time
 
-func tickCmd() tea.Cmd {
+func TickCmd() tea.Cmd {
 	return tea.Tick(time.Second/fps, func(t time.Time) tea.Msg {
-		return tickMsg(t)
+		return TickMsg(t)
 	})
 }
 
-func (m model) Init() tea.Cmd {
-	return tea.Batch(tea.Sequentially(m.checkPrerequisites, m.runMigration), tickCmd())
+func (m Model) runMigration() tea.Msg {
+	m.Tool.Run(context.TODO())
+
+	return cleanQuit()
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) checkPrerequisites() tea.Msg {
+	return m.Tool.CheckPrerequisites(context.TODO()) //nolint: wrapcheck
+}
+
+func (m Model) Init() tea.Cmd {
+	return tea.Batch(tea.Sequentially(m.checkPrerequisites, m.runMigration), TickCmd())
+}
+
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -103,14 +102,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg
 		cmd = cleanQuit
 	default:
-		m.percent = m.migrator.CalculatePercentage()
-		cmd = tickCmd()
+		m.percent = m.Tool.CalculatePercentage()
+		cmd = TickCmd()
 	}
 
 	return m, cmd
 }
 
-func (m model) View() string {
+func (m Model) View() string {
 	// TODO: handle window size detection and text wrapping
 	errorColor := lipgloss.Color("#dc322f")
 	infoColor := lipgloss.Color("#859900")
@@ -120,7 +119,7 @@ func (m model) View() string {
 	clusterOutputStyle := lipgloss.NewStyle().PaddingLeft(8).Foreground(infoColor) //nolint:gomnd
 	clusterErrorStyle := lipgloss.NewStyle().PaddingLeft(4).Foreground(errorColor) //nolint:gomnd
 
-	s := "CAPP ProviderID Migration\n\n"
+	s := m.title + "\n\n"
 
 	s += m.progress.View(m.percent) + "\n\n"
 
@@ -128,22 +127,30 @@ func (m model) View() string {
 		s += lipgloss.NewStyle().Foreground(errorColor).Render(fmt.Sprintf("Error: %s", m.err.Error())) + "\n"
 	}
 
-	for i := range m.migrator.Clusters {
-		c := m.migrator.Clusters[i]
+	clusters := m.Tool.GetClusters()
+	for i := range clusters {
+		c := clusters[i]
 		outputKey := fmt.Sprintf("%s/%s", c.Namespace, c.Name)
 		s += clusterStyle.Render(fmt.Sprintf("Cluster %s:", outputKey)) + "\n"
 
-		out := m.migrator.GetOutputFor(c)
+		out := m.Tool.GetOutputFor(c)
 
 		if len(out) > 0 {
 			s += outputHeadings.Render("Output:") + "\n"
 			s += clusterOutputStyle.Render(out) + "\n"
 		}
 
-		if err := m.migrator.GetErrorFor(c); err != nil {
+		if err := m.Tool.GetErrorFor(c); err != nil {
 			s += clusterErrorStyle.Render(fmt.Sprintf("Error: %s", err.Error())) + "\n"
 		}
 	}
 
 	return s
+}
+
+func cleanQuit() tea.Msg {
+	// This is to ensure that the buffers are flushed to stdout prior to exiting
+	time.Sleep(time.Second)
+
+	return tea.Quit()
 }
