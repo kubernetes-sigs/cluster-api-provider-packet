@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/blang/semver"
+	"github.com/docker/distribution/reference"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -28,7 +29,6 @@ import (
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	capiutil "sigs.k8s.io/cluster-api/util"
-	containerutil "sigs.k8s.io/cluster-api/util/container"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -53,9 +53,13 @@ func (m *Migrator) Initialize(ctx context.Context, kubeconfig *string) error {
 		return err
 	}
 
-	m.nodeStatus = make(map[string]map[string]bool, len(m.Clusters))
+	// Initialize the node status
+	m.mu.Lock()
+	clusters := m.GetClusters()
+	m.nodeStatus = make(map[string]map[string]bool, len(clusters))
+	m.mu.Unlock()
 
-	for _, c := range m.Clusters {
+	for _, c := range clusters {
 		nodes, err := m.getNodes(ctx, c)
 		if err != nil {
 			m.AddErrorFor(c, err)
@@ -74,8 +78,9 @@ func (m *Migrator) Initialize(ctx context.Context, kubeconfig *string) error {
 func (m *Migrator) CheckPrerequisites(ctx context.Context) error {
 	wg := new(sync.WaitGroup)
 
-	for i := range m.Clusters {
-		c := m.Clusters[i]
+	clusters := m.GetClusters()
+	for i := range clusters {
+		c := clusters[i]
 
 		wg.Add(1)
 
@@ -90,18 +95,20 @@ func (m *Migrator) CheckPrerequisites(ctx context.Context) error {
 
 	wg.Wait()
 
-	cappDeployment, err := getDeployment(
+	cappDeployment := new(appsv1.Deployment)
+	if err := m.MgmtClient.Get(
 		ctx,
-		m.MgmtClient,
-		"cluster-api-provider-packet-system",
-		"cluster-api-provider-packet-controller-manager",
-	)
-	if err != nil {
-		return fmt.Errorf("failed to get CAPP deployment: %w", err)
-	}
+		client.ObjectKey{
+			Namespace: "cluster-api-provider-packet-system",
+			Name:      "cluster-api-provider-packet-controller-manager",
+		},
+		cappDeployment,
+	); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ErrMissingCAPPDeployment
+		}
 
-	if cappDeployment == nil {
-		return ErrMissingCAPPDeployment
+		return fmt.Errorf("failed to get CAPP deployment: %w", err)
 	}
 
 	ok, err := containerImageGTE(cappDeployment.Spec.Template.Spec.Containers[0], semver.MustParse("0.4.0"))
@@ -117,12 +124,16 @@ func (m *Migrator) CheckPrerequisites(ctx context.Context) error {
 }
 
 func containerImageGTE(container corev1.Container, version semver.Version) (bool, error) {
-	image, err := containerutil.ImageFromString(container.Image)
+	ref, err := reference.ParseNormalizedNamed(container.Image)
 	if err != nil {
-		return false, fmt.Errorf("failed to get image from container: %w", err)
+		return false, fmt.Errorf("failed to parse container reference %s: %w", container.Image, err)
 	}
 
-	imageVersion, err := capiutil.ParseMajorMinorPatch(image.Tag)
+	ref = reference.TagNameOnly(ref)
+	tagged, _ := ref.(reference.Tagged)
+	tag := tagged.Tag()
+
+	imageVersion, err := capiutil.ParseMajorMinorPatch(tag)
 	if err != nil {
 		return false, fmt.Errorf("failed to get version from image: %w", err)
 	}
@@ -141,22 +152,36 @@ func (m *Migrator) validateCloudProviderForCluster(ctx context.Context, c *clust
 		return err
 	}
 
-	packetCCMDeployment, err := getDeployment(ctx, workloadClient, "kube-system", "packet-cloud-controller-manager")
-	if err != nil {
-		return err
-	}
-
-	if packetCCMDeployment != nil {
+	packetCCMDeployment := new(appsv1.Deployment)
+	if err := workloadClient.Get(
+		ctx,
+		client.ObjectKey{Namespace: "kube-system", Name: "packet-cloud-controller-manager"},
+		packetCCMDeployment,
+	); err != nil {
+		if !apierrors.IsNotFound(err) {
+			// Ignore IsNotFound errors, since this is what we want to proceed
+			// We hit an unexpected error
+			return fmt.Errorf("failed to get deployment: %w", err)
+		}
+	} else {
+		// If we successfully retrieved the deployment, that means that the prerequisite step
+		// for upgrading the Cloud Provider has not been run yet
 		return ErrPacketCloudProviderFound
 	}
 
-	cpemDeployment, err := getDeployment(ctx, workloadClient, "kube-system", "cloud-provider-equinix-metal")
-	if err != nil {
-		return err
-	}
+	cpemDeployment := new(appsv1.Deployment)
+	if err := workloadClient.Get(
+		ctx,
+		client.ObjectKey{Namespace: "kube-system", Name: "cloud-provider-equinix-metal"},
+		cpemDeployment,
+	); err != nil {
+		if apierrors.IsNotFound(err) {
+			// Missing expected CPEM deployment
+			return ErrMissingCPEMDeployment
+		}
 
-	if cpemDeployment == nil {
-		return ErrMissingCPEMDeployment
+		// We hit an unexpected error
+		return fmt.Errorf("failed to get deployment: %w", err)
 	}
 
 	ok, err := containerImageGTE(cpemDeployment.Spec.Template.Spec.Containers[0], semver.MustParse("3.1.0"))
@@ -171,25 +196,6 @@ func (m *Migrator) validateCloudProviderForCluster(ctx context.Context, c *clust
 	return nil
 }
 
-func getDeployment(
-	ctx context.Context,
-	workloadClient client.Client,
-	namespace, name string,
-) (*appsv1.Deployment, error) {
-	deployment := new(appsv1.Deployment)
-	key := client.ObjectKey{Namespace: namespace, Name: name}
-
-	if err := workloadClient.Get(ctx, key, deployment); err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil, nil
-		}
-
-		return nil, fmt.Errorf("failed to get deployment: %w", err)
-	}
-
-	return deployment, nil
-}
-
 func (m *Migrator) CalculatePercentage() float64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -200,7 +206,7 @@ func (m *Migrator) CalculatePercentage() float64 {
 
 	var totalNodes, doneNodes int
 
-	for _, c := range m.Clusters {
+	for _, c := range m.GetClusters() {
 		clusterKey := base.ClusterToKey(c)
 
 		if m.nodeStatus[clusterKey] == nil {
@@ -226,8 +232,9 @@ func (m *Migrator) CalculatePercentage() float64 {
 func (m *Migrator) Run(ctx context.Context) {
 	wg := new(sync.WaitGroup)
 
-	for i := range m.Clusters {
-		c := m.Clusters[i]
+	clusters := m.GetClusters()
+	for i := range clusters {
+		c := clusters[i]
 
 		wg.Add(1)
 

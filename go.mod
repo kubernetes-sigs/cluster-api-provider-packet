@@ -7,8 +7,10 @@ require (
 	github.com/charmbracelet/bubbles v0.7.9
 	github.com/charmbracelet/bubbletea v0.13.4
 	github.com/charmbracelet/lipgloss v0.2.1
+	github.com/docker/distribution v2.7.1+incompatible
 	github.com/go-logr/logr v0.4.0
 	github.com/google/uuid v1.2.0
+	github.com/muesli/reflow v0.2.1-0.20210115123740-9e1d0d53df68
 	github.com/onsi/ginkgo v1.16.1
 	github.com/onsi/gomega v1.11.0
 	github.com/packethost/packngo v0.13.0

@@ -32,13 +32,10 @@ func ClusterToKey(c *clusterv1.Cluster) string {
 }
 
 type Tool struct {
-	// TODO: make this private
-	Clusters []*clusterv1.Cluster
-
-	kubeconfig string
-	MgmtClient client.Client
-
-	mu              sync.Mutex
+	kubeconfig      string
+	MgmtClient      client.Client
+	baseMutex       sync.Mutex
+	clusters        []*clusterv1.Cluster
 	workloadClients map[string]client.Client
 	errors          map[string]error
 	outputBuffers   map[string]*bytes.Buffer
@@ -48,11 +45,16 @@ type Tool struct {
 var ErrMissingKubeConfig = errors.New("kubeconfig was nil")
 
 func (t *Tool) GetClusters() []*clusterv1.Cluster {
-	// TODO: should this lock???
-	return t.Clusters
+	t.baseMutex.Lock()
+	defer t.baseMutex.Unlock()
+
+	return t.clusters
 }
 
 func (t *Tool) Initialize(ctx context.Context, kubeconfig *string) error {
+	t.baseMutex.Lock()
+	defer t.baseMutex.Unlock()
+
 	if kubeconfig == nil {
 		return ErrMissingKubeConfig
 	}
@@ -79,7 +81,7 @@ func (t *Tool) Initialize(ctx context.Context, kubeconfig *string) error {
 		clusters = append(clusters, cluster)
 	}
 
-	t.Clusters = clusters
+	t.clusters = clusters
 	t.workloadClients = make(map[string]client.Client, size)
 	t.errors = make(map[string]error, size)
 	t.outputBuffers = make(map[string]*bytes.Buffer, size)
@@ -93,8 +95,8 @@ func (t *Tool) HasError(c *clusterv1.Cluster) bool {
 }
 
 func (t *Tool) GetErrorFor(c *clusterv1.Cluster) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.baseMutex.Lock()
+	defer t.baseMutex.Unlock()
 
 	if t.errors == nil {
 		return nil
@@ -104,8 +106,8 @@ func (t *Tool) GetErrorFor(c *clusterv1.Cluster) error {
 }
 
 func (t *Tool) GetOutputFor(c *clusterv1.Cluster) string {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.baseMutex.Lock()
+	defer t.baseMutex.Unlock()
 
 	t.flushBuffers()
 
@@ -113,8 +115,8 @@ func (t *Tool) GetOutputFor(c *clusterv1.Cluster) string {
 }
 
 func (t *Tool) AddErrorFor(c *clusterv1.Cluster, err error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.baseMutex.Lock()
+	defer t.baseMutex.Unlock()
 
 	if t.errors == nil {
 		t.errors = make(map[string]error)
@@ -124,8 +126,8 @@ func (t *Tool) AddErrorFor(c *clusterv1.Cluster, err error) {
 }
 
 func (t *Tool) GetBufferFor(c *clusterv1.Cluster) *bytes.Buffer {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.baseMutex.Lock()
+	defer t.baseMutex.Unlock()
 
 	if t.outputBuffers == nil {
 		t.outputBuffers = make(map[string]*bytes.Buffer)
@@ -163,6 +165,9 @@ func (t *Tool) GetWorkloadClient(
 	ctx context.Context,
 	cluster *clusterv1.Cluster,
 ) (client.Client, error) {
+	t.baseMutex.Lock()
+	defer t.baseMutex.Unlock()
+
 	if t.workloadClients == nil {
 		t.workloadClients = make(map[string]client.Client)
 	}

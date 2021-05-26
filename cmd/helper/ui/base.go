@@ -21,6 +21,7 @@ import (
 	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/reflow/wordwrap"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 )
 
@@ -58,6 +59,8 @@ type Model struct {
 	progress *progress.Model
 	percent  float64
 	err      error
+	height   int
+	width    int
 }
 
 type TickMsg time.Time
@@ -92,6 +95,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = cleanQuit
 		}
 	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
 		m.progress.Width = msg.Width - padding*2 - 4 //nolint: gomnd
 		if m.progress.Width > maxWidth {
 			m.progress.Width = maxWidth
@@ -145,7 +150,7 @@ func (m Model) View() string {
 		}
 	}
 
-	return s
+	return wordwrap.String(s, m.width)
 }
 
 func cleanQuit() tea.Msg {
