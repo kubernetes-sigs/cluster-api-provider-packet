@@ -76,6 +76,8 @@ variables:
   WORKER_NODE_TYPE: "t1.small"
   POD_CIDR: "192.168.0.0/16"
   SERVICE_CIDR: "172.26.0.0/16"
+  CONFORMANCE_WORKER_MACHINE_COUNT: "3"
+  CONFORMANCE_CONTROL_PLANE_MACHINE_COUNT: "1"
   CNI: "../../templates/addons/calico.yaml"
   REDACT_LOG_SCRIPT: "../../../hack/log/redact.sh"
 

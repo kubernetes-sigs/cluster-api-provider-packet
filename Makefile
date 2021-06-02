@@ -234,8 +234,15 @@ e2e-image:
 .PHONY: e2e
 e2e: e2e-image
 	# This is the name used inside the component.yaml for the container that runs the manager
-	# The image gets loaded inside kind from ./test/e2e/config/packet-dev.yaml
+	# The image gets loaded inside kind from ./test/e2e/config/packet-ci.yaml
 	$(E2E_FLAGS) $(MAKE) -C $(TEST_E2E_DIR) run
+
+# Run conformance tests
+.PHONY: conformance
+conformance: e2e-image
+	# This is the name used inside the component.yaml for the container that runs the manager
+	# The image gets loaded inside kind from ./test/e2e/config/packet-ci.yaml
+	$(E2E_FLAGS) $(MAKE) -C $(TEST_E2E_DIR) run-conformance
 
 # Build manager binary
 manager: $(MANAGER)
