@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"sync"
 
@@ -178,7 +179,7 @@ func getLatestCPEMVersion(ctx context.Context) (string, error) {
 
 	defer versionResp.Body.Close()
 
-	versionBody, err := io.ReadAll(versionResp.Body)
+	versionBody, err := ioutil.ReadAll(versionResp.Body)
 	if err != nil {
 		return "", err
 	}
