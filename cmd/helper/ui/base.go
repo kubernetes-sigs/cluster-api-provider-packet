@@ -33,7 +33,7 @@ const (
 
 type Tool interface {
 	CalculatePercentage() float64
-	GetClusters() []*clusterv1.Cluster
+	GetClusters(context.Context) ([]*clusterv1.Cluster, error)
 	GetOutputFor(*clusterv1.Cluster) string
 	GetErrorFor(*clusterv1.Cluster) error
 	Run(context.Context)
@@ -132,7 +132,13 @@ func (m Model) View() string {
 		s += lipgloss.NewStyle().Foreground(errorColor).Render(fmt.Sprintf("Error: %s", m.err.Error())) + "\n"
 	}
 
-	clusters := m.Tool.GetClusters()
+	clusters, err := m.Tool.GetClusters(context.TODO())
+	if err != nil {
+		s += lipgloss.NewStyle().Foreground(errorColor).Render(fmt.Sprintf("Error: %s", err.Error())) + "\n"
+
+		return wordwrap.String(s, m.width)
+	}
+
 	for i := range clusters {
 		c := clusters[i]
 		outputKey := fmt.Sprintf("%s/%s", c.Namespace, c.Name)

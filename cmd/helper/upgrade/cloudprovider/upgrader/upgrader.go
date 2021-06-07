@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base"
@@ -34,22 +35,30 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	oldSecretName      = "packet-cloud-config"
+	newSecretName      = "metal-cloud-config" //nolint: gosec
+	oldDeploymentName  = "packet-cloud-controller-manager"
+	csiStatefulSetName = "csi-packet-controller"
+)
+
 type Upgrader struct {
-	base.Tool
+	*base.Tool
 	upgradeMutex  sync.Mutex
 	clusterStatus map[string]bool
 }
 
-var ErrMissingKubeConfig = errors.New("kubeconfig was nil")
+func New(ctx context.Context, config *base.ToolConfig) (*Upgrader, error) {
+	u := new(Upgrader)
+	u.Tool = new(base.Tool)
+	u.Configure(config)
+	u.upgradeMutex.Lock()
 
-func (u *Upgrader) Initialize(ctx context.Context, kubeconfig *string) error {
-	if err := u.Tool.Initialize(ctx, kubeconfig); err != nil {
-		return err
+	clusters, err := u.GetClusters(ctx)
+	if err != nil {
+		return u, err
 	}
 
-	// Initialize the cluster status
-	u.upgradeMutex.Lock()
-	clusters := u.GetClusters()
 	u.clusterStatus = make(map[string]bool, len(clusters))
 	u.upgradeMutex.Unlock()
 
@@ -57,10 +66,10 @@ func (u *Upgrader) Initialize(ctx context.Context, kubeconfig *string) error {
 		u.updateClusterStatus(c, false)
 	}
 
-	return nil
+	return u, nil
 }
 
-// TODO: update to better represent percentage by steps rather than by clusters
+// TODO: update to better represent percentage by steps rather than by clusters.
 func (u *Upgrader) CalculatePercentage() float64 {
 	u.upgradeMutex.Lock()
 	defer u.upgradeMutex.Unlock()
@@ -69,7 +78,12 @@ func (u *Upgrader) CalculatePercentage() float64 {
 		u.clusterStatus = make(map[string]bool)
 	}
 
-	totalClusters := len(u.GetClusters())
+	clusters, err := u.GetClusters(context.TODO())
+	if err != nil {
+		return float64(0)
+	}
+
+	totalClusters := len(clusters)
 	doneClusters := 0
 
 	for _, cluster := range u.clusterStatus {
@@ -92,7 +106,11 @@ func (u *Upgrader) CheckPrerequisites(ctx context.Context) error {
 func (u *Upgrader) Run(ctx context.Context) {
 	wg := new(sync.WaitGroup)
 
-	clusters := u.GetClusters()
+	clusters, err := u.GetClusters(ctx)
+	if err != nil {
+		return
+	}
+
 	for i := range clusters {
 		c := clusters[i]
 
@@ -249,12 +267,6 @@ func (u *Upgrader) patchOrCreateUnstructured(
 	obj *unstructured.Unstructured,
 ) error {
 	stdout := u.GetBufferFor(c)
-
-	workloadClient, err := u.GetWorkloadClient(ctx, c)
-	if err != nil {
-		return err
-	}
-
 	existing := obj.NewEmptyInstance()
 
 	existingKey, err := client.ObjectKeyFromObject(obj)
@@ -262,28 +274,16 @@ func (u *Upgrader) patchOrCreateUnstructured(
 		return err
 	}
 
-	if err := workloadClient.Get(ctx, existingKey, existing); err != nil {
+	if err := u.WorkloadGet(ctx, c, existingKey, existing); err != nil {
 		if apierrors.IsNotFound(err) {
-			if err := workloadClient.Create(ctx, obj); err != nil {
-				return err
-			}
-
-			fmt.Fprintf(stdout, "✅ %s %s/%s successfully created\n", obj.GetKind(), obj.GetNamespace(), obj.GetName())
-
-			return nil
+			return u.WorkloadCreate(ctx, c, obj)
 		}
 
 		return err
 	}
 
 	if !equality.Semantic.DeepDerivative(obj, existing) {
-		if err := workloadClient.Patch(ctx, obj, client.Merge); err != nil {
-			return err
-		}
-
-		fmt.Fprintf(stdout, "✅ %s %s/%s successfully updated\n", obj.GetKind(), obj.GetNamespace(), obj.GetName())
-
-		return nil
+		return u.WorkloadPatch(ctx, c, obj, client.Merge)
 	}
 
 	fmt.Fprintf(
@@ -299,21 +299,11 @@ func (u *Upgrader) patchOrCreateUnstructured(
 
 func (u *Upgrader) removeOldCCMSecret(ctx context.Context, c *clusterv1.Cluster) error {
 	stdout := u.GetBufferFor(c)
-
-	workloadClient, err := u.GetWorkloadClient(ctx, c)
-	if err != nil {
-		return err
-	}
-
-	ccmSecretKey := client.ObjectKey{Namespace: "kube-system", Name: "packet-cloud-config"}
+	ccmSecretKey := client.ObjectKey{Namespace: metav1.NamespaceSystem, Name: oldSecretName}
 	csiStatefulSet := new(appsv1.StatefulSet)
-	csiKey := client.ObjectKey{Namespace: "kube-system", Name: "csi-packet-controller"}
+	csiKey := client.ObjectKey{Namespace: metav1.NamespaceSystem, Name: csiStatefulSetName}
 
-	err = workloadClient.Get(
-		ctx,
-		csiKey,
-		csiStatefulSet,
-	)
+	err := u.WorkloadGet(ctx, c, csiKey, csiStatefulSet)
 
 	switch {
 	case err != nil && !apierrors.IsNotFound(err):
@@ -326,7 +316,7 @@ func (u *Upgrader) removeOldCCMSecret(ctx context.Context, c *clusterv1.Cluster)
 	}
 
 	ccmSecret := new(corev1.Secret)
-	if err := workloadClient.Get(ctx, ccmSecretKey, ccmSecret); err != nil {
+	if err := u.WorkloadGet(ctx, c, ccmSecretKey, ccmSecret); err != nil {
 		if apierrors.IsNotFound(err) {
 			fmt.Fprintf(stdout, "✔ Secret %s/%s already deleted\n", ccmSecretKey.Namespace, ccmSecretKey.Name)
 
@@ -336,31 +326,15 @@ func (u *Upgrader) removeOldCCMSecret(ctx context.Context, c *clusterv1.Cluster)
 		return err
 	}
 
-	if err := workloadClient.Delete(ctx, ccmSecret); err != nil {
-		return err
-	}
-
-	fmt.Fprintf(stdout, "✅ Secret %s/%s successfully deleted\n", ccmSecretKey.Namespace, ccmSecretKey.Name)
-
-	return nil
+	return u.WorkloadDelete(ctx, c, ccmSecret)
 }
 
 func (u *Upgrader) removeCCMDeployment(ctx context.Context, c *clusterv1.Cluster) error {
 	stdout := u.GetBufferFor(c)
-
-	workloadClient, err := u.GetWorkloadClient(ctx, c)
-	if err != nil {
-		return err
-	}
-
 	ccmDeployment := new(appsv1.Deployment)
-	ccmKey := client.ObjectKey{Namespace: "kube-system", Name: "packet-cloud-controller-manager"}
+	ccmKey := client.ObjectKey{Namespace: metav1.NamespaceSystem, Name: oldDeploymentName}
 
-	if err := workloadClient.Get(
-		ctx,
-		ccmKey,
-		ccmDeployment,
-	); err != nil {
+	if err := u.WorkloadGet(ctx, c, ccmKey, ccmDeployment); err != nil {
 		if apierrors.IsNotFound(err) {
 			fmt.Fprintf(stdout, "✔ Deployment %s/%s already deleted\n", ccmKey.Namespace, ccmKey.Name)
 
@@ -370,27 +344,15 @@ func (u *Upgrader) removeCCMDeployment(ctx context.Context, c *clusterv1.Cluster
 		return err
 	}
 
-	if err := workloadClient.Delete(ctx, ccmDeployment); err != nil {
-		return err
-	}
-
-	fmt.Fprintf(stdout, "✅ Deployment %s/%s successfully deleted\n", ccmKey.Namespace, ccmKey.Name)
-
-	return nil
+	return u.WorkloadDelete(ctx, c, ccmDeployment)
 }
 
 func (u *Upgrader) migrateSecret(ctx context.Context, c *clusterv1.Cluster) error {
 	stdout := u.GetBufferFor(c)
-
-	workloadClient, err := u.GetWorkloadClient(ctx, c)
-	if err != nil {
-		return err
-	}
-
 	// Check to see if the CPEM secret already exists
 	cpemSecret := new(corev1.Secret)
-	cpemSecretKey := client.ObjectKey{Namespace: "kube-system", Name: "metal-cloud-config"}
-	err = workloadClient.Get(ctx, cpemSecretKey, cpemSecret)
+	cpemSecretKey := client.ObjectKey{Namespace: metav1.NamespaceSystem, Name: newSecretName}
+	err := u.WorkloadGet(ctx, c, cpemSecretKey, cpemSecret)
 
 	switch {
 	case err != nil && !apierrors.IsNotFound(err):
@@ -404,9 +366,9 @@ func (u *Upgrader) migrateSecret(ctx context.Context, c *clusterv1.Cluster) erro
 
 	// Fetch the old CCM secret
 	ccmSecret := new(corev1.Secret)
-	ccmSecretKey := client.ObjectKey{Namespace: "kube-system", Name: "packet-cloud-config"}
+	ccmSecretKey := client.ObjectKey{Namespace: metav1.NamespaceSystem, Name: oldSecretName}
 
-	if err := workloadClient.Get(ctx, ccmSecretKey, ccmSecret); err != nil {
+	if err := u.WorkloadGet(ctx, c, ccmSecretKey, ccmSecret); err != nil {
 		if apierrors.IsNotFound(err) {
 			return fmt.Errorf("secret %s/%s not found", ccmSecretKey.Namespace, ccmSecretKey.Name)
 		}
@@ -419,13 +381,7 @@ func (u *Upgrader) migrateSecret(ctx context.Context, c *clusterv1.Cluster) erro
 	newSecret.SetName(cpemSecretKey.Name)
 	newSecret.Data = ccmSecret.Data
 
-	if err := workloadClient.Create(ctx, newSecret); err != nil {
-		return err
-	}
-
-	fmt.Fprintf(stdout, "✅ Secret %s/%s has been successfully created\n", newSecret.Namespace, newSecret.Name)
-
-	return nil
+	return u.WorkloadCreate(ctx, c, newSecret)
 }
 
 func (u *Upgrader) updateClusterStatus(c *clusterv1.Cluster, done bool) {
@@ -436,5 +392,5 @@ func (u *Upgrader) updateClusterStatus(c *clusterv1.Cluster, done bool) {
 		u.clusterStatus = make(map[string]bool)
 	}
 
-	u.clusterStatus[base.ClusterToKey(c)] = done
+	u.clusterStatus[base.ObjectToName(c)] = done
 }

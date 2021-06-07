@@ -16,24 +16,44 @@ package base
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"sync"
 
-	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/util"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/controllers/remote"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-func ClusterToKey(c *clusterv1.Cluster) string {
-	return fmt.Sprintf("%s/%s", c.Name, c.Namespace)
+func ObjectToName(obj controllerutil.Object) string {
+	if obj.GetNamespace() != "" {
+		return fmt.Sprintf("%s/%s", obj.GetNamespace(), obj.GetName())
+	}
+
+	return obj.GetName()
+}
+
+type ToolConfig struct {
+	Kubeconfig           string
+	RestConfig           *rest.Config
+	Context              string
+	TargetNamespace      string
+	WatchingNamespace    string
+	WorkloadClientGetter remote.ClusterClientGetter
+	DryRun               bool
 }
 
 type Tool struct {
-	kubeconfig      string
-	MgmtClient      client.Client
+	mgmtClient      client.Client
+	scheme          *runtime.Scheme
+	config          *ToolConfig
 	baseMutex       sync.Mutex
 	clusters        []*clusterv1.Cluster
 	workloadClients map[string]client.Client
@@ -42,35 +62,160 @@ type Tool struct {
 	outputContents  map[string]string
 }
 
-var ErrMissingKubeConfig = errors.New("kubeconfig was nil")
-
-func (t *Tool) GetClusters() []*clusterv1.Cluster {
-	t.baseMutex.Lock()
-	defer t.baseMutex.Unlock()
-
-	return t.clusters
+func (t *Tool) WatchingNamespace() string {
+	return t.config.WatchingNamespace
 }
 
-func (t *Tool) Initialize(ctx context.Context, kubeconfig *string) error {
+func (t *Tool) TargetNamespace() string {
+	return t.config.TargetNamespace
+}
+
+func (t *Tool) DryRun() bool {
+	return t.config.DryRun
+}
+
+func (t *Tool) WorkloadPatch(
+	ctx context.Context,
+	c *clusterv1.Cluster,
+	obj controllerutil.Object,
+	patch client.Patch,
+) error {
+	var opts []client.PatchOption
+	if t.DryRun() {
+		opts = append(opts, client.DryRunAll)
+	}
+
+	workloadClient, err := t.getWorkloadClient(ctx, c)
+	if err != nil {
+		return err
+	}
+
+	if err := workloadClient.Patch(ctx, obj, patch, opts...); err != nil {
+		return err
+	}
+
+	gvk, err := apiutil.GVKForObject(obj, t.scheme)
+	if err != nil {
+		return err
+	}
+
+	if t.DryRun() {
+		// TODO: show diff
+		fmt.Fprintf(t.GetBufferFor(c), "(Dry Run) Would patch %s %s\n", gvk.Kind, ObjectToName(obj))
+
+		return nil
+	}
+
+	fmt.Fprintf(t.GetBufferFor(c), "✅ %s %s has been successfully patched\n", gvk.Kind, ObjectToName(obj))
+
+	return nil
+}
+
+func (t *Tool) WorkloadCreate(ctx context.Context, c *clusterv1.Cluster, obj controllerutil.Object) error {
+	var opts []client.CreateOption
+	if t.DryRun() {
+		opts = append(opts, client.DryRunAll)
+	}
+
+	workloadClient, err := t.getWorkloadClient(ctx, c)
+	if err != nil {
+		return err
+	}
+
+	if err := workloadClient.Create(ctx, obj, opts...); err != nil {
+		return err
+	}
+
+	gvk, err := apiutil.GVKForObject(obj, t.scheme)
+	if err != nil {
+		return err
+	}
+
+	if t.DryRun() {
+		fmt.Fprintf(t.GetBufferFor(c), "(Dry Run) Would create %s %s\n", gvk.Kind, ObjectToName(obj))
+
+		return nil
+	}
+
+	fmt.Fprintf(t.GetBufferFor(c), "✅ %s %s has been successfully created\n", gvk.Kind, ObjectToName(obj))
+
+	return nil
+}
+
+func (t *Tool) WorkloadDelete(ctx context.Context, c *clusterv1.Cluster, obj controllerutil.Object) error {
+	var opts []client.DeleteOption
+	if t.DryRun() {
+		opts = append(opts, client.DryRunAll)
+	}
+
+	workloadClient, err := t.getWorkloadClient(ctx, c)
+	if err != nil {
+		return err
+	}
+
+	if err := workloadClient.Delete(ctx, obj, opts...); err != nil {
+		return err
+	}
+
+	gvk, err := apiutil.GVKForObject(obj, t.scheme)
+	if err != nil {
+		return err
+	}
+
+	if t.DryRun() {
+		fmt.Fprintf(t.GetBufferFor(c), "(Dry Run) Would delete %s %s\n", gvk.Kind, ObjectToName(obj))
+
+		return nil
+	}
+
+	fmt.Fprintf(t.GetBufferFor(c), "✅ %s %s has been successfully deleted\n", gvk.Kind, ObjectToName(obj))
+
+	return nil
+}
+
+func (t *Tool) WorkloadGet(ctx context.Context, c *clusterv1.Cluster, key client.ObjectKey, obj runtime.Object) error {
+	workloadClient, err := t.getWorkloadClient(ctx, c)
+	if err != nil {
+		return err
+	}
+
+	return workloadClient.Get(ctx, key, obj)
+}
+
+func (t *Tool) WorkloadList(ctx context.Context, c *clusterv1.Cluster, obj runtime.Object) error {
+	workloadClient, err := t.getWorkloadClient(ctx, c)
+	if err != nil {
+		return err
+	}
+
+	return workloadClient.List(ctx, obj)
+}
+
+func (t *Tool) ManagementGet(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+	mgmtClient, err := t.ManagementClient()
+	if err != nil {
+		return err
+	}
+
+	return mgmtClient.Get(ctx, key, obj)
+}
+
+func (t *Tool) GetClusters(ctx context.Context) ([]*clusterv1.Cluster, error) {
+	mgmtClient, err := t.ManagementClient()
+	if err != nil {
+		return nil, err
+	}
+
 	t.baseMutex.Lock()
 	defer t.baseMutex.Unlock()
 
-	if kubeconfig == nil {
-		return ErrMissingKubeConfig
+	if t.clusters != nil {
+		return t.clusters, nil
 	}
-
-	t.kubeconfig = *kubeconfig
-
-	mgmtClient, err := util.GetManagementClient(*kubeconfig)
-	if err != nil {
-		return fmt.Errorf("failed to create management cluster client: %w", err)
-	}
-
-	t.MgmtClient = mgmtClient
 
 	clusterList := new(clusterv1.ClusterList)
-	if err := mgmtClient.List(ctx, clusterList); err != nil {
-		return fmt.Errorf("failed to list workload clusters in management cluster: %w", err)
+	if err := mgmtClient.List(ctx, clusterList, client.InNamespace(t.WatchingNamespace())); err != nil {
+		return nil, fmt.Errorf("failed to list workload clusters in management cluster: %w", err)
 	}
 
 	size := len(clusterList.Items)
@@ -82,12 +227,66 @@ func (t *Tool) Initialize(ctx context.Context, kubeconfig *string) error {
 	}
 
 	t.clusters = clusters
-	t.workloadClients = make(map[string]client.Client, size)
-	t.errors = make(map[string]error, size)
-	t.outputBuffers = make(map[string]*bytes.Buffer, size)
-	t.outputContents = make(map[string]string, size)
 
-	return nil
+	return t.clusters, nil
+}
+
+func (t *Tool) ManagementClient() (client.Client, error) {
+	t.baseMutex.Lock()
+	defer t.baseMutex.Unlock()
+
+	if t.scheme == nil {
+		t.scheme = runtime.NewScheme()
+
+		if err := scheme.AddToScheme(t.scheme); err != nil {
+			return nil, fmt.Errorf("failed to add clientgo scheme: %w", err)
+		}
+
+		if err := apiextensionsv1.AddToScheme(t.scheme); err != nil {
+			return nil, fmt.Errorf("failed to add apiextensions scheme: %w", err)
+		}
+
+		if err := clusterv1.AddToScheme(t.scheme); err != nil {
+			return nil, fmt.Errorf("failed to add cluster-api scheme: %w", err)
+		}
+	}
+
+	if t.mgmtClient != nil {
+		return t.mgmtClient, nil
+	}
+
+	if t.config.RestConfig == nil {
+		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+		loadingRules.ExplicitPath = t.config.Kubeconfig
+
+		configOverrides := &clientcmd.ConfigOverrides{ //nolint:exhaustivestruct
+			CurrentContext: t.config.Context,
+		}
+		kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+
+		config, err := kubeConfig.ClientConfig()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create client configuration for management cluster: %w", err)
+		}
+
+		t.config.RestConfig = config
+	}
+
+	c, err := client.New(t.config.RestConfig, client.Options{Scheme: t.scheme}) //nolint:exhaustivestruct
+	if err != nil {
+		return nil, fmt.Errorf("failed to create managmement cluster client: %w", err)
+	}
+
+	t.mgmtClient = c
+
+	return c, nil
+}
+
+func (t *Tool) Configure(toolConfig *ToolConfig) {
+	t.baseMutex.Lock()
+	defer t.baseMutex.Unlock()
+
+	t.config = toolConfig
 }
 
 func (t *Tool) HasError(c *clusterv1.Cluster) bool {
@@ -102,7 +301,7 @@ func (t *Tool) GetErrorFor(c *clusterv1.Cluster) error {
 		return nil
 	}
 
-	return t.errors[ClusterToKey(c)]
+	return t.errors[ObjectToName(c)]
 }
 
 func (t *Tool) GetOutputFor(c *clusterv1.Cluster) string {
@@ -111,7 +310,11 @@ func (t *Tool) GetOutputFor(c *clusterv1.Cluster) string {
 
 	t.flushBuffers()
 
-	return t.outputContents[ClusterToKey(c)]
+	if t.outputContents == nil {
+		return ""
+	}
+
+	return t.outputContents[ObjectToName(c)]
 }
 
 func (t *Tool) AddErrorFor(c *clusterv1.Cluster, err error) {
@@ -122,7 +325,7 @@ func (t *Tool) AddErrorFor(c *clusterv1.Cluster, err error) {
 		t.errors = make(map[string]error)
 	}
 
-	t.errors[ClusterToKey(c)] = err
+	t.errors[ObjectToName(c)] = err
 }
 
 func (t *Tool) GetBufferFor(c *clusterv1.Cluster) *bytes.Buffer {
@@ -133,7 +336,7 @@ func (t *Tool) GetBufferFor(c *clusterv1.Cluster) *bytes.Buffer {
 		t.outputBuffers = make(map[string]*bytes.Buffer)
 	}
 
-	key := ClusterToKey(c)
+	key := ObjectToName(c)
 
 	if t.outputBuffers[key] == nil {
 		t.outputBuffers[key] = new(bytes.Buffer)
@@ -161,10 +364,12 @@ func (t *Tool) flushBuffers() {
 	}
 }
 
-func (t *Tool) GetWorkloadClient(
-	ctx context.Context,
-	cluster *clusterv1.Cluster,
-) (client.Client, error) {
+func (t *Tool) getWorkloadClient(ctx context.Context, cluster *clusterv1.Cluster) (client.Client, error) {
+	mgmtClient, err := t.ManagementClient()
+	if err != nil {
+		return nil, err
+	}
+
 	t.baseMutex.Lock()
 	defer t.baseMutex.Unlock()
 
@@ -172,7 +377,7 @@ func (t *Tool) GetWorkloadClient(
 		t.workloadClients = make(map[string]client.Client)
 	}
 
-	key := ClusterToKey(cluster)
+	key := ObjectToName(cluster)
 
 	if _, ok := t.workloadClients[key]; !ok {
 		clusterKey, err := client.ObjectKeyFromObject(cluster)
@@ -180,7 +385,11 @@ func (t *Tool) GetWorkloadClient(
 			return nil, fmt.Errorf("failed to create object key: %w", err)
 		}
 
-		workloadClient, err := remote.NewClusterClient(ctx, t.MgmtClient, clusterKey, nil)
+		if t.config.WorkloadClientGetter == nil {
+			t.config.WorkloadClientGetter = remote.NewClusterClient
+		}
+
+		workloadClient, err := t.config.WorkloadClientGetter(ctx, mgmtClient, clusterKey, scheme.Scheme)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create client: %w", err)
 		}

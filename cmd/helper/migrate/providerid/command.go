@@ -19,12 +19,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/migrate/providerid/migrator"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/ui"
 )
 
 type Command struct {
-	KubeConfig *string
+	ToolConfig *base.ToolConfig
 }
 
 func (c *Command) Command() *cobra.Command {
@@ -38,9 +39,8 @@ func (c *Command) Command() *cobra.Command {
 }
 
 func (c *Command) RunE() error {
-	migrator := new(migrator.Migrator)
-
-	if err := migrator.Initialize(context.TODO(), c.KubeConfig); err != nil {
+	migrator, err := migrator.New(context.TODO(), c.ToolConfig)
+	if err != nil {
 		return fmt.Errorf("failed to initialize migration utility: %w", err)
 	}
 

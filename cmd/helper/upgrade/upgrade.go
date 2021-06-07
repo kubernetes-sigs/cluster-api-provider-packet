@@ -15,11 +15,12 @@ package upgrade
 
 import (
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/upgrade/cloudprovider"
 )
 
 type Command struct {
-	KubeConfig *string
+	ToolConfig *base.ToolConfig
 }
 
 func (c *Command) Command() *cobra.Command {
@@ -31,7 +32,7 @@ func (c *Command) Command() *cobra.Command {
 		},
 	}
 
-	upgradeCmd.AddCommand((&cloudprovider.Command{KubeConfig: c.KubeConfig}).Command())
+	upgradeCmd.AddCommand((&cloudprovider.Command{ToolConfig: c.ToolConfig}).Command())
 
 	return upgradeCmd
 }

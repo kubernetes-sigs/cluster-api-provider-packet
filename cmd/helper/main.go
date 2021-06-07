@@ -19,7 +19,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/migrate"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/upgrade"
 )
@@ -27,7 +29,7 @@ import (
 func main() {
 	rand.Seed(time.Now().UTC().UnixNano())
 
-	var kubeconfig string
+	config := new(base.ToolConfig)
 
 	rootCmd := &cobra.Command{ //nolint:exhaustivestruct
 		Use:          "capp-helper",
@@ -38,10 +40,18 @@ func main() {
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVar(&kubeconfig, "kubeconfig", "",
+	rootCmd.PersistentFlags().StringVar(&config.Kubeconfig, "kubeconfig", "",
 		"Path to the kubeconfig for the management cluster. If unspecified, default discovery rules apply.")
-	rootCmd.AddCommand((&migrate.Command{KubeConfig: &kubeconfig}).Command())
-	rootCmd.AddCommand((&upgrade.Command{KubeConfig: &kubeconfig}).Command())
+	rootCmd.PersistentFlags().StringVar(&config.Context, "kubeconfig-context", "",
+		"Context to be used within the kubeconfig file. If empty, current context will be used.")
+	rootCmd.PersistentFlags().StringVar(&config.TargetNamespace, "target-namespace", "cluster-api-provider-packet-system",
+		"The namespace where cluster-api-provider-packet is deployed.")
+	rootCmd.PersistentFlags().StringVar(&config.WatchingNamespace, "watching-namespace", metav1.NamespaceAll,
+		"The namespace where cluster-api-provider-packet is deployed.")
+	rootCmd.PersistentFlags().BoolVar(&config.DryRun, "dry-run", false, "Dry run.")
+
+	rootCmd.AddCommand((&migrate.Command{ToolConfig: config}).Command())
+	rootCmd.AddCommand((&upgrade.Command{ToolConfig: config}).Command())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

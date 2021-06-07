@@ -25,6 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
@@ -32,8 +33,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	oldProviderIDPrefix = "packet://"
+	newProviderIDPrefix = "equinixmetal://"
+)
+
 type Migrator struct {
-	base.Tool
+	*base.Tool
 	mu         sync.Mutex
 	nodeStatus map[string]map[string]bool
 }
@@ -48,37 +54,47 @@ var (
 		"clusterctl upgrade apply --management-group capi-system/cluster-api --contract v1alpha3")
 )
 
-func (m *Migrator) Initialize(ctx context.Context, kubeconfig *string) error {
-	if err := m.Tool.Initialize(ctx, kubeconfig); err != nil {
-		return err
-	}
+func New(ctx context.Context, config *base.ToolConfig) (*Migrator, error) {
+	m := new(Migrator)
+	m.Tool = new(base.Tool)
+	m.Configure(config)
 
 	// Initialize the node status
 	m.mu.Lock()
-	clusters := m.GetClusters()
+
+	clusters, err := m.GetClusters(ctx)
+	if err != nil {
+		return m, err
+	}
+
 	m.nodeStatus = make(map[string]map[string]bool, len(clusters))
+
 	m.mu.Unlock()
 
 	for _, c := range clusters {
-		nodes, err := m.getNodes(ctx, c)
-		if err != nil {
+		nodeList := new(corev1.NodeList)
+		if err := m.WorkloadList(ctx, c, nodeList); err != nil {
 			m.AddErrorFor(c, err)
 
 			continue
 		}
 
-		for i := range nodes.Items {
-			m.updateNodeStatus(c, &nodes.Items[i], false)
+		for i := range nodeList.Items {
+			m.updateNodeStatus(c, &nodeList.Items[i], false)
 		}
 	}
 
-	return nil
+	return m, nil
 }
 
 func (m *Migrator) CheckPrerequisites(ctx context.Context) error {
 	wg := new(sync.WaitGroup)
 
-	clusters := m.GetClusters()
+	clusters, err := m.GetClusters(ctx)
+	if err != nil {
+		return err
+	}
+
 	for i := range clusters {
 		c := clusters[i]
 
@@ -96,10 +112,10 @@ func (m *Migrator) CheckPrerequisites(ctx context.Context) error {
 	wg.Wait()
 
 	cappDeployment := new(appsv1.Deployment)
-	if err := m.MgmtClient.Get(
+	if err := m.ManagementGet(
 		ctx,
 		client.ObjectKey{
-			Namespace: "cluster-api-provider-packet-system",
+			Namespace: m.TargetNamespace(),
 			Name:      "cluster-api-provider-packet-controller-manager",
 		},
 		cappDeployment,
@@ -147,15 +163,11 @@ func (m *Migrator) validateCloudProviderForCluster(ctx context.Context, c *clust
 		return nil
 	}
 
-	workloadClient, err := m.GetWorkloadClient(ctx, c)
-	if err != nil {
-		return err
-	}
-
 	packetCCMDeployment := new(appsv1.Deployment)
-	if err := workloadClient.Get(
+	if err := m.WorkloadGet(
 		ctx,
-		client.ObjectKey{Namespace: "kube-system", Name: "packet-cloud-controller-manager"},
+		c,
+		client.ObjectKey{Namespace: metav1.NamespaceSystem, Name: "packet-cloud-controller-manager"},
 		packetCCMDeployment,
 	); err != nil {
 		if !apierrors.IsNotFound(err) {
@@ -170,9 +182,10 @@ func (m *Migrator) validateCloudProviderForCluster(ctx context.Context, c *clust
 	}
 
 	cpemDeployment := new(appsv1.Deployment)
-	if err := workloadClient.Get(
+	if err := m.WorkloadGet(
 		ctx,
-		client.ObjectKey{Namespace: "kube-system", Name: "cloud-provider-equinix-metal"},
+		c,
+		client.ObjectKey{Namespace: metav1.NamespaceSystem, Name: "cloud-provider-equinix-metal"},
 		cpemDeployment,
 	); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -206,8 +219,13 @@ func (m *Migrator) CalculatePercentage() float64 {
 
 	var totalNodes, doneNodes int
 
-	for _, c := range m.GetClusters() {
-		clusterKey := base.ClusterToKey(c)
+	clusters, err := m.GetClusters(context.TODO())
+	if err != nil {
+		return float64(0)
+	}
+
+	for _, c := range clusters {
+		clusterKey := base.ObjectToName(c)
 
 		if m.nodeStatus[clusterKey] == nil {
 			m.nodeStatus[clusterKey] = make(map[string]bool)
@@ -232,7 +250,11 @@ func (m *Migrator) CalculatePercentage() float64 {
 func (m *Migrator) Run(ctx context.Context) {
 	wg := new(sync.WaitGroup)
 
-	clusters := m.GetClusters()
+	clusters, err := m.GetClusters(ctx)
+	if err != nil {
+		return
+	}
+
 	for i := range clusters {
 		c := clusters[i]
 
@@ -256,7 +278,7 @@ func (m *Migrator) updateNodeStatus(c *clusterv1.Cluster, n *corev1.Node, done b
 		m.nodeStatus = make(map[string]map[string]bool)
 	}
 
-	clusterKey := base.ClusterToKey(c)
+	clusterKey := base.ObjectToName(c)
 
 	if m.nodeStatus[clusterKey] == nil {
 		m.nodeStatus[clusterKey] = make(map[string]bool)
@@ -265,35 +287,15 @@ func (m *Migrator) updateNodeStatus(c *clusterv1.Cluster, n *corev1.Node, done b
 	m.nodeStatus[clusterKey][n.Name] = done
 }
 
-func (m *Migrator) getNodes(
-	ctx context.Context,
-	cluster *clusterv1.Cluster,
-) (*corev1.NodeList, error) {
-	workloadClient, err := m.GetWorkloadClient(ctx, cluster)
-	if err != nil {
-		return nil, err
-	}
-
-	nodeList := new(corev1.NodeList)
-	if err := workloadClient.List(ctx, nodeList); err != nil {
-		return nil, fmt.Errorf("failed to list nodes: %w", err)
-	}
-
-	return nodeList, nil
-}
-
-func (m *Migrator) migrateWorkloadCluster(
-	ctx context.Context,
-	cluster *clusterv1.Cluster,
-) {
+func (m *Migrator) migrateWorkloadCluster(ctx context.Context, c *clusterv1.Cluster) {
 	// Return early if cluster has already hit an error
-	if m.HasError(cluster) {
+	if m.HasError(c) {
 		return
 	}
 
-	nodeList, err := m.getNodes(ctx, cluster)
-	if err != nil {
-		m.AddErrorFor(cluster, fmt.Errorf("failed to list nodes: %w", err))
+	nodeList := new(corev1.NodeList)
+	if err := m.WorkloadList(ctx, c, nodeList); err != nil {
+		m.AddErrorFor(c, fmt.Errorf("failed to list nodes: %w", err))
 
 		return
 	}
@@ -302,38 +304,28 @@ func (m *Migrator) migrateWorkloadCluster(
 		// TODO: should this stop at first error, or attempt to continue?
 		// TODO: should probably give some additional safety to users since this will be
 		// deleting and re-creating Node resources
-		if err := m.migrateNode(ctx, n, cluster); err != nil {
-			m.AddErrorFor(cluster, err)
+		if err := m.migrateNode(ctx, &n, c); err != nil {
+			m.AddErrorFor(c, err)
 
 			return
 		}
 	}
 }
 
-func (m *Migrator) migrateNode(
-	ctx context.Context,
-	node corev1.Node,
-	cluster *clusterv1.Cluster,
-) error {
-	stdout := m.GetBufferFor(cluster)
-	if strings.HasPrefix(node.Spec.ProviderID, "equinixmetal") {
-		fmt.Fprintf(stdout, "✔ Node %s already has the updated providerID\n", node.Name)
-		m.updateNodeStatus(cluster, &node, true)
+func (m *Migrator) migrateNode(ctx context.Context, node *corev1.Node, c *clusterv1.Cluster) error {
+	if strings.HasPrefix(node.Spec.ProviderID, newProviderIDPrefix) {
+		fmt.Fprintf(m.GetBufferFor(c), "✔ Node %s already has the updated providerID\n", node.Name)
+		m.updateNodeStatus(c, node, true)
 
 		return nil
 	}
 
-	workloadClient, err := m.GetWorkloadClient(ctx, cluster)
-	if err != nil {
-		return err
-	}
-
-	if err := workloadClient.Delete(ctx, &node); err != nil {
+	if err := m.WorkloadDelete(ctx, c, node.DeepCopy()); err != nil {
 		return fmt.Errorf("failed to delete existing node resource: %w", err)
 	}
 
 	node.SetResourceVersion("")
-	node.Spec.ProviderID = strings.Replace(node.Spec.ProviderID, "packet", "equinixmetal", 1)
+	node.Spec.ProviderID = strings.Replace(node.Spec.ProviderID, oldProviderIDPrefix, newProviderIDPrefix, 1)
 
 	if err := retry.OnError(
 		retry.DefaultRetry,
@@ -341,15 +333,25 @@ func (m *Migrator) migrateNode(
 			return true
 		},
 		func() error {
-			return workloadClient.Create(ctx, &node) //nolint:wrapcheck
+			if err := m.WorkloadCreate(ctx, c, node); err != nil {
+				if m.DryRun() && apierrors.IsAlreadyExists(err) {
+					// add dry run success output here since Create will fail with an already exists error during dry run
+					fmt.Fprintf(m.GetBufferFor(c), "(Dry Run) Would create Node %s\n", base.ObjectToName(node))
+
+					return nil
+				}
+
+				return err //nolint:wrapcheck
+			}
+
+			return nil
 		},
 	); err != nil {
+		// TODO: give user actionable output/log to remediate
 		return fmt.Errorf("failed to create replacement node resource: %w", err)
 	}
 
-	fmt.Fprintf(stdout, "✅ Node %s has been successfully migrated\n", node.Name)
-
-	m.updateNodeStatus(cluster, &node, true)
+	m.updateNodeStatus(c, node, true)
 
 	return nil
 }

@@ -19,12 +19,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/ui"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/upgrade/cloudprovider/upgrader"
 )
 
 type Command struct {
-	KubeConfig *string
+	ToolConfig *base.ToolConfig
 }
 
 func (c *Command) Command() *cobra.Command {
@@ -38,9 +39,8 @@ func (c *Command) Command() *cobra.Command {
 }
 
 func (c *Command) RunE() error {
-	upgrader := new(upgrader.Upgrader)
-
-	if err := upgrader.Initialize(context.TODO(), c.KubeConfig); err != nil {
+	upgrader, err := upgrader.New(context.TODO(), c.ToolConfig)
+	if err != nil {
 		return fmt.Errorf("failed to initialize upgrade utility: %w", err)
 	}
 
