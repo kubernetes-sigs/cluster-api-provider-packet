@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/migrate"
@@ -44,10 +43,10 @@ func main() {
 		"Path to the kubeconfig for the management cluster. If unspecified, default discovery rules apply.")
 	rootCmd.PersistentFlags().StringVar(&config.Context, "kubeconfig-context", "",
 		"Context to be used within the kubeconfig file. If empty, current context will be used.")
-	rootCmd.PersistentFlags().StringVar(&config.TargetNamespace, "target-namespace", "cluster-api-provider-packet-system",
+	rootCmd.PersistentFlags().StringVar(&config.TargetNamespace, "target-namespace", base.DefaultTargetNamespace,
 		"The namespace where cluster-api-provider-packet is deployed.")
-	rootCmd.PersistentFlags().StringVar(&config.WatchingNamespace, "watching-namespace", metav1.NamespaceAll,
-		"The namespace where cluster-api-provider-packet is deployed.")
+	rootCmd.PersistentFlags().StringVar(&config.WatchingNamespace, "watching-namespace", base.DefaultWatchingNamespace,
+		"The namespace that the packet provider is configured to watch.")
 	rootCmd.PersistentFlags().BoolVar(&config.DryRun, "dry-run", false, "Dry run.")
 
 	rootCmd.AddCommand((&migrate.Command{ToolConfig: config}).Command())

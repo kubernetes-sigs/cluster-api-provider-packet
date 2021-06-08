@@ -46,7 +46,14 @@ const (
 type Upgrader struct {
 	*base.Tool
 	upgradeMutex  sync.Mutex
-	clusterStatus map[string]bool
+	steps         []step
+	clusters      []*clusterv1.Cluster
+	clusterStatus map[string]map[string]bool
+}
+
+type step struct {
+	name   string
+	method func(context.Context, *clusterv1.Cluster) error
 }
 
 func New(ctx context.Context, config *base.ToolConfig) (*Upgrader, error) {
@@ -54,50 +61,70 @@ func New(ctx context.Context, config *base.ToolConfig) (*Upgrader, error) {
 	u.Tool = new(base.Tool)
 	u.Configure(config)
 	u.upgradeMutex.Lock()
+	defer u.upgradeMutex.Unlock()
+
+	u.steps = []step{
+		{
+			name:   "Migrate Credentials Secret",
+			method: u.migrateSecret,
+		},
+		{
+			name:   "Remove Deprecated packet-cloud-controller-manager",
+			method: u.removeCCMDeployment,
+		},
+		{
+			name:   "Remove Old Credentials Secret",
+			method: u.removeOldCCMSecret,
+		},
+		{
+			name:   "Install cloud-provider-equinix-metal",
+			method: u.installCPEM,
+		},
+	}
 
 	clusters, err := u.GetClusters(ctx)
 	if err != nil {
 		return u, err
 	}
 
-	u.clusterStatus = make(map[string]bool, len(clusters))
-	u.upgradeMutex.Unlock()
+	u.clusterStatus = make(map[string]map[string]bool, len(clusters))
 
 	for _, c := range clusters {
-		u.updateClusterStatus(c, false)
+		clusterKey := base.ObjectToName(c)
+
+		if u.clusterStatus[clusterKey] == nil {
+			u.clusterStatus[clusterKey] = make(map[string]bool, len(u.steps))
+		}
 	}
 
 	return u, nil
 }
 
-// TODO: update to better represent percentage by steps rather than by clusters.
 func (u *Upgrader) CalculatePercentage() float64 {
 	u.upgradeMutex.Lock()
 	defer u.upgradeMutex.Unlock()
 
 	if u.clusterStatus == nil {
-		u.clusterStatus = make(map[string]bool)
+		u.clusterStatus = make(map[string]map[string]bool)
 	}
 
-	clusters, err := u.GetClusters(context.TODO())
-	if err != nil {
-		return float64(0)
-	}
+	totalClusters := len(u.clusterStatus)
+	totalSteps := totalClusters * len(u.steps)
+	doneSteps := 0
 
-	totalClusters := len(clusters)
-	doneClusters := 0
-
-	for _, cluster := range u.clusterStatus {
-		if cluster {
-			doneClusters++
+	for cKey := range u.clusterStatus {
+		for _, sDone := range u.clusterStatus[cKey] {
+			if sDone {
+				doneSteps++
+			}
 		}
 	}
 
-	if totalClusters == 0 {
+	if totalSteps == 0 {
 		return float64(0)
 	}
 
-	return float64(doneClusters) / float64(totalClusters)
+	return float64(doneSteps) / float64(totalSteps)
 }
 
 func (u *Upgrader) CheckPrerequisites(ctx context.Context) error {
@@ -107,13 +134,8 @@ func (u *Upgrader) CheckPrerequisites(ctx context.Context) error {
 func (u *Upgrader) Run(ctx context.Context) {
 	wg := new(sync.WaitGroup)
 
-	clusters, err := u.GetClusters(ctx)
-	if err != nil {
-		return
-	}
-
-	for i := range clusters {
-		c := clusters[i]
+	for i := range u.clusters {
+		c := u.clusters[i]
 
 		wg.Add(1)
 
@@ -136,28 +158,14 @@ func (u *Upgrader) upgradeCloudProviderForCluster(
 		return
 	}
 
-	if err := u.migrateSecret(ctx, c); err != nil {
-		u.AddErrorFor(c, err)
+	for _, s := range u.steps {
+		if err := s.method(ctx, c); err != nil {
+			u.AddErrorFor(c, err)
 
-		return
-	}
+			return
+		}
 
-	if err := u.removeCCMDeployment(ctx, c); err != nil {
-		u.AddErrorFor(c, err)
-
-		return
-	}
-
-	if err := u.removeOldCCMSecret(ctx, c); err != nil {
-		u.AddErrorFor(c, err)
-
-		return
-	}
-
-	if err := u.installCPEM(ctx, c); err != nil {
-		u.AddErrorFor(c, err)
-
-		return
+		u.updateStepStatus(c, s, true)
 	}
 }
 
@@ -385,13 +393,19 @@ func (u *Upgrader) migrateSecret(ctx context.Context, c *clusterv1.Cluster) erro
 	return u.WorkloadCreate(ctx, c, newSecret)
 }
 
-func (u *Upgrader) updateClusterStatus(c *clusterv1.Cluster, done bool) {
+func (u *Upgrader) updateStepStatus(c *clusterv1.Cluster, step step, done bool) {
 	u.upgradeMutex.Lock()
 	defer u.upgradeMutex.Unlock()
 
 	if u.clusterStatus == nil {
-		u.clusterStatus = make(map[string]bool)
+		u.clusterStatus = make(map[string]map[string]bool)
 	}
 
-	u.clusterStatus[base.ObjectToName(c)] = done
+	clusterKey := base.ObjectToName(c)
+
+	if u.clusterStatus[clusterKey] == nil {
+		u.clusterStatus[clusterKey] = make(map[string]bool, len(u.steps))
+	}
+
+	u.clusterStatus[clusterKey][step.name] = done
 }

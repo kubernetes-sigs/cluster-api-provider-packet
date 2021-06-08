@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -40,14 +41,21 @@ func ObjectToName(obj controllerutil.Object) string {
 	return obj.GetName()
 }
 
+const (
+	DefaultTargetNamespace   = "cluster-api-provider-packet-system"
+	DefaultWatchingNamespace = metav1.NamespaceAll
+)
+
 type ToolConfig struct {
-	Kubeconfig           string
+	Kubeconfig        string
+	Context           string
+	TargetNamespace   string
+	WatchingNamespace string
+	DryRun            bool
+
 	RestConfig           *rest.Config
-	Context              string
-	TargetNamespace      string
-	WatchingNamespace    string
+	MgmtClient           client.Client
 	WorkloadClientGetter remote.ClusterClientGetter
-	DryRun               bool
 }
 
 type Tool struct {
@@ -252,6 +260,11 @@ func (t *Tool) ManagementClient() (client.Client, error) {
 	}
 
 	if t.mgmtClient != nil {
+		return t.mgmtClient, nil
+	}
+
+	if t.config.MgmtClient != nil {
+		t.mgmtClient = t.config.MgmtClient
 		return t.mgmtClient, nil
 	}
 

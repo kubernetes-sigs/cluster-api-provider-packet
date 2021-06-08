@@ -25,6 +25,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/onsi/gomega"
 	gomegatypes "github.com/onsi/gomega/types"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,11 +35,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/diff"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base"
+	"k8s.io/client-go/rest"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	"sigs.k8s.io/cluster-api/controllers/remote"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake" // nolint:staticcheck
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
@@ -49,27 +53,39 @@ func RegisterSchemes() {
 	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
 }
 
-type MgmtEnv struct {
-	ToolConfig *base.ToolConfig
-	Tool       *base.Tool
-
-	env          *envtest.Environment
-	workloadEnvs map[types.NamespacedName]*envtest.Environment
+type FakeEnv struct {
+	workloadClients      map[client.ObjectKey]client.Client
+	WorkloadClientGetter remote.ClusterClientGetter
+	MgmtClient           client.Client
 }
 
-func (m *MgmtEnv) DryRun(dryRun bool) {
-	m.ToolConfig.DryRun = dryRun
+func NewFakeEnv(
+	ctx context.Context,
+	t *testing.T,
+	clusterObjs map[client.ObjectKey][]runtime.Object,
+	initObjs ...runtime.Object,
+) *FakeEnv {
+	t.Helper()
+
+	workloadClients := make(map[client.ObjectKey]client.Client, len(clusterObjs))
+	for key, objs := range clusterObjs {
+		workloadClients[key] = fake.NewFakeClient(objs...)
+	}
+
+	fakeEnv := &FakeEnv{ //nolint:exhaustivestruct
+		workloadClients: workloadClients,
+		MgmtClient:      fake.NewFakeClient(initObjs...),
+	}
+
+	fakeEnv.WorkloadClientGetter = fakeEnv.newWorkloadClusterGetter(t)
+
+	return fakeEnv
 }
 
-func (m *MgmtEnv) newWorkloadClusterGetter(
+func (e *FakeEnv) newWorkloadClusterGetter(
 	t *testing.T,
 ) func(context.Context, client.Client, types.NamespacedName, *runtime.Scheme) (client.Client, error) {
 	t.Helper()
-	t.Cleanup(func() {
-		for _, env := range m.workloadEnvs {
-			_ = env.Stop()
-		}
-	})
 
 	return func(
 		ctx context.Context,
@@ -77,62 +93,121 @@ func (m *MgmtEnv) newWorkloadClusterGetter(
 		cluster types.NamespacedName,
 		scheme *runtime.Scheme,
 	) (client.Client, error) {
-		if m.workloadEnvs[cluster] == nil {
-			env := new(envtest.Environment)
-			if _, err := env.Start(); err != nil {
-				return nil, err //nolint:wrapcheck
+		if e.workloadClients[cluster] == nil {
+			if scheme == nil {
+				e.workloadClients[cluster] = fake.NewFakeClient()
+			} else {
+				e.workloadClients[cluster] = fake.NewFakeClientWithScheme(scheme)
 			}
-
-			m.workloadEnvs[cluster] = env
 		}
 
-		return client.New(m.workloadEnvs[cluster].Config, client.Options{Scheme: scheme}) //nolint:exhaustivestruct,wrapcheck
+		return e.workloadClients[cluster], nil
 	}
 }
 
-func NewMgmtEnv(
+type TestEnv struct {
+	env                  *envtest.Environment
+	workloadEnvs         map[types.NamespacedName]*envtest.Environment
+	WorkloadClientGetter remote.ClusterClientGetter
+	RestConfig           *rest.Config
+	Client               client.Client
+}
+
+func NewTestEnv(
 	ctx context.Context,
 	t *testing.T,
-	toolConfig *base.ToolConfig,
+	clusterObjs map[client.ObjectKey][]runtime.Object,
 	initObjs ...runtime.Object,
-) *MgmtEnv {
+) *TestEnv {
 	t.Helper()
 	g := gomega.NewWithT(t)
 
-	testEnv := &MgmtEnv{
+	testEnv := &TestEnv{ //nolint:exhaustivestruct
 		env: &envtest.Environment{ //nolint:exhaustivestruct
 			CRDs: getClusterAPICRDs(ctx, t, "release-0.3"),
 		},
-		ToolConfig:   toolConfig,
-		Tool:         new(base.Tool),
 		workloadEnvs: make(map[types.NamespacedName]*envtest.Environment),
 	}
 
-	if toolConfig.WorkloadClientGetter == nil {
-		toolConfig.WorkloadClientGetter = testEnv.newWorkloadClusterGetter(t)
-	}
+	testEnv.WorkloadClientGetter = testEnv.newWorkloadClusterGetter(t)
 
-	if toolConfig.RestConfig == nil {
-		restConfig, err := testEnv.env.Start()
-		g.Expect(err).NotTo(gomega.HaveOccurred())
-
-		t.Cleanup(func() {
-			g.Expect(testEnv.env.Stop()).To(gomega.Succeed())
-		})
-
-		toolConfig.RestConfig = restConfig
-	}
-
-	testEnv.Tool.Configure(toolConfig)
-
-	c, err := testEnv.Tool.ManagementClient()
+	restConfig, err := testEnv.env.Start()
 	g.Expect(err).NotTo(gomega.HaveOccurred())
+
+	t.Cleanup(func() {
+		g.Expect(testEnv.env.Stop()).To(gomega.Succeed())
+	})
+
+	testEnv.RestConfig = restConfig
+
+	c, err := client.New(testEnv.RestConfig, client.Options{}) //nolint:exhaustivestruct
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
+	testEnv.Client = c
 
 	for _, obj := range initObjs {
 		g.Expect(c.Create(ctx, obj.DeepCopyObject())).To(gomega.Succeed())
 	}
 
+	for key, objs := range clusterObjs {
+		wc, err := testEnv.WorkloadClientGetter(ctx, c, key, nil)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+
+		for _, obj := range objs {
+			g.Expect(wc.Create(ctx, obj.DeepCopyObject())).To(gomega.Succeed())
+		}
+	}
+
 	return testEnv
+}
+
+func (e *TestEnv) AddWorkloadResources(
+	ctx context.Context,
+	t *testing.T,
+	cluster *clusterv1.Cluster,
+	objs ...runtime.Object,
+) {
+	t.Helper()
+	g := gomega.NewWithT(t)
+
+	clusterKey, err := client.ObjectKeyFromObject(cluster)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
+	wc, err := e.WorkloadClientGetter(ctx, e.Client, clusterKey, nil)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
+	for _, obj := range objs {
+		g.Expect(wc.Create(ctx, obj.DeepCopyObject())).To(gomega.Succeed())
+	}
+}
+
+func (e *TestEnv) newWorkloadClusterGetter(
+	t *testing.T,
+) func(context.Context, client.Client, types.NamespacedName, *runtime.Scheme) (client.Client, error) {
+	t.Helper()
+	g := gomega.NewWithT(t)
+
+	return func(
+		ctx context.Context,
+		_ client.Client,
+		cluster types.NamespacedName,
+		scheme *runtime.Scheme,
+	) (client.Client, error) {
+		if e.workloadEnvs[cluster] == nil {
+			env := new(envtest.Environment)
+			if _, err := env.Start(); err != nil {
+				return nil, err //nolint:wrapcheck
+			}
+
+			t.Cleanup(func() {
+				g.Expect(env.Stop()).To(gomega.Succeed())
+			})
+
+			e.workloadEnvs[cluster] = env
+		}
+
+		return client.New(e.workloadEnvs[cluster].Config, client.Options{Scheme: scheme}) //nolint:exhaustivestruct,wrapcheck
+	}
 }
 
 func getClusterAPICRDs(ctx context.Context, t *testing.T, branch string) []runtime.Object {
@@ -235,6 +310,71 @@ func GenerateCluster(namespace, name string) *clusterv1.Cluster {
 		ObjectMeta: metav1.ObjectMeta{ // nolint:exhaustivestruct
 			Namespace: namespace,
 			Name:      name,
+		},
+	}
+}
+
+func GenerateNode(name, providerID string) *corev1.Node {
+	if name == "" {
+		name = util.RandomString(generatedNameLength)
+	}
+
+	return &corev1.Node{ // nolint:exhaustivestruct
+		ObjectMeta: metav1.ObjectMeta{ // nolint:exhaustivestruct
+			Name: name,
+		},
+		Spec: corev1.NodeSpec{ // nolint:exhaustivestruct
+			ProviderID: providerID,
+		},
+	}
+}
+
+func GenerateDeployment(namespace, name, containerImage string) *appsv1.Deployment {
+	labels := map[string]string{"app": name}
+
+	return &appsv1.Deployment{ //nolint:exhaustivestruct
+		ObjectMeta: metav1.ObjectMeta{ //nolint:exhaustivestruct
+			Namespace: namespace,
+			Name:      name,
+		},
+		Spec: appsv1.DeploymentSpec{ //nolint:exhaustivestruct
+			Selector: &metav1.LabelSelector{MatchLabels: labels}, //nolint:exhaustivestruct
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: labels}, //nolint:exhaustivestruct
+				Spec: corev1.PodSpec{ //nolint:exhaustivestruct
+					Containers: []corev1.Container{
+						{
+							Name:  name,
+							Image: containerImage,
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func GenerateStatefulSet(namespace, name, containerImage string) *appsv1.StatefulSet {
+	labels := map[string]string{"app": name}
+
+	return &appsv1.StatefulSet{ //nolint:exhaustivestruct
+		ObjectMeta: metav1.ObjectMeta{ //nolint:exhaustivestruct
+			Namespace: namespace,
+			Name:      name,
+		},
+		Spec: appsv1.StatefulSetSpec{ //nolint:exhaustivestruct
+			Selector: &metav1.LabelSelector{MatchLabels: labels}, //nolint:exhaustivestruct
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: labels}, //nolint:exhaustivestruct
+				Spec: corev1.PodSpec{ //nolint:exhaustivestruct
+					Containers: []corev1.Container{
+						{
+							Name:  name,
+							Image: containerImage,
+						},
+					},
+				},
+			},
 		},
 	}
 }
