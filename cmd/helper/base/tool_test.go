@@ -210,6 +210,7 @@ func TestTool_TestGetClustersNone(t *testing.T) {
 	toolConfig := &base.ToolConfig{ //nolint:exhaustivestruct
 		MgmtClient:           fakeEnv.MgmtClient,
 		WorkloadClientGetter: fakeEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
 	}
 	tool := &base.Tool{}
 	tool.Configure(toolConfig)
@@ -242,6 +243,7 @@ func TestTool_TestGetClustersAll(t *testing.T) {
 	toolConfig := &base.ToolConfig{ //nolint:exhaustivestruct
 		MgmtClient:           fakeEnv.MgmtClient,
 		WorkloadClientGetter: fakeEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
 	}
 	tool := &base.Tool{}
 	tool.Configure(toolConfig)
@@ -288,6 +290,7 @@ func TestTool_TestGetClustersFiltered(t *testing.T) {
 		WatchingNamespace:    namespaceToFilterOn,
 		MgmtClient:           fakeEnv.MgmtClient,
 		WorkloadClientGetter: fakeEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
 	}
 	tool := &base.Tool{}
 	tool.Configure(toolConfig)
@@ -323,6 +326,7 @@ func TestTool_ManagementGet(t *testing.T) {
 	toolConfig := &base.ToolConfig{ //nolint:exhaustivestruct
 		MgmtClient:           fakeEnv.MgmtClient,
 		WorkloadClientGetter: fakeEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
 	}
 	tool := &base.Tool{}
 	tool.Configure(toolConfig)
@@ -488,6 +492,7 @@ func testLifecycleDry(ctx context.Context, t *testing.T, initial, patchInput con
 		DryRun:               true,
 		RestConfig:           testEnv.RestConfig,
 		WorkloadClientGetter: testEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
 	}
 	tool := &base.Tool{}
 	tool.Configure(toolConfig)
