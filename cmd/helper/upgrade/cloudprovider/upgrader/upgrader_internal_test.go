@@ -36,7 +36,6 @@ func TestUpgrader_removeCCMDeployment(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 	ctx := context.TODO()
-	// logger := klogr.New()
 	clusterWithoutCCM := testutils.GenerateCluster("", "withoutCCM")
 	clusterWithCCM := testutils.GenerateCluster("", "withCCM")
 	workloadResources := map[client.ObjectKey][]runtime.Object{
@@ -76,7 +75,6 @@ func TestUpgrader_removeCCMDeploymentDry(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 	ctx := context.TODO()
-	// logger := klogr.New()
 	cluster := testutils.GenerateCluster("", "")
 	oldDeployment := testutils.GenerateDeployment(metav1.NamespaceSystem, oldDeploymentName, "test")
 	workloadResources := map[client.ObjectKey][]runtime.Object{
@@ -112,8 +110,6 @@ func TestUpgrader_removeCCMSecret(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 	ctx := context.TODO()
-	// logger := klogr.New()
-
 	oldSecret := &corev1.Secret{ //nolint:exhaustivestruct
 		ObjectMeta: metav1.ObjectMeta{ //nolint:exhaustivestruct
 			Namespace: metav1.NamespaceSystem,
@@ -178,7 +174,6 @@ func TestUpgrader_removeOldCCMSecretDry(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 	ctx := context.TODO()
-	// logger := klogr.New()
 	cluster := testutils.GenerateCluster("", "")
 
 	oldSecret := &corev1.Secret{ //nolint:exhaustivestruct
@@ -224,7 +219,6 @@ func TestUpgrader_migrateSecret(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 	ctx := context.TODO()
-	// logger := klogr.New()
 	oldSecret := &corev1.Secret{ //nolint:exhaustivestruct
 		ObjectMeta: metav1.ObjectMeta{ //nolint:exhaustivestruct
 			Namespace: metav1.NamespaceSystem,
@@ -316,7 +310,6 @@ func TestUpgrader_migrateSecretDry(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 	ctx := context.TODO()
-	// logger := klogr.New()
 	cluster := testutils.GenerateCluster("", "")
 
 	oldSecret := &corev1.Secret{ //nolint:exhaustivestruct

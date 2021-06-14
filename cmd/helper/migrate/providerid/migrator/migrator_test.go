@@ -23,6 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/klog/v2/klogr"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base/testutils"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/migrate/providerid/migrator"
@@ -71,6 +72,7 @@ func TestMigrator_CheckPrerequisitesManagement(t *testing.T) {
 		MgmtClient:           fakeEnv.MgmtClient,
 		TargetNamespace:      mgmtNamespace,
 		WorkloadClientGetter: fakeEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
 	}
 	m, err := migrator.New(ctx, toolConfig)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -134,6 +136,7 @@ func TestMigrator_CalculatePercentage(t *testing.T) {
 	toolConfig := &base.ToolConfig{ //nolint:exhaustivestruct
 		MgmtClient:           fakeEnv.MgmtClient,
 		WorkloadClientGetter: fakeEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
 	}
 	m, err := migrator.New(ctx, toolConfig)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -173,6 +176,7 @@ func TestMigrator_MigrateNode(t *testing.T) {
 	toolConfig := &base.ToolConfig{ //nolint:exhaustivestruct
 		MgmtClient:           fakeEnv.MgmtClient,
 		WorkloadClientGetter: fakeEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
 	}
 	m, err := migrator.New(ctx, toolConfig)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -220,6 +224,7 @@ func TestMigrator_MigrateNodeDry(t *testing.T) {
 		DryRun:               true,
 		RestConfig:           testEnv.RestConfig,
 		WorkloadClientGetter: testEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
 	}
 	m, err := migrator.New(ctx, toolConfig)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -264,6 +269,7 @@ func TestMigrator_MigrateNodeAlreadyMigrated(t *testing.T) {
 	toolConfig := &base.ToolConfig{ //nolint:exhaustivestruct
 		MgmtClient:           fakeEnv.MgmtClient,
 		WorkloadClientGetter: fakeEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
 	}
 	m, err := migrator.New(ctx, toolConfig)
 	g.Expect(err).NotTo(HaveOccurred())
