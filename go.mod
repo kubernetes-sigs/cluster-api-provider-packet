@@ -11,6 +11,7 @@ require (
 	github.com/go-logr/logr v0.4.0
 	github.com/google/go-cmp v0.5.2
 	github.com/google/uuid v1.2.0
+	github.com/mattn/go-isatty v0.0.12
 	github.com/muesli/reflow v0.2.1-0.20210115123740-9e1d0d53df68
 	github.com/onsi/ginkgo v1.16.1
 	github.com/onsi/gomega v1.11.0
@@ -21,6 +22,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.17.17
 	k8s.io/apimachinery v0.17.17
 	k8s.io/client-go v0.17.17
+	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.8.0
 	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
 	sigs.k8s.io/cluster-api v0.3.16

@@ -22,6 +22,7 @@ import (
 
 	"github.com/blang/semver"
 	"github.com/docker/distribution/reference"
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -44,6 +45,7 @@ type Migrator struct {
 	clusters     []*clusterv1.Cluster
 	clusterNodes map[string][]*corev1.Node
 	nodeStatus   map[string]map[string]bool
+	logger       logr.Logger
 }
 
 const (
@@ -66,15 +68,18 @@ var (
 
 func New(ctx context.Context, config *base.ToolConfig) (*Migrator, error) {
 	m := new(Migrator)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.logger = config.Logger.WithName("MigrateNodeProviderID")
 	m.Tool = new(base.Tool)
 	m.Configure(config)
 
 	// Initialize the node status
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	clusters, err := m.GetClusters(ctx)
 	if err != nil {
+		m.logger.Error(err, "Failed to get clusters")
+
 		return m, err
 	}
 
@@ -84,9 +89,11 @@ func New(ctx context.Context, config *base.ToolConfig) (*Migrator, error) {
 
 	for _, c := range clusters {
 		clusterKey := base.ObjectToName(c)
+		logger := m.logger.WithValues("cluster", clusterKey)
 
 		nodeList := new(corev1.NodeList)
 		if err := m.WorkloadList(ctx, c, nodeList); err != nil {
+			logger.Error(err, "Failed to list Nodes")
 			m.AddErrorFor(c, err)
 
 			continue
@@ -101,6 +108,8 @@ func New(ctx context.Context, config *base.ToolConfig) (*Migrator, error) {
 }
 
 func (m *Migrator) CheckPrerequisites(ctx context.Context) error {
+	m.logger.Info("Checking Prerequisites")
+
 	cappDeployment := new(appsv1.Deployment)
 	if err := m.ManagementGet(
 		ctx,
@@ -114,15 +123,21 @@ func (m *Migrator) CheckPrerequisites(ctx context.Context) error {
 			return ErrMissingCAPPDeployment
 		}
 
+		m.logger.Error(err, "Failed to get CAPP Deployment")
+
 		return fmt.Errorf("failed to get CAPP deployment: %w", err)
 	}
 
 	ok, err := containerImageGTE(cappDeployment.Spec.Template.Spec.Containers[0], semver.MustParse(CAPPMinVersion))
 	if err != nil {
+		m.logger.Error(err, "Failed to compare container image")
+
 		return err
 	}
 
 	if !ok {
+		m.logger.Error(ErrCAPPTooOld, "CAPP needs to be upgraded prior to running this tool")
+
 		return ErrCAPPTooOld
 	}
 
@@ -138,6 +153,12 @@ func (m *Migrator) CheckPrerequisites(ctx context.Context) error {
 
 			// These errors are non-blocking but will prevent further processing of the cluster
 			if err := m.validateCloudProviderForCluster(ctx, c); err != nil {
+				m.logger.Error(
+					err,
+					"Cloud Provider needs to be upgraded on workload cluster prior to running this tool",
+					"cluster",
+					base.ObjectToName(c),
+				)
 				m.AddErrorFor(c, err)
 			}
 		}()
@@ -286,8 +307,13 @@ func (m *Migrator) updateNodeStatus(c *clusterv1.Cluster, n *corev1.Node, done b
 }
 
 func (m *Migrator) MigrateWorkloadCluster(ctx context.Context, c *clusterv1.Cluster) {
+	logger := m.logger.WithValues("cluster", base.ObjectToName(c))
+	logger.Info("Started migration for cluster")
+
 	// Return early if cluster has already hit an error
 	if m.HasError(c) {
+		logger.Info("Cluster previously ran into an error, skipping further processing")
+
 		return
 	}
 
@@ -296,22 +322,29 @@ func (m *Migrator) MigrateWorkloadCluster(ctx context.Context, c *clusterv1.Clus
 		// TODO: should probably give some additional safety to users since this will be
 		// deleting and re-creating Node resources
 		if err := m.MigrateNode(ctx, n, c); err != nil {
+			logger.Error(err, "Failed to migrate node", "node", base.ObjectToName(n))
 			m.AddErrorFor(c, err)
 
 			return
 		}
 	}
+
+	logger.Info("Finished migration for cluster")
 }
 
 func (m *Migrator) MigrateNode(ctx context.Context, node *corev1.Node, c *clusterv1.Cluster) error {
+	logger := m.logger.WithValues("cluster", base.ObjectToName(c)).WithValues("node", base.ObjectToName(node))
+	logger.Info("Started migrating node")
+
 	if strings.HasPrefix(node.Spec.ProviderID, newProviderIDPrefix) {
+		logger.Info("Node already has the updated providerID")
 		fmt.Fprintf(m.GetBufferFor(c), "✔ Node %s already has the updated providerID\n", node.Name)
 		m.updateNodeStatus(c, node, true)
 
 		return nil
 	}
 
-	if err := m.WorkloadDelete(ctx, c, node.DeepCopy()); err != nil {
+	if err := m.WorkloadDelete(ctx, logger, c, node.DeepCopy()); err != nil {
 		return fmt.Errorf("failed to delete existing node resource: %w", err)
 	}
 
@@ -324,9 +357,10 @@ func (m *Migrator) MigrateNode(ctx context.Context, node *corev1.Node, c *cluste
 			return true
 		},
 		func() error {
-			if err := m.WorkloadCreate(ctx, c, node); err != nil {
+			if err := m.WorkloadCreate(ctx, logger, c, node); err != nil {
 				if m.DryRun() && apierrors.IsAlreadyExists(err) {
 					// add dry run success output here since Create will fail with an already exists error during dry run
+					logger.Info("(Dry Run) Would create Node")
 					fmt.Fprintf(m.GetBufferFor(c), "(Dry Run) Would create Node %s\n", base.ObjectToName(node))
 
 					return nil
@@ -343,6 +377,8 @@ func (m *Migrator) MigrateNode(ctx context.Context, node *corev1.Node, c *cluste
 	}
 
 	m.updateNodeStatus(c, node, true)
+
+	logger.Info("Finished migrating node")
 
 	return nil
 }

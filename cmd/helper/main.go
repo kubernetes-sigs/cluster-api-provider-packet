@@ -14,12 +14,16 @@ limitations under the License.
 package main
 
 import (
+	"flag"
 	"math/rand"
 	"os"
 	"time"
 
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/klogr"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/migrate"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/upgrade"
@@ -28,12 +32,34 @@ import (
 func main() {
 	rand.Seed(time.Now().UTC().UnixNano())
 
+	var logFile string
+
 	config := new(base.ToolConfig)
+	config.Logger = klogr.New()
+	klogFlags := new(flag.FlagSet)
+	klog.InitFlags(klogFlags)
+	klogFlags.Set("logtostderr", "false")
 
 	rootCmd := &cobra.Command{ //nolint:exhaustivestruct
 		Use:          "capp-helper",
 		Short:        "Helper utilties for CAPP",
 		SilenceUsage: true,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			klogFlags.Set("log_file", logFile)
+
+			// log to stderr if NoTUI is set or we are not running in a tty
+			if !isatty.IsTerminal(os.Stdout.Fd()) && !config.NoTUI {
+				config.NoTUI = true
+			}
+
+			if config.NoTUI {
+				klogFlags.Set("alsologtostderr", "true")
+			}
+
+			klogFlags.Parse(nil)
+
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmd.Help() //nolint:wrapcheck
 		},
@@ -48,11 +74,21 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&config.WatchingNamespace, "watching-namespace", base.DefaultWatchingNamespace,
 		"The namespace that the packet provider is configured to watch.")
 	rootCmd.PersistentFlags().BoolVar(&config.DryRun, "dry-run", false, "Dry run.")
+	rootCmd.PersistentFlags().BoolVar(&config.NoTUI, "no-tui", false, "Do not run TUI.")
+	rootCmd.PersistentFlags().StringVar(&logFile, "log-file", "output.log",
+		"Logfile to use.")
 
 	rootCmd.AddCommand((&migrate.Command{ToolConfig: config}).Command())
 	rootCmd.AddCommand((&upgrade.Command{ToolConfig: config}).Command())
 
 	if err := rootCmd.Execute(); err != nil {
+		flushLogs(config)
 		os.Exit(1)
 	}
+
+	flushLogs(config)
+}
+
+func flushLogs(config *base.ToolConfig) {
+	klog.Flush()
 }

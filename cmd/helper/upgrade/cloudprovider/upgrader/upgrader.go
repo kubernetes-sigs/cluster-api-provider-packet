@@ -23,9 +23,9 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -49,41 +49,46 @@ type Upgrader struct {
 	steps         []step
 	clusters      []*clusterv1.Cluster
 	clusterStatus map[string]map[string]bool
+	logger        logr.Logger
 }
 
 type step struct {
 	name   string
-	method func(context.Context, *clusterv1.Cluster) error
+	method func(context.Context, logr.Logger, *base.Tool, *clusterv1.Cluster) error
 }
 
 func New(ctx context.Context, config *base.ToolConfig) (*Upgrader, error) {
 	u := new(Upgrader)
-	u.Tool = new(base.Tool)
-	u.Configure(config)
 	u.upgradeMutex.Lock()
 	defer u.upgradeMutex.Unlock()
 
+	u.logger = config.Logger.WithName("UpgradeCloudProvider")
+	u.Tool = new(base.Tool)
+	u.Configure(config)
+
 	u.steps = []step{
 		{
-			name:   "Migrate Credentials Secret",
-			method: u.migrateSecret,
+			name:   "MigrateCredentialsSecret",
+			method: migrateSecret,
 		},
 		{
-			name:   "Remove Deprecated packet-cloud-controller-manager",
-			method: u.removeCCMDeployment,
+			name:   "RemoveDeprecatedManager",
+			method: removeCCMDeployment,
 		},
 		{
-			name:   "Remove Old Credentials Secret",
-			method: u.removeOldCCMSecret,
+			name:   "RemoveOldCredentialsSecret",
+			method: removeOldCCMSecret,
 		},
 		{
-			name:   "Install cloud-provider-equinix-metal",
-			method: u.installCPEM,
+			name:   "InstallNewManager",
+			method: installCPEM,
 		},
 	}
 
 	clusters, err := u.GetClusters(ctx)
 	if err != nil {
+		u.logger.Error(err, "Failed to get clusters")
+
 		return u, err
 	}
 
@@ -129,6 +134,8 @@ func (u *Upgrader) CalculatePercentage() float64 {
 }
 
 func (u *Upgrader) CheckPrerequisites(ctx context.Context) error {
+	u.logger.Info("Checking Prerequisites")
+
 	return nil
 }
 
@@ -154,20 +161,32 @@ func (u *Upgrader) upgradeCloudProviderForCluster(
 	ctx context.Context,
 	c *clusterv1.Cluster,
 ) {
+	logger := u.logger.WithValues("cluster", base.ObjectToName(c))
+	logger.Info("Started upgrade for cluster")
+
 	// Return early if cluster has already hit an error
 	if u.HasError(c) {
+		logger.Info("Cluster previously ran into an error, skipping further processing")
+
 		return
 	}
 
 	for _, s := range u.steps {
-		if err := s.method(ctx, c); err != nil {
+		stepLogger := logger.WithValues("step", s.name)
+		stepLogger.Info("Started running step")
+
+		if err := s.method(ctx, stepLogger, u.Tool, c); err != nil {
+			stepLogger.Error(err, "Failure running step")
 			u.AddErrorFor(c, err)
 
 			return
 		}
 
 		u.updateStepStatus(c, s, true)
+		stepLogger.Info("Finished running step")
 	}
+
+	logger.Info("Finished upgrade for cluster")
 }
 
 func getLatestCPEMVersion(ctx context.Context) (string, error) {
@@ -251,7 +270,7 @@ func getCPEMArtifacts(ctx context.Context, version string) ([]*unstructured.Unst
 	return resources, nil
 }
 
-func (u *Upgrader) installCPEM(ctx context.Context, c *clusterv1.Cluster) error {
+func installCPEM(ctx context.Context, logger logr.Logger, u *base.Tool, c *clusterv1.Cluster) error {
 	cpemVersion, err := getLatestCPEMVersion(ctx)
 	if err != nil {
 		return err
@@ -263,7 +282,7 @@ func (u *Upgrader) installCPEM(ctx context.Context, c *clusterv1.Cluster) error 
 	}
 
 	for _, r := range resources {
-		if err := u.patchOrCreateUnstructured(ctx, c, r); err != nil {
+		if err := u.WorkloadPatchOrCreateUnstructured(ctx, logger, c, r); err != nil {
 			return err
 		}
 	}
@@ -271,47 +290,12 @@ func (u *Upgrader) installCPEM(ctx context.Context, c *clusterv1.Cluster) error 
 	return nil
 }
 
-func (u *Upgrader) patchOrCreateUnstructured(
-	ctx context.Context,
-	c *clusterv1.Cluster,
-	obj *unstructured.Unstructured,
-) error {
-	stdout := u.GetBufferFor(c)
-	existing := obj.NewEmptyInstance()
-
-	existingKey, err := client.ObjectKeyFromObject(obj)
-	if err != nil {
-		return err
-	}
-
-	if err := u.WorkloadGet(ctx, c, existingKey, existing); err != nil {
-		if apierrors.IsNotFound(err) {
-			return u.WorkloadCreate(ctx, c, obj)
-		}
-
-		return err
-	}
-
-	if !equality.Semantic.DeepDerivative(obj, existing) {
-		return u.WorkloadPatch(ctx, c, obj, client.Merge)
-	}
-
-	fmt.Fprintf(
-		stdout,
-		"✔ %s %s/%s already up to date\n",
-		obj.GetObjectKind().GroupVersionKind().Kind,
-		obj.GetNamespace(),
-		obj.GetName(),
-	)
-
-	return nil
-}
-
-func (u *Upgrader) removeOldCCMSecret(ctx context.Context, c *clusterv1.Cluster) error {
+func removeOldCCMSecret(ctx context.Context, logger logr.Logger, u *base.Tool, c *clusterv1.Cluster) error {
 	stdout := u.GetBufferFor(c)
 	ccmSecretKey := client.ObjectKey{Namespace: metav1.NamespaceSystem, Name: oldSecretName}
 	csiStatefulSet := new(appsv1.StatefulSet)
 	csiKey := client.ObjectKey{Namespace: metav1.NamespaceSystem, Name: csiStatefulSetName}
+	secretName := fmt.Sprintf("%s/%s", ccmSecretKey.Namespace, ccmSecretKey.Name)
 
 	err := u.WorkloadGet(ctx, c, csiKey, csiStatefulSet)
 
@@ -319,8 +303,8 @@ func (u *Upgrader) removeOldCCMSecret(ctx context.Context, c *clusterv1.Cluster)
 	case err != nil && !apierrors.IsNotFound(err):
 		return err
 	case err == nil:
-		fmt.Fprintf(stdout,
-			"Skipping removal of Secret %s/%s because Packet CSI is deployed", ccmSecretKey.Namespace, ccmSecretKey.Name)
+		logger.Info("Skipping removal of secret because Packet CSI is deployed", "name", secretName)
+		fmt.Fprintf(stdout, "Skipping removal of Secret %s because Packet CSI is deployed", secretName)
 
 		return nil
 	}
@@ -328,7 +312,8 @@ func (u *Upgrader) removeOldCCMSecret(ctx context.Context, c *clusterv1.Cluster)
 	ccmSecret := new(corev1.Secret)
 	if err := u.WorkloadGet(ctx, c, ccmSecretKey, ccmSecret); err != nil {
 		if apierrors.IsNotFound(err) {
-			fmt.Fprintf(stdout, "✔ Secret %s/%s already deleted\n", ccmSecretKey.Namespace, ccmSecretKey.Name)
+			logger.Info("Secret already removed", "name", secretName)
+			fmt.Fprintf(stdout, "✔ Secret %s already deleted\n", secretName)
 
 			return nil
 		}
@@ -336,17 +321,19 @@ func (u *Upgrader) removeOldCCMSecret(ctx context.Context, c *clusterv1.Cluster)
 		return err
 	}
 
-	return u.WorkloadDelete(ctx, c, ccmSecret)
+	return u.WorkloadDelete(ctx, logger, c, ccmSecret)
 }
 
-func (u *Upgrader) removeCCMDeployment(ctx context.Context, c *clusterv1.Cluster) error {
+func removeCCMDeployment(ctx context.Context, logger logr.Logger, u *base.Tool, c *clusterv1.Cluster) error {
 	stdout := u.GetBufferFor(c)
 	ccmDeployment := new(appsv1.Deployment)
 	ccmKey := client.ObjectKey{Namespace: metav1.NamespaceSystem, Name: oldDeploymentName}
+	deploymentName := fmt.Sprintf("%s/%s", ccmDeployment.Namespace, ccmDeployment.Name)
 
 	if err := u.WorkloadGet(ctx, c, ccmKey, ccmDeployment); err != nil {
 		if apierrors.IsNotFound(err) {
-			fmt.Fprintf(stdout, "✔ Deployment %s/%s already deleted\n", ccmKey.Namespace, ccmKey.Name)
+			logger.Info("Deployment already removed", "name", deploymentName)
+			fmt.Fprintf(stdout, "✔ Deployment %s already deleted\n", deploymentName)
 
 			return nil
 		}
@@ -354,14 +341,15 @@ func (u *Upgrader) removeCCMDeployment(ctx context.Context, c *clusterv1.Cluster
 		return err
 	}
 
-	return u.WorkloadDelete(ctx, c, ccmDeployment)
+	return u.WorkloadDelete(ctx, logger, c, ccmDeployment)
 }
 
-func (u *Upgrader) migrateSecret(ctx context.Context, c *clusterv1.Cluster) error {
+func migrateSecret(ctx context.Context, logger logr.Logger, u *base.Tool, c *clusterv1.Cluster) error {
 	stdout := u.GetBufferFor(c)
 	// Check to see if the CPEM secret already exists
 	cpemSecret := new(corev1.Secret)
 	cpemSecretKey := client.ObjectKey{Namespace: metav1.NamespaceSystem, Name: newSecretName}
+	cpemSecretName := fmt.Sprintf("%s/%s", cpemSecretKey.Namespace, cpemSecretKey.Name)
 	err := u.WorkloadGet(ctx, c, cpemSecretKey, cpemSecret)
 
 	switch {
@@ -369,6 +357,8 @@ func (u *Upgrader) migrateSecret(ctx context.Context, c *clusterv1.Cluster) erro
 		return err
 	case err == nil:
 		// If there was no error, then the secret already exists and there is no need to proceed
+
+		logger.Info("Secret already exists", "name", cpemSecretName)
 		fmt.Fprintf(stdout, "✔ Secret %s/%s already exists\n", cpemSecret.Namespace, cpemSecret.Name)
 
 		return nil
@@ -391,7 +381,7 @@ func (u *Upgrader) migrateSecret(ctx context.Context, c *clusterv1.Cluster) erro
 	newSecret.SetName(cpemSecretKey.Name)
 	newSecret.Data = ccmSecret.Data
 
-	return u.WorkloadCreate(ctx, c, newSecret)
+	return u.WorkloadCreate(ctx, logger, c, newSecret)
 }
 
 func (u *Upgrader) updateStepStatus(c *clusterv1.Cluster, step step, done bool) {

@@ -15,8 +15,6 @@ package upgrader
 
 import (
 	"context"
-	"encoding/base64"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -24,162 +22,21 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/klog/v2/klogr"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base/testutils"
-	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // TODO: Add tests for CCM v2.0.0 compared to v1.1.0
 // TODO: Do we need tests for CPEM >= v3.1.0 && < v3.1.0?
 
-func TestUpgrader_patchOrCreateUnstructured(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-	ctx := context.TODO()
-
-	expectedData := map[string]interface{}{
-		"color": base64.StdEncoding.EncodeToString([]byte("red")),
-	}
-	expectedResource := new(unstructured.Unstructured)
-	expectedResource.SetUnstructuredContent(map[string]interface{}{"data": expectedData})
-	expectedResource.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Secret"))
-	expectedResource.SetNamespace(fmt.Sprintf("test-%s", util.RandomString(6)))
-	expectedResource.SetName(fmt.Sprintf("test-secret-%s", util.RandomString(6)))
-
-	preMutatedData := map[string]string{
-		"color": base64.StdEncoding.EncodeToString([]byte("purple")),
-	}
-	preMutatedResource := expectedResource.DeepCopy()
-	g.Expect(unstructured.SetNestedStringMap(preMutatedResource.UnstructuredContent(), preMutatedData, "data")).
-		To(Succeed())
-
-	clusterWithoutResource := testutils.GenerateCluster("", "withoutResource")
-	clusterWithResource := testutils.GenerateCluster("", "withResource")
-	clusterWithResourceDiff := testutils.GenerateCluster("", "withResourceDiff")
-
-	workloadResources := map[client.ObjectKey][]runtime.Object{
-		{Namespace: clusterWithResource.Namespace, Name: clusterWithResource.Name}: {
-			expectedResource.DeepCopy(),
-		},
-		{Namespace: clusterWithResourceDiff.Namespace, Name: clusterWithResourceDiff.Name}: {
-			preMutatedResource.DeepCopy(),
-		},
-	}
-
-	fakeEnv := testutils.NewFakeEnv(ctx, t, workloadResources, clusterWithResource,
-		clusterWithResourceDiff, clusterWithoutResource)
-	toolConfig := &base.ToolConfig{ //nolint:exhaustivestruct
-		MgmtClient:           fakeEnv.MgmtClient,
-		WorkloadClientGetter: fakeEnv.WorkloadClientGetter,
-	}
-	u, err := New(ctx, toolConfig)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	// Test Create
-	preCreateOutput := u.GetOutputFor(clusterWithoutResource)
-	g.Expect(u.patchOrCreateUnstructured(ctx, clusterWithoutResource, expectedResource.DeepCopy())).To(Succeed())
-	postCreateOutput := u.GetOutputFor(clusterWithoutResource)
-	testutils.VerifySuccessOutputChanged(t, strings.TrimPrefix(postCreateOutput, preCreateOutput))
-
-	expectedResourceKey, err := client.ObjectKeyFromObject(expectedResource)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	actualPostCreate := expectedResource.NewEmptyInstance()
-	g.Expect(u.WorkloadGet(ctx, clusterWithoutResource, expectedResourceKey, actualPostCreate)).To(Succeed())
-	g.Expect(actualPostCreate).To(testutils.BeDerivativeOf(expectedResource))
-
-	// Test Noop on unchanged
-	preNoopOutput := u.GetOutputFor(clusterWithResource)
-	g.Expect(u.patchOrCreateUnstructured(ctx, clusterWithResource, expectedResource.DeepCopy())).To(Succeed())
-	postNoopOutput := u.GetOutputFor(clusterWithResource)
-	testutils.VerifySuccessOutputUnchanged(t, strings.TrimPrefix(postNoopOutput, preNoopOutput))
-
-	actualNoop := expectedResource.NewEmptyInstance()
-	g.Expect(u.WorkloadGet(ctx, clusterWithResource, expectedResourceKey, actualNoop)).To(Succeed())
-	g.Expect(actualNoop).To(testutils.BeDerivativeOf(expectedResource))
-
-	// Test Modify
-	preMutateOutput := u.GetOutputFor(clusterWithResourceDiff)
-	g.Expect(u.patchOrCreateUnstructured(ctx, clusterWithResourceDiff, expectedResource.DeepCopy())).To(Succeed())
-	postMutateOutput := u.GetOutputFor(clusterWithResourceDiff)
-	testutils.VerifySuccessOutputChanged(t, strings.TrimPrefix(postMutateOutput, preMutateOutput))
-
-	actualMutate := expectedResource.NewEmptyInstance()
-	g.Expect(u.WorkloadGet(ctx, clusterWithResourceDiff, expectedResourceKey, actualMutate)).To(Succeed())
-	g.Expect(actualMutate).To(testutils.BeDerivativeOf(expectedResource))
-	g.Expect(actualMutate).NotTo(testutils.BeDerivativeOf(preMutatedResource))
-}
-
-func TestUpgrader_patchOrCreateUnstructuredDry(t *testing.T) {
-	t.Parallel()
-	g := NewWithT(t)
-	ctx := context.TODO()
-
-	expectedData := map[string]interface{}{
-		"color": base64.StdEncoding.EncodeToString([]byte("red")),
-	}
-	expectedResource := new(unstructured.Unstructured)
-	expectedResource.SetUnstructuredContent(map[string]interface{}{"data": expectedData})
-	expectedResource.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Secret"))
-	expectedResource.SetNamespace(fmt.Sprintf("test-%s", util.RandomString(6)))
-	expectedResource.SetName(fmt.Sprintf("test-secret-%s", util.RandomString(6)))
-
-	preMutatedData := map[string]string{
-		"color": base64.StdEncoding.EncodeToString([]byte("purple")),
-	}
-	preMutatedResource := expectedResource.DeepCopy()
-	g.Expect(unstructured.SetNestedStringMap(preMutatedResource.UnstructuredContent(), preMutatedData, "data")).
-		To(Succeed())
-
-	clusterWithoutResource := testutils.GenerateCluster("", "withoutresource")
-	clusterWithResourceDiff := testutils.GenerateCluster("", "withdiff")
-
-	workloadResources := map[client.ObjectKey][]runtime.Object{
-		{Namespace: clusterWithResourceDiff.Namespace, Name: clusterWithResourceDiff.Name}: {
-			preMutatedResource.DeepCopy(),
-		},
-	}
-
-	testEnv := testutils.NewTestEnv(ctx, t, workloadResources,
-		clusterWithResourceDiff, clusterWithoutResource)
-	toolConfig := &base.ToolConfig{ //nolint:exhaustivestruct
-		DryRun:               true,
-		RestConfig:           testEnv.RestConfig,
-		WorkloadClientGetter: testEnv.WorkloadClientGetter,
-	}
-	u, err := New(ctx, toolConfig)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	// Test Dry Run Create
-	preDryRunOutput := u.GetOutputFor(clusterWithoutResource)
-	g.Expect(u.patchOrCreateUnstructured(ctx, clusterWithoutResource, expectedResource.DeepCopy())).To(Succeed())
-	postDryRunOutput := u.GetOutputFor(clusterWithoutResource)
-	testutils.VerifySuccessOutputDryRun(t, strings.TrimPrefix(postDryRunOutput, preDryRunOutput))
-
-	expectedResourceKey, err := client.ObjectKeyFromObject(expectedResource)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(u.WorkloadGet(ctx, clusterWithoutResource, expectedResourceKey, expectedResource.NewEmptyInstance())).
-		To(MatchError(ContainSubstring("not found")))
-
-	// Test Dry Run Modify
-	preDryRunMutateOutput := u.GetOutputFor(clusterWithResourceDiff)
-	g.Expect(u.patchOrCreateUnstructured(ctx, clusterWithResourceDiff, expectedResource.DeepCopy())).To(Succeed())
-	postDryRunMutateOutput := u.GetOutputFor(clusterWithResourceDiff)
-	testutils.VerifySuccessOutputDryRun(t, strings.TrimPrefix(postDryRunMutateOutput, preDryRunMutateOutput))
-
-	actualDryRunMutate := expectedResource.NewEmptyInstance()
-	g.Expect(u.WorkloadGet(ctx, clusterWithResourceDiff, expectedResourceKey, actualDryRunMutate)).To(Succeed())
-	g.Expect(actualDryRunMutate).To(testutils.BeDerivativeOf(preMutatedResource))
-	g.Expect(actualDryRunMutate).NotTo(testutils.BeDerivativeOf(expectedResource))
-}
-
 func TestUpgrader_removeCCMDeployment(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 	ctx := context.TODO()
+	// logger := klogr.New()
 	clusterWithoutCCM := testutils.GenerateCluster("", "withoutCCM")
 	clusterWithCCM := testutils.GenerateCluster("", "withCCM")
 	workloadResources := map[client.ObjectKey][]runtime.Object{
@@ -192,12 +49,13 @@ func TestUpgrader_removeCCMDeployment(t *testing.T) {
 	toolConfig := &base.ToolConfig{ //nolint:exhaustivestruct
 		MgmtClient:           fakeEnv.MgmtClient,
 		WorkloadClientGetter: fakeEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
 	}
 	u, err := New(ctx, toolConfig)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	preRemoveOutput := u.GetOutputFor(clusterWithoutCCM)
-	g.Expect(u.removeCCMDeployment(ctx, clusterWithoutCCM)).To(Succeed())
+	g.Expect(removeCCMDeployment(ctx, toolConfig.Logger, u.Tool, clusterWithoutCCM)).To(Succeed())
 	postRemoveOutput := u.GetOutputFor(clusterWithoutCCM)
 	testutils.VerifySuccessOutputUnchanged(t, strings.TrimPrefix(postRemoveOutput, preRemoveOutput))
 
@@ -206,7 +64,7 @@ func TestUpgrader_removeCCMDeployment(t *testing.T) {
 		To(MatchError(ContainSubstring("not found")))
 
 	preRemoveOutput = u.GetOutputFor(clusterWithCCM)
-	g.Expect(u.removeCCMDeployment(ctx, clusterWithCCM)).To(Succeed())
+	g.Expect(removeCCMDeployment(ctx, toolConfig.Logger, u.Tool, clusterWithCCM)).To(Succeed())
 	postRemoveOutput = u.GetOutputFor(clusterWithCCM)
 	testutils.VerifySuccessOutputChanged(t, strings.TrimPrefix(postRemoveOutput, preRemoveOutput))
 
@@ -218,6 +76,7 @@ func TestUpgrader_removeCCMDeploymentDry(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 	ctx := context.TODO()
+	// logger := klogr.New()
 	cluster := testutils.GenerateCluster("", "")
 	oldDeployment := testutils.GenerateDeployment(metav1.NamespaceSystem, oldDeploymentName, "test")
 	workloadResources := map[client.ObjectKey][]runtime.Object{
@@ -231,13 +90,14 @@ func TestUpgrader_removeCCMDeploymentDry(t *testing.T) {
 		DryRun:               true,
 		RestConfig:           testEnv.RestConfig,
 		WorkloadClientGetter: testEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
 	}
 	u, err := New(ctx, toolConfig)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Test Dry Run
 	preDryRunOutput := u.GetOutputFor(cluster)
-	g.Expect(u.removeCCMDeployment(ctx, cluster)).To(Succeed())
+	g.Expect(removeCCMDeployment(ctx, toolConfig.Logger, u.Tool, cluster)).To(Succeed())
 	postDryRunOutput := u.GetOutputFor(cluster)
 	testutils.VerifySuccessOutputDryRun(t, strings.TrimPrefix(postDryRunOutput, preDryRunOutput))
 
@@ -252,6 +112,7 @@ func TestUpgrader_removeCCMSecret(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 	ctx := context.TODO()
+	// logger := klogr.New()
 
 	oldSecret := &corev1.Secret{ //nolint:exhaustivestruct
 		ObjectMeta: metav1.ObjectMeta{ //nolint:exhaustivestruct
@@ -281,12 +142,13 @@ func TestUpgrader_removeCCMSecret(t *testing.T) {
 	toolConfig := &base.ToolConfig{ //nolint:exhaustivestruct
 		MgmtClient:           fakeEnv.MgmtClient,
 		WorkloadClientGetter: fakeEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
 	}
 	u, err := New(ctx, toolConfig)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	preRemoveOutput := u.GetOutputFor(clusterWithoutCCMSecret)
-	g.Expect(u.removeOldCCMSecret(ctx, clusterWithoutCCMSecret)).To(Succeed())
+	g.Expect(removeOldCCMSecret(ctx, toolConfig.Logger, u.Tool, clusterWithoutCCMSecret)).To(Succeed())
 	postRemoveOutput := u.GetOutputFor(clusterWithoutCCMSecret)
 	testutils.VerifySuccessOutputUnchanged(t, strings.TrimPrefix(postRemoveOutput, preRemoveOutput))
 
@@ -295,7 +157,7 @@ func TestUpgrader_removeCCMSecret(t *testing.T) {
 		To(MatchError(ContainSubstring("not found")))
 
 	preRemoveOutput = u.GetOutputFor(clusterWithCCMSecret)
-	g.Expect(u.removeOldCCMSecret(ctx, clusterWithCCMSecret)).To(Succeed())
+	g.Expect(removeOldCCMSecret(ctx, toolConfig.Logger, u.Tool, clusterWithCCMSecret)).To(Succeed())
 	postRemoveOutput = u.GetOutputFor(clusterWithCCMSecret)
 	testutils.VerifySuccessOutputChanged(t, strings.TrimPrefix(postRemoveOutput, preRemoveOutput))
 
@@ -303,7 +165,7 @@ func TestUpgrader_removeCCMSecret(t *testing.T) {
 		To(MatchError(ContainSubstring("not found")))
 
 	preRemoveOutput = u.GetOutputFor(clusterWithCCMSecretAndCSI)
-	g.Expect(u.removeOldCCMSecret(ctx, clusterWithCCMSecretAndCSI)).To(Succeed())
+	g.Expect(removeOldCCMSecret(ctx, toolConfig.Logger, u.Tool, clusterWithCCMSecretAndCSI)).To(Succeed())
 	postRemoveOutput = u.GetOutputFor(clusterWithCCMSecretAndCSI)
 	testutils.VerifySuccessOutputSkipped(t, strings.TrimPrefix(postRemoveOutput, preRemoveOutput))
 
@@ -316,6 +178,7 @@ func TestUpgrader_removeOldCCMSecretDry(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 	ctx := context.TODO()
+	// logger := klogr.New()
 	cluster := testutils.GenerateCluster("", "")
 
 	oldSecret := &corev1.Secret{ //nolint:exhaustivestruct
@@ -339,13 +202,14 @@ func TestUpgrader_removeOldCCMSecretDry(t *testing.T) {
 		DryRun:               true,
 		RestConfig:           testEnv.RestConfig,
 		WorkloadClientGetter: testEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
 	}
 	u, err := New(ctx, toolConfig)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Test Dry Run
 	preDryRunOutput := u.GetOutputFor(cluster)
-	g.Expect(u.removeOldCCMSecret(ctx, cluster)).To(Succeed())
+	g.Expect(removeOldCCMSecret(ctx, toolConfig.Logger, u.Tool, cluster)).To(Succeed())
 	postDryRunOutput := u.GetOutputFor(cluster)
 	testutils.VerifySuccessOutputDryRun(t, strings.TrimPrefix(postDryRunOutput, preDryRunOutput))
 
@@ -360,7 +224,7 @@ func TestUpgrader_migrateSecret(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 	ctx := context.TODO()
-
+	// logger := klogr.New()
 	oldSecret := &corev1.Secret{ //nolint:exhaustivestruct
 		ObjectMeta: metav1.ObjectMeta{ //nolint:exhaustivestruct
 			Namespace: metav1.NamespaceSystem,
@@ -397,12 +261,13 @@ func TestUpgrader_migrateSecret(t *testing.T) {
 	toolConfig := &base.ToolConfig{ //nolint:exhaustivestruct
 		MgmtClient:           fakeEnv.MgmtClient,
 		WorkloadClientGetter: fakeEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
 	}
 	u, err := New(ctx, toolConfig)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	preMigrateOutput := u.GetOutputFor(clusterWithBothSecrets)
-	g.Expect(u.migrateSecret(ctx, clusterWithBothSecrets)).To(Succeed())
+	g.Expect(migrateSecret(ctx, toolConfig.Logger, u.Tool, clusterWithBothSecrets)).To(Succeed())
 	postMigrateOutput := u.GetOutputFor(clusterWithBothSecrets)
 	testutils.VerifySuccessOutputUnchanged(t, strings.TrimPrefix(postMigrateOutput, preMigrateOutput))
 
@@ -421,7 +286,7 @@ func TestUpgrader_migrateSecret(t *testing.T) {
 	g.Expect(actualOldSecret).To(testutils.BeDerivativeOf(oldSecret))
 
 	preMigrateOutput = u.GetOutputFor(clusterWithCPEMSecret)
-	g.Expect(u.migrateSecret(ctx, clusterWithCPEMSecret)).To(Succeed())
+	g.Expect(migrateSecret(ctx, toolConfig.Logger, u.Tool, clusterWithCPEMSecret)).To(Succeed())
 	postMigrateOutput = u.GetOutputFor(clusterWithCPEMSecret)
 	testutils.VerifySuccessOutputUnchanged(t, strings.TrimPrefix(postMigrateOutput, preMigrateOutput))
 
@@ -433,7 +298,7 @@ func TestUpgrader_migrateSecret(t *testing.T) {
 		To(MatchError(ContainSubstring("not found")))
 
 	preMigrateOutput = u.GetOutputFor(clusterWithCCMSecret)
-	g.Expect(u.migrateSecret(ctx, clusterWithCCMSecret)).To(Succeed())
+	g.Expect(migrateSecret(ctx, toolConfig.Logger, u.Tool, clusterWithCCMSecret)).To(Succeed())
 	postMigrateOutput = u.GetOutputFor(clusterWithCCMSecret)
 	testutils.VerifySuccessOutputChanged(t, strings.TrimPrefix(postMigrateOutput, preMigrateOutput))
 
@@ -443,7 +308,7 @@ func TestUpgrader_migrateSecret(t *testing.T) {
 	g.Expect(u.WorkloadGet(ctx, clusterWithCCMSecret, newSecretKey, actualNewSecret)).To(Succeed())
 	g.Expect(actualNewSecret).To(testutils.BeDerivativeOf(newSecret))
 
-	g.Expect(u.migrateSecret(ctx, clusterWithNeitherSecret)).
+	g.Expect(migrateSecret(ctx, toolConfig.Logger, u.Tool, clusterWithNeitherSecret)).
 		To(MatchError(ContainSubstring("not found")))
 }
 
@@ -451,6 +316,7 @@ func TestUpgrader_migrateSecretDry(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 	ctx := context.TODO()
+	// logger := klogr.New()
 	cluster := testutils.GenerateCluster("", "")
 
 	oldSecret := &corev1.Secret{ //nolint:exhaustivestruct
@@ -474,13 +340,14 @@ func TestUpgrader_migrateSecretDry(t *testing.T) {
 		DryRun:               true,
 		RestConfig:           testEnv.RestConfig,
 		WorkloadClientGetter: testEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
 	}
 	u, err := New(ctx, toolConfig)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Test Dry Run
 	preDryRunOutput := u.GetOutputFor(cluster)
-	g.Expect(u.migrateSecret(ctx, cluster)).To(Succeed())
+	g.Expect(migrateSecret(ctx, toolConfig.Logger, u.Tool, cluster)).To(Succeed())
 	postDryRunOutput := u.GetOutputFor(cluster)
 	testutils.VerifySuccessOutputDryRun(t, strings.TrimPrefix(postDryRunOutput, preDryRunOutput))
 

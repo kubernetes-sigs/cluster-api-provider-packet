@@ -49,7 +49,13 @@ func (c *Command) RunE() error {
 		return err
 	}
 
-	p := tea.NewProgram(m)
+	var opts []tea.ProgramOption
+
+	if c.ToolConfig.NoTUI {
+		opts = append(opts, tea.WithoutRenderer())
+	}
+
+	p := tea.NewProgram(m, opts...)
 
 	if err := p.Start(); err != nil {
 		return fmt.Errorf("failed to start UI: %w", err)

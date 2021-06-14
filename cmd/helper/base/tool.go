@@ -20,8 +20,12 @@ import (
 	"io/ioutil"
 	"sync"
 
+	"github.com/go-logr/logr"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -52,6 +56,8 @@ type ToolConfig struct {
 	TargetNamespace   string
 	WatchingNamespace string
 	DryRun            bool
+	NoTUI             bool
+	Logger            logr.Logger
 
 	RestConfig           *rest.Config
 	MgmtClient           client.Client
@@ -82,8 +88,43 @@ func (t *Tool) DryRun() bool {
 	return t.config.DryRun
 }
 
+func (t *Tool) WorkloadPatchOrCreateUnstructured(
+	ctx context.Context,
+	logger logr.Logger,
+	c *clusterv1.Cluster,
+	obj *unstructured.Unstructured,
+) error {
+	stdout := t.GetBufferFor(c)
+	existing := obj.NewEmptyInstance()
+
+	existingKey, err := client.ObjectKeyFromObject(obj)
+	if err != nil {
+		return err
+	}
+
+	if err := t.WorkloadGet(ctx, c, existingKey, existing); err != nil {
+		if apierrors.IsNotFound(err) {
+			return t.WorkloadCreate(ctx, logger, c, obj)
+		}
+
+		return err
+	}
+
+	if !equality.Semantic.DeepDerivative(obj, existing) {
+		return t.WorkloadPatch(ctx, logger, c, obj, client.Merge)
+	}
+
+	kind := obj.GetObjectKind().GroupVersionKind().Kind
+	name := ObjectToName(obj)
+	logger.Info("Resource already up to date", "kind", kind, "name", name)
+	fmt.Fprintf(stdout, "✔ %s %s already up to date\n", kind, name)
+
+	return nil
+}
+
 func (t *Tool) WorkloadPatch(
 	ctx context.Context,
+	logger logr.Logger,
 	c *clusterv1.Cluster,
 	obj controllerutil.Object,
 	patch client.Patch,
@@ -107,19 +148,22 @@ func (t *Tool) WorkloadPatch(
 		return err
 	}
 
+	name := ObjectToName(obj)
 	if t.DryRun() {
 		// TODO: show diff
-		fmt.Fprintf(t.GetBufferFor(c), "(Dry Run) Would patch %s %s\n", gvk.Kind, ObjectToName(obj))
+		logger.Info("(Dry Run) Would patch resource", "kind", gvk.Kind, "name", name)
+		fmt.Fprintf(t.GetBufferFor(c), "(Dry Run) Would patch %s %s\n", gvk.Kind, name)
 
 		return nil
 	}
 
-	fmt.Fprintf(t.GetBufferFor(c), "✅ %s %s has been successfully patched\n", gvk.Kind, ObjectToName(obj))
+	logger.Info("Successfully patched resource", "kind", gvk.Kind, "name", name)
+	fmt.Fprintf(t.GetBufferFor(c), "✅ %s %s has been successfully patched\n", gvk.Kind, name)
 
 	return nil
 }
 
-func (t *Tool) WorkloadCreate(ctx context.Context, c *clusterv1.Cluster, obj controllerutil.Object) error {
+func (t *Tool) WorkloadCreate(ctx context.Context, logger logr.Logger, c *clusterv1.Cluster, obj controllerutil.Object) error {
 	var opts []client.CreateOption
 	if t.DryRun() {
 		opts = append(opts, client.DryRunAll)
@@ -139,18 +183,22 @@ func (t *Tool) WorkloadCreate(ctx context.Context, c *clusterv1.Cluster, obj con
 		return err
 	}
 
+	name := ObjectToName(obj)
+
 	if t.DryRun() {
-		fmt.Fprintf(t.GetBufferFor(c), "(Dry Run) Would create %s %s\n", gvk.Kind, ObjectToName(obj))
+		logger.Info("(Dry Run) Would create resource", "kind", gvk.Kind, "name", name)
+		fmt.Fprintf(t.GetBufferFor(c), "(Dry Run) Would create %s %s\n", gvk.Kind, name)
 
 		return nil
 	}
 
-	fmt.Fprintf(t.GetBufferFor(c), "✅ %s %s has been successfully created\n", gvk.Kind, ObjectToName(obj))
+	logger.Info("Successfully created resource", "kind", gvk.Kind, "name", name)
+	fmt.Fprintf(t.GetBufferFor(c), "✅ %s %s has been successfully created\n", gvk.Kind, name)
 
 	return nil
 }
 
-func (t *Tool) WorkloadDelete(ctx context.Context, c *clusterv1.Cluster, obj controllerutil.Object) error {
+func (t *Tool) WorkloadDelete(ctx context.Context, logger logr.Logger, c *clusterv1.Cluster, obj controllerutil.Object) error {
 	var opts []client.DeleteOption
 	if t.DryRun() {
 		opts = append(opts, client.DryRunAll)
@@ -170,13 +218,17 @@ func (t *Tool) WorkloadDelete(ctx context.Context, c *clusterv1.Cluster, obj con
 		return err
 	}
 
+	name := ObjectToName(obj)
+
 	if t.DryRun() {
-		fmt.Fprintf(t.GetBufferFor(c), "(Dry Run) Would delete %s %s\n", gvk.Kind, ObjectToName(obj))
+		logger.Info("(Dry Run) Would delete resource", "kind", gvk.Kind, "name", name)
+		fmt.Fprintf(t.GetBufferFor(c), "(Dry Run) Would delete %s %s\n", gvk.Kind, name)
 
 		return nil
 	}
 
-	fmt.Fprintf(t.GetBufferFor(c), "✅ %s %s has been successfully deleted\n", gvk.Kind, ObjectToName(obj))
+	logger.Info("Successfully deleted resource", "kind", gvk.Kind, "name", name)
+	fmt.Fprintf(t.GetBufferFor(c), "✅ %s %s has been successfully deleted\n", gvk.Kind, name)
 
 	return nil
 }

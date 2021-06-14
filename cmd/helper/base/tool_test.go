@@ -15,6 +15,7 @@ package base_test
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"math/rand"
 	"reflect"
@@ -26,7 +27,9 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/klog/klogr"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base/testutils"
 	"sigs.k8s.io/cluster-api/util"
@@ -42,6 +45,151 @@ import (
 // TODO: tests for WorkloadList
 // TODO: tests for HasError/GetErrorFor/AddErrorFor
 // TODO: tests for GetOutputFor/GetBufferFor/flushing of buffers to output
+
+func TestTool_WorkloadPatchOrCreateUnstructured(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+	ctx := context.TODO()
+
+	expectedData := map[string]interface{}{
+		"color": base64.StdEncoding.EncodeToString([]byte("red")),
+	}
+	expectedResource := new(unstructured.Unstructured)
+	expectedResource.SetUnstructuredContent(map[string]interface{}{"data": expectedData})
+	expectedResource.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Secret"))
+	expectedResource.SetNamespace(fmt.Sprintf("test-%s", util.RandomString(6)))
+	expectedResource.SetName(fmt.Sprintf("test-secret-%s", util.RandomString(6)))
+
+	preMutatedData := map[string]string{
+		"color": base64.StdEncoding.EncodeToString([]byte("purple")),
+	}
+	preMutatedResource := expectedResource.DeepCopy()
+	g.Expect(unstructured.SetNestedStringMap(preMutatedResource.UnstructuredContent(), preMutatedData, "data")).
+		To(Succeed())
+
+	clusterWithoutResource := testutils.GenerateCluster("", "withoutResource")
+	clusterWithResource := testutils.GenerateCluster("", "withResource")
+	clusterWithResourceDiff := testutils.GenerateCluster("", "withResourceDiff")
+
+	workloadResources := map[client.ObjectKey][]runtime.Object{
+		{Namespace: clusterWithResource.Namespace, Name: clusterWithResource.Name}: {
+			expectedResource.DeepCopy(),
+		},
+		{Namespace: clusterWithResourceDiff.Namespace, Name: clusterWithResourceDiff.Name}: {
+			preMutatedResource.DeepCopy(),
+		},
+	}
+
+	fakeEnv := testutils.NewFakeEnv(ctx, t, workloadResources, clusterWithResource,
+		clusterWithResourceDiff, clusterWithoutResource)
+	toolConfig := &base.ToolConfig{ //nolint:exhaustivestruct
+		MgmtClient:           fakeEnv.MgmtClient,
+		WorkloadClientGetter: fakeEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
+	}
+
+	tool := &base.Tool{}
+	tool.Configure(toolConfig)
+
+	// Test Create
+	preCreateOutput := tool.GetOutputFor(clusterWithoutResource)
+	g.Expect(tool.WorkloadPatchOrCreateUnstructured(ctx, toolConfig.Logger, clusterWithoutResource, expectedResource.DeepCopy())).To(Succeed())
+	postCreateOutput := tool.GetOutputFor(clusterWithoutResource)
+	testutils.VerifySuccessOutputChanged(t, strings.TrimPrefix(postCreateOutput, preCreateOutput))
+
+	expectedResourceKey, err := client.ObjectKeyFromObject(expectedResource)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	actualPostCreate := expectedResource.NewEmptyInstance()
+	g.Expect(tool.WorkloadGet(ctx, clusterWithoutResource, expectedResourceKey, actualPostCreate)).To(Succeed())
+	g.Expect(actualPostCreate).To(testutils.BeDerivativeOf(expectedResource))
+
+	// Test Noop on unchanged
+	preNoopOutput := tool.GetOutputFor(clusterWithResource)
+	g.Expect(tool.WorkloadPatchOrCreateUnstructured(ctx, toolConfig.Logger, clusterWithResource, expectedResource.DeepCopy())).To(Succeed())
+	postNoopOutput := tool.GetOutputFor(clusterWithResource)
+	testutils.VerifySuccessOutputUnchanged(t, strings.TrimPrefix(postNoopOutput, preNoopOutput))
+
+	actualNoop := expectedResource.NewEmptyInstance()
+	g.Expect(tool.WorkloadGet(ctx, clusterWithResource, expectedResourceKey, actualNoop)).To(Succeed())
+	g.Expect(actualNoop).To(testutils.BeDerivativeOf(expectedResource))
+
+	// Test Modify
+	preMutateOutput := tool.GetOutputFor(clusterWithResourceDiff)
+	g.Expect(tool.WorkloadPatchOrCreateUnstructured(ctx, toolConfig.Logger, clusterWithResourceDiff, expectedResource.DeepCopy())).To(Succeed())
+	postMutateOutput := tool.GetOutputFor(clusterWithResourceDiff)
+	testutils.VerifySuccessOutputChanged(t, strings.TrimPrefix(postMutateOutput, preMutateOutput))
+
+	actualMutate := expectedResource.NewEmptyInstance()
+	g.Expect(tool.WorkloadGet(ctx, clusterWithResourceDiff, expectedResourceKey, actualMutate)).To(Succeed())
+	g.Expect(actualMutate).To(testutils.BeDerivativeOf(expectedResource))
+	g.Expect(actualMutate).NotTo(testutils.BeDerivativeOf(preMutatedResource))
+}
+
+func TestTool_WorkloadPatchOrCreateUnstructuredDry(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+	ctx := context.TODO()
+
+	expectedData := map[string]interface{}{
+		"color": base64.StdEncoding.EncodeToString([]byte("red")),
+	}
+	expectedResource := new(unstructured.Unstructured)
+	expectedResource.SetUnstructuredContent(map[string]interface{}{"data": expectedData})
+	expectedResource.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Secret"))
+	expectedResource.SetNamespace(fmt.Sprintf("test-%s", util.RandomString(6)))
+	expectedResource.SetName(fmt.Sprintf("test-secret-%s", util.RandomString(6)))
+
+	preMutatedData := map[string]string{
+		"color": base64.StdEncoding.EncodeToString([]byte("purple")),
+	}
+	preMutatedResource := expectedResource.DeepCopy()
+	g.Expect(unstructured.SetNestedStringMap(preMutatedResource.UnstructuredContent(), preMutatedData, "data")).
+		To(Succeed())
+
+	clusterWithoutResource := testutils.GenerateCluster("", "withoutresource")
+	clusterWithResourceDiff := testutils.GenerateCluster("", "withdiff")
+
+	workloadResources := map[client.ObjectKey][]runtime.Object{
+		{Namespace: clusterWithResourceDiff.Namespace, Name: clusterWithResourceDiff.Name}: {
+			preMutatedResource.DeepCopy(),
+		},
+	}
+
+	testEnv := testutils.NewTestEnv(ctx, t, workloadResources,
+		clusterWithResourceDiff, clusterWithoutResource)
+	toolConfig := &base.ToolConfig{ //nolint:exhaustivestruct
+		DryRun:               true,
+		RestConfig:           testEnv.RestConfig,
+		WorkloadClientGetter: testEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
+	}
+
+	tool := &base.Tool{}
+	tool.Configure(toolConfig)
+
+	// Test Dry Run Create
+	preDryRunOutput := tool.GetOutputFor(clusterWithoutResource)
+	g.Expect(tool.WorkloadPatchOrCreateUnstructured(ctx, toolConfig.Logger, clusterWithoutResource, expectedResource.DeepCopy())).To(Succeed())
+	postDryRunOutput := tool.GetOutputFor(clusterWithoutResource)
+	testutils.VerifySuccessOutputDryRun(t, strings.TrimPrefix(postDryRunOutput, preDryRunOutput))
+
+	expectedResourceKey, err := client.ObjectKeyFromObject(expectedResource)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(tool.WorkloadGet(ctx, clusterWithoutResource, expectedResourceKey, expectedResource.NewEmptyInstance())).
+		To(MatchError(ContainSubstring("not found")))
+
+	// Test Dry Run Modify
+	preDryRunMutateOutput := tool.GetOutputFor(clusterWithResourceDiff)
+	g.Expect(tool.WorkloadPatchOrCreateUnstructured(ctx, toolConfig.Logger, clusterWithResourceDiff, expectedResource.DeepCopy())).To(Succeed())
+	postDryRunMutateOutput := tool.GetOutputFor(clusterWithResourceDiff)
+	testutils.VerifySuccessOutputDryRun(t, strings.TrimPrefix(postDryRunMutateOutput, preDryRunMutateOutput))
+
+	actualDryRunMutate := expectedResource.NewEmptyInstance()
+	g.Expect(tool.WorkloadGet(ctx, clusterWithResourceDiff, expectedResourceKey, actualDryRunMutate)).To(Succeed())
+	g.Expect(actualDryRunMutate).To(testutils.BeDerivativeOf(preMutatedResource))
+	g.Expect(actualDryRunMutate).NotTo(testutils.BeDerivativeOf(expectedResource))
+}
 
 func TestTool_TestGetClustersNone(t *testing.T) {
 	t.Parallel()
