@@ -29,7 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/klog/klogr"
+	"k8s.io/klog/v2/klogr"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base/testutils"
 	"sigs.k8s.io/cluster-api/util"
@@ -93,7 +93,9 @@ func TestTool_WorkloadPatchOrCreateUnstructured(t *testing.T) {
 
 	// Test Create
 	preCreateOutput := tool.GetOutputFor(clusterWithoutResource)
-	g.Expect(tool.WorkloadPatchOrCreateUnstructured(ctx, toolConfig.Logger, clusterWithoutResource, expectedResource.DeepCopy())).To(Succeed())
+	g.Expect(tool.WorkloadPatchOrCreateUnstructured(ctx, toolConfig.Logger, clusterWithoutResource,
+		expectedResource.DeepCopy())).To(Succeed())
+
 	postCreateOutput := tool.GetOutputFor(clusterWithoutResource)
 	testutils.VerifySuccessOutputChanged(t, strings.TrimPrefix(postCreateOutput, preCreateOutput))
 
@@ -106,7 +108,9 @@ func TestTool_WorkloadPatchOrCreateUnstructured(t *testing.T) {
 
 	// Test Noop on unchanged
 	preNoopOutput := tool.GetOutputFor(clusterWithResource)
-	g.Expect(tool.WorkloadPatchOrCreateUnstructured(ctx, toolConfig.Logger, clusterWithResource, expectedResource.DeepCopy())).To(Succeed())
+	g.Expect(tool.WorkloadPatchOrCreateUnstructured(ctx, toolConfig.Logger, clusterWithResource,
+		expectedResource.DeepCopy())).To(Succeed())
+
 	postNoopOutput := tool.GetOutputFor(clusterWithResource)
 	testutils.VerifySuccessOutputUnchanged(t, strings.TrimPrefix(postNoopOutput, preNoopOutput))
 
@@ -116,7 +120,9 @@ func TestTool_WorkloadPatchOrCreateUnstructured(t *testing.T) {
 
 	// Test Modify
 	preMutateOutput := tool.GetOutputFor(clusterWithResourceDiff)
-	g.Expect(tool.WorkloadPatchOrCreateUnstructured(ctx, toolConfig.Logger, clusterWithResourceDiff, expectedResource.DeepCopy())).To(Succeed())
+	g.Expect(tool.WorkloadPatchOrCreateUnstructured(ctx, toolConfig.Logger, clusterWithResourceDiff,
+		expectedResource.DeepCopy())).To(Succeed())
+
 	postMutateOutput := tool.GetOutputFor(clusterWithResourceDiff)
 	testutils.VerifySuccessOutputChanged(t, strings.TrimPrefix(postMutateOutput, preMutateOutput))
 
@@ -170,7 +176,9 @@ func TestTool_WorkloadPatchOrCreateUnstructuredDry(t *testing.T) {
 
 	// Test Dry Run Create
 	preDryRunOutput := tool.GetOutputFor(clusterWithoutResource)
-	g.Expect(tool.WorkloadPatchOrCreateUnstructured(ctx, toolConfig.Logger, clusterWithoutResource, expectedResource.DeepCopy())).To(Succeed())
+	g.Expect(tool.WorkloadPatchOrCreateUnstructured(ctx, toolConfig.Logger, clusterWithoutResource,
+		expectedResource.DeepCopy())).To(Succeed())
+
 	postDryRunOutput := tool.GetOutputFor(clusterWithoutResource)
 	testutils.VerifySuccessOutputDryRun(t, strings.TrimPrefix(postDryRunOutput, preDryRunOutput))
 
@@ -181,7 +189,9 @@ func TestTool_WorkloadPatchOrCreateUnstructuredDry(t *testing.T) {
 
 	// Test Dry Run Modify
 	preDryRunMutateOutput := tool.GetOutputFor(clusterWithResourceDiff)
-	g.Expect(tool.WorkloadPatchOrCreateUnstructured(ctx, toolConfig.Logger, clusterWithResourceDiff, expectedResource.DeepCopy())).To(Succeed())
+	g.Expect(tool.WorkloadPatchOrCreateUnstructured(ctx, toolConfig.Logger, clusterWithResourceDiff,
+		expectedResource.DeepCopy())).To(Succeed())
+
 	postDryRunMutateOutput := tool.GetOutputFor(clusterWithResourceDiff)
 	testutils.VerifySuccessOutputDryRun(t, strings.TrimPrefix(postDryRunMutateOutput, preDryRunMutateOutput))
 
@@ -385,6 +395,7 @@ func testLifecycle(ctx context.Context, t *testing.T, initial, patchInput contro
 	toolConfig := &base.ToolConfig{ //nolint:exhaustivestruct
 		RestConfig:           testEnv.RestConfig,
 		WorkloadClientGetter: testEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
 	}
 	tool := &base.Tool{}
 	tool.Configure(toolConfig)
@@ -401,16 +412,16 @@ func testLifecycle(ctx context.Context, t *testing.T, initial, patchInput contro
 	preCreateOutput := tool.GetOutputFor(cluster)
 
 	// verify deletion of non-existing resource acts as expected
-	g.Expect(tool.WorkloadDelete(ctx, cluster, preCreate.DeepCopyObject().(controllerutil.Object))).
+	g.Expect(tool.WorkloadDelete(ctx, toolConfig.Logger, cluster, preCreate.DeepCopyObject().(controllerutil.Object))).
 		To(MatchError(ContainSubstring("not found")))
 
 	// verify patch of non-existing resource acts as expected
-	g.Expect(tool.WorkloadPatch(ctx, cluster, preCreate.DeepCopyObject().(controllerutil.Object), client.Merge)).
-		To(MatchError(ContainSubstring("not found")))
+	g.Expect(tool.WorkloadPatch(ctx, toolConfig.Logger, cluster,
+		preCreate.DeepCopyObject().(controllerutil.Object), client.Merge)).To(MatchError(ContainSubstring("not found")))
 
 	// verify real create
 	postCreate, _ := preCreate.DeepCopyObject().(controllerutil.Object)
-	g.Expect(tool.WorkloadCreate(ctx, cluster, postCreate)).To(Succeed())
+	g.Expect(tool.WorkloadCreate(ctx, toolConfig.Logger, cluster, postCreate)).To(Succeed())
 	g.Expect(postCreate).To(testutils.BeDerivativeOf(preCreate))
 
 	postCreateOutput := tool.GetOutputFor(cluster)
@@ -422,12 +433,12 @@ func testLifecycle(ctx context.Context, t *testing.T, initial, patchInput contro
 	g.Expect(actualPostCreate).To(testutils.BeDerivativeOf(preCreate))
 
 	// verify create of an already existing resource fails
-	g.Expect(tool.WorkloadCreate(ctx, cluster, preCreate.DeepCopyObject().(controllerutil.Object))).
+	g.Expect(tool.WorkloadCreate(ctx, toolConfig.Logger, cluster, preCreate.DeepCopyObject().(controllerutil.Object))).
 		To(MatchError(ContainSubstring("already exists")))
 
 	// verify real patch
 	postPatch, _ := patchInput.DeepCopyObject().(controllerutil.Object)
-	g.Expect(tool.WorkloadPatch(ctx, cluster, postPatch, client.Merge)).To(Succeed())
+	g.Expect(tool.WorkloadPatch(ctx, toolConfig.Logger, cluster, postPatch, client.Merge)).To(Succeed())
 	g.Expect(postPatch).To(testutils.BeDerivativeOf(patchInput))
 
 	postPatchOutput := tool.GetOutputFor(cluster)
@@ -442,7 +453,8 @@ func testLifecycle(ctx context.Context, t *testing.T, initial, patchInput contro
 	preDelete.SetCreationTimestamp(metav1.NewTime(time.Time{}))
 
 	// verify real delete
-	g.Expect(tool.WorkloadDelete(ctx, cluster, preDelete.DeepCopyObject().(controllerutil.Object))).To(Succeed())
+	g.Expect(tool.WorkloadDelete(ctx, toolConfig.Logger, cluster,
+		preDelete.DeepCopyObject().(controllerutil.Object))).To(Succeed())
 
 	postDeleteOutput := tool.GetOutputFor(cluster)
 	testutils.VerifySuccessOutputChanged(t, strings.TrimPrefix(postDeleteOutput, postPatchOutput))
@@ -481,17 +493,17 @@ func testLifecycleDry(ctx context.Context, t *testing.T, initial, patchInput con
 	tool.Configure(toolConfig)
 
 	// verify dry-run deletion of non-existing resource acts as expected
-	g.Expect(tool.WorkloadDelete(ctx, clusterWithout, initial.DeepCopyObject().(controllerutil.Object))).
-		To(MatchError(ContainSubstring("not found")))
+	g.Expect(tool.WorkloadDelete(ctx, toolConfig.Logger, clusterWithout,
+		initial.DeepCopyObject().(controllerutil.Object))).To(MatchError(ContainSubstring("not found")))
 
 	// verify dry-run patch of non-existing resource acts as expected
-	g.Expect(tool.WorkloadPatch(ctx, clusterWithout, initial.DeepCopyObject().(controllerutil.Object), client.Merge)).
-		To(MatchError(ContainSubstring("not found")))
+	g.Expect(tool.WorkloadPatch(ctx, toolConfig.Logger, clusterWithout,
+		initial.DeepCopyObject().(controllerutil.Object), client.Merge)).To(MatchError(ContainSubstring("not found")))
 
 	// verify dry-run create
 	preCreateOutput := tool.GetOutputFor(clusterWithout)
 	postDryCreate, _ := initial.DeepCopyObject().(controllerutil.Object)
-	g.Expect(tool.WorkloadCreate(ctx, clusterWithout, postDryCreate)).To(Succeed())
+	g.Expect(tool.WorkloadCreate(ctx, toolConfig.Logger, clusterWithout, postDryCreate)).To(Succeed())
 	postCreateOutput := tool.GetOutputFor(clusterWithout)
 
 	g.Expect(postDryCreate).To(testutils.BeDerivativeOf(initial))
@@ -506,14 +518,14 @@ func testLifecycleDry(ctx context.Context, t *testing.T, initial, patchInput con
 	)).To(MatchError(ContainSubstring("not found")))
 
 	// verify dry run create of an already existing resource fails
-	g.Expect(tool.WorkloadCreate(ctx, clusterWith, initial.DeepCopyObject().(controllerutil.Object))).
+	g.Expect(tool.WorkloadCreate(ctx, toolConfig.Logger, clusterWith, initial.DeepCopyObject().(controllerutil.Object))).
 		To(MatchError(ContainSubstring("already exists")))
 
 	// verify dry-run patch
 	toolConfig.DryRun = true
 	preDryPatchOutput := tool.GetOutputFor(clusterWith)
 	postDryPatch, _ := patchInput.DeepCopyObject().(controllerutil.Object)
-	g.Expect(tool.WorkloadPatch(ctx, clusterWith, postDryPatch, client.Merge)).To(Succeed())
+	g.Expect(tool.WorkloadPatch(ctx, toolConfig.Logger, clusterWith, postDryPatch, client.Merge)).To(Succeed())
 	postDryPatchOutput := tool.GetOutputFor(clusterWith)
 
 	g.Expect(postDryPatch).To(testutils.BeDerivativeOf(patchInput))
@@ -526,7 +538,9 @@ func testLifecycleDry(ctx context.Context, t *testing.T, initial, patchInput con
 
 	// verify dry-run delete
 	preDryDeleteOutput := tool.GetOutputFor(clusterWith)
-	g.Expect(tool.WorkloadDelete(ctx, clusterWith, initial.DeepCopyObject().(controllerutil.Object))).To(Succeed())
+	g.Expect(tool.WorkloadDelete(ctx, toolConfig.Logger, clusterWith,
+		initial.DeepCopyObject().(controllerutil.Object))).To(Succeed())
+
 	postDryDeleteOutput := tool.GetOutputFor(clusterWith)
 	testutils.VerifySuccessOutputDryRun(t, strings.TrimPrefix(postDryDeleteOutput, preDryDeleteOutput))
 
