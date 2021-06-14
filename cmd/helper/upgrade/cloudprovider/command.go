@@ -44,7 +44,7 @@ func (c *Command) RunE() error {
 		return fmt.Errorf("failed to initialize upgrade utility: %w", err)
 	}
 
-	m, err := ui.NewModel("CAPP ProviderID Migration", upgrader)
+	m, err := ui.NewModel("CAPP Upgrade Cloud Provider", upgrader)
 	if err != nil {
 		return err
 	}

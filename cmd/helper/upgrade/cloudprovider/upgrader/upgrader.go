@@ -87,6 +87,7 @@ func New(ctx context.Context, config *base.ToolConfig) (*Upgrader, error) {
 		return u, err
 	}
 
+	u.clusters = clusters
 	u.clusterStatus = make(map[string]map[string]bool, len(clusters))
 
 	for _, c := range clusters {

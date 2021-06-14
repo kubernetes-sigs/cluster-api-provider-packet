@@ -71,7 +71,7 @@ func TickCmd() tea.Cmd {
 	})
 }
 
-func (m Model) runMigration() tea.Msg {
+func (m Model) runTool() tea.Msg {
 	m.Tool.Run(context.TODO())
 
 	return cleanQuit()
@@ -82,7 +82,7 @@ func (m Model) checkPrerequisites() tea.Msg {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tea.Sequentially(m.checkPrerequisites, m.runMigration), TickCmd())
+	return tea.Batch(tea.Sequentially(m.checkPrerequisites, m.runTool), TickCmd())
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -98,6 +98,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.progress.Width = msg.Width - padding*2 - 4 //nolint: gomnd
+
 		if m.progress.Width > maxWidth {
 			m.progress.Width = maxWidth
 		}
@@ -115,7 +116,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	// TODO: handle window size detection and text wrapping
 	errorColor := lipgloss.Color("#dc322f")
 	infoColor := lipgloss.Color("#859900")
 	headingColor := lipgloss.Color("#268bd2")
