@@ -4,8 +4,8 @@ go 1.13
 
 require (
 	github.com/blang/semver v3.5.1+incompatible
-	github.com/charmbracelet/bubbles v0.7.9
-	github.com/charmbracelet/bubbletea v0.13.4
+	github.com/charmbracelet/bubbles v0.8.0
+	github.com/charmbracelet/bubbletea v0.14.0
 	github.com/charmbracelet/lipgloss v0.2.1
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/go-logr/logr v0.4.0
@@ -22,7 +22,6 @@ require (
 	k8s.io/apiextensions-apiserver v0.17.17
 	k8s.io/apimachinery v0.17.17
 	k8s.io/client-go v0.17.17
-	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.8.0
 	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
 	sigs.k8s.io/cluster-api v0.3.16

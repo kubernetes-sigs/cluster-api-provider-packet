@@ -39,6 +39,7 @@ func main() {
 	klogFlags := new(flag.FlagSet)
 	klog.InitFlags(klogFlags)
 	klogFlags.Set("logtostderr", "false")
+	klogFlags.Set("stderrthreshold", "FATAL")
 
 	rootCmd := &cobra.Command{ //nolint:exhaustivestruct
 		Use:          "capp-helper",

@@ -44,12 +44,15 @@ func (c *Command) RunE() error {
 		return fmt.Errorf("failed to initialize upgrade utility: %w", err)
 	}
 
-	m, err := ui.NewModel("CAPP Upgrade Cloud Provider", upgrader)
+	m, err := ui.NewModel("CAPP Upgrade Cloud Provider", upgrader, !c.ToolConfig.NoTUI)
 	if err != nil {
 		return err
 	}
 
-	var opts []tea.ProgramOption
+	opts := []tea.ProgramOption{
+		tea.WithAltScreen(),
+		tea.WithMouseCellMotion(),
+	}
 
 	if c.ToolConfig.NoTUI {
 		opts = append(opts, tea.WithoutRenderer())
