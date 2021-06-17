@@ -28,10 +28,12 @@ import (
 )
 
 const (
-	fps        = 60
-	padding    = 2
-	maxWidth   = 80
-	errorColor = lipgloss.Color("#dc322f")
+	fps          = 60
+	padding      = 2
+	maxWidth     = 80
+	errorColor   = lipgloss.Color("#dc322f")
+	headingColor = lipgloss.Color("#268bd2")
+	infoColor    = lipgloss.Color("#859900")
 )
 
 type Tool interface {
@@ -62,17 +64,18 @@ func NewModel(title string, tool Tool, tuiEnabled bool) (Model, error) {
 }
 
 type Model struct {
-	title      string
-	Tool       Tool
-	progress   *progress.Model
-	paginator  paginator.Model
-	viewport   viewport.Model
-	percent    float64
-	err        error
-	height     int
-	width      int
-	finished   bool
-	tuiEnabled bool
+	title           string
+	Tool            Tool
+	progress        *progress.Model
+	paginator       paginator.Model
+	viewPortCluster string
+	viewport        viewport.Model
+	percent         float64
+	err             error
+	height          int
+	width           int
+	finished        bool
+	tuiEnabled      bool
 }
 
 type progressTick time.Time
@@ -100,10 +103,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m *Model) updateViewport() {
-	infoColor := lipgloss.Color("#859900")
-	headingColor := lipgloss.Color("#268bd2")
-	clusterStyle := lipgloss.NewStyle().Foreground(headingColor)
-	outputHeadings := clusterStyle.Copy().PaddingLeft(4)                           //nolint:gomnd
+	outputHeadings := lipgloss.NewStyle().Foreground(headingColor).PaddingLeft(4)  //nolint:gomnd
 	clusterOutputStyle := lipgloss.NewStyle().PaddingLeft(8).Foreground(infoColor) //nolint:gomnd
 	clusterErrorStyle := lipgloss.NewStyle().PaddingLeft(4).Foreground(errorColor) //nolint:gomnd
 
@@ -117,8 +117,7 @@ func (m *Model) updateViewport() {
 	start, end := m.paginator.GetSliceBounds(len(clusters))
 
 	for _, c := range clusters[start:end] {
-		outputKey := fmt.Sprintf("%s/%s", c.Namespace, c.Name)
-		body += clusterStyle.Render(fmt.Sprintf("Cluster %s:", outputKey)) + "\n"
+		m.viewPortCluster = fmt.Sprintf("%s/%s", c.Namespace, c.Name)
 
 		out := m.Tool.GetOutputFor(c)
 
@@ -155,10 +154,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //nolint:cyclop
 			m.finished = true
 		}
 	case tea.WindowSizeMsg:
+		footerHeight := 1
+		headerHeight := 4
+		navHeight := 6
+		viewportHeadingHeight := 1
+		viewPortHeightPadding := footerHeight + headerHeight + navHeight + viewportHeadingHeight + padding*2 //nolint: gomnd
+
 		m.width = msg.Width
 		m.height = msg.Height
-		m.viewport.Width = msg.Width
-		m.viewport.Height = msg.Height - 9           //nolint: gomnd
+		m.viewport.Width = msg.Width - padding
+		m.viewport.Height = msg.Height - viewPortHeightPadding
 		m.progress.Width = msg.Width - padding*2 - 4 //nolint: gomnd
 
 		if m.progress.Width > maxWidth {
@@ -246,25 +251,57 @@ func (m *Model) updatePaginatorAndViewPort(msg tea.KeyMsg) { //nolint:cyclop
 }
 
 func (m Model) View() string {
-	footerStyle := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center)
+	header := fmt.Sprintf("%s\n\n%s\n", m.title, m.progress.View(m.percent))
+	header = lipgloss.PlaceHorizontal(m.width-padding, lipgloss.Center, header)
 
-	header := fmt.Sprintf("%s\n\n%s\n\n", m.title, m.progress.View(m.percent))
+	footer := ""
 
+	if m.finished {
+		footer += "Press 'q' to quit"
+	}
+
+	footer = lipgloss.PlaceHorizontal(m.width-padding, lipgloss.Center, footer)
+
+	headerHeight := lipgloss.Height(header)
+	footerHeight := lipgloss.Height(footer)
+	bodyHeight := m.height - headerHeight - footerHeight - (padding * 2) //nolint: gomnd
+
+	body := ""
+	// If we encountered an error with pre-requisites the error output should override
+	// any other output
 	if m.err != nil {
-		header += lipgloss.NewStyle().Foreground(errorColor).Render(fmt.Sprintf("Error: %s", m.err.Error())) + "\n"
+		errOutput := fmt.Sprintf("Error: %s", m.err.Error())
+		errOutput = lipgloss.NewStyle().Foreground(errorColor).Render(errOutput) + "\n"
+		body += wordwrap.String(errOutput, m.width-padding)
+		body = lipgloss.Place(m.width-padding, bodyHeight, lipgloss.Left, lipgloss.Top, body)
 	} else {
-		header += "\n"
+		scrollPercent := fmt.Sprintf("%3.f%%", m.viewport.ScrollPercent()*100) //nolint:gomnd
+		// Only show scroll percentage if everything doesn't fit on a single page
+		if m.viewport.AtBottom() && m.viewport.AtTop() {
+			scrollPercent = ""
+		}
+
+		paginator := "cluster: " + m.paginator.View()
+
+		paginatorNav := "<-/-> to view output for additional workload clusters"
+		viewportNav := "PageUp/PageDown to scroll through output\n"
+
+		nav := lipgloss.JoinVertical(lipgloss.Center, scrollPercent, paginator, paginatorNav, viewportNav)
+		nav = lipgloss.PlaceHorizontal(m.width-padding, lipgloss.Center, nav)
+
+		clusterHeading := ""
+
+		if m.viewPortCluster != "" {
+			clusterHeading = lipgloss.NewStyle().Foreground(headingColor).Render("Cluster: " + m.viewPortCluster)
+		}
+
+		body += lipgloss.JoinVertical(lipgloss.Left, clusterHeading, m.viewport.View(), nav)
+		body = lipgloss.Place(m.width-padding, bodyHeight, lipgloss.Left, lipgloss.Bottom, body)
 	}
 
-	scrollPercent := fmt.Sprintf("%3.f%%\n", m.viewport.ScrollPercent()*100)
-	if m.viewport.AtBottom() && m.viewport.AtTop() {
-		// Do not show scroll percentage if everything fits on a single page
-		scrollPercent = "\n"
-	}
+	body = lipgloss.NewStyle().Border(lipgloss.NormalBorder(), true, false).Render(body)
+	output := lipgloss.JoinVertical(lipgloss.Center, header, body, footer)
+	output = lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).Render(output)
 
-	// TODO: if m.finished is true, output quit instructions
-	// TODO: add instructions for navigation
-	footer := footerStyle.Render(scrollPercent + m.paginator.View() + "\n")
-
-	return header + m.viewport.View() + "\n" + footer
+	return output
 }

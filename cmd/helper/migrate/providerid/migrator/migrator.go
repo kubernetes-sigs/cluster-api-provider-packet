@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
@@ -135,11 +136,7 @@ func (m *Migrator) CheckPrerequisites(ctx context.Context) error {
 		return err
 	}
 
-	if !ok {
-		m.logger.Error(ErrCAPPTooOld, "CAPP needs to be upgraded prior to running this tool")
-
-		return ErrCAPPTooOld
-	}
+	cappDeploymentOk := ok
 
 	wg := new(sync.WaitGroup)
 
@@ -165,6 +162,28 @@ func (m *Migrator) CheckPrerequisites(ctx context.Context) error {
 	}
 
 	wg.Wait()
+
+	clusterErrors := make([]error, 0, len(m.clusters))
+
+	for _, c := range m.clusters {
+		if err := m.GetErrorFor(c); err != nil {
+			clusterErrors = append(clusterErrors, err)
+		}
+	}
+
+	// If all workload clusters are in an error state, report that
+	if len(clusterErrors) == len(m.clusters) {
+		err := kerrors.NewAggregate(clusterErrors)
+		m.logger.Error(err, "workload cluster prerequisites failed")
+
+		return err
+	}
+
+	if !cappDeploymentOk {
+		m.logger.Error(ErrCAPPTooOld, "CAPP needs to be upgraded prior to running this tool")
+
+		return ErrCAPPTooOld
+	}
 
 	return nil
 }
