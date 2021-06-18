@@ -46,6 +46,106 @@ import (
 // TODO: tests for HasError/GetErrorFor/AddErrorFor
 // TODO: tests for GetOutputFor/GetBufferFor/flushing of buffers to output
 
+func TestTool_WorkloadPatchDryRunRedactsSecrets(t *testing.T) {
+	t.Parallel()
+
+	g := NewWithT(t)
+	ctx := context.TODO()
+	initialSecret := &corev1.Secret{ // nolint:exhaustivestruct
+		ObjectMeta: metav1.ObjectMeta{ // nolint:exhaustivestruct
+			Namespace: fmt.Sprintf("test-%s", util.RandomString(6)),
+			Name:      fmt.Sprintf("test-secret-%s", util.RandomString(6)),
+		},
+		Data: map[string][]byte{
+			"color": []byte("yellow"),
+			"shape": []byte("square"),
+		},
+	}
+
+	cluster := testutils.GenerateCluster("", "")
+	clusterKey, err := client.ObjectKeyFromObject(cluster)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	workloadResources := map[client.ObjectKey][]runtime.Object{
+		clusterKey: {initialSecret},
+	}
+
+	testEnv := testutils.NewTestEnv(ctx, t, workloadResources, cluster)
+	toolConfig := &base.ToolConfig{ //nolint:exhaustivestruct
+		DryRun:               true,
+		RestConfig:           testEnv.RestConfig,
+		WorkloadClientGetter: testEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
+	}
+	tool := &base.Tool{}
+	tool.Configure(toolConfig)
+
+	patchInput := initialSecret.DeepCopy()
+	patchInput.Data["size"] = []byte("large")
+	unstructuredSecret := new(unstructured.Unstructured)
+	unstructuredContent, err := runtime.DefaultUnstructuredConverter.ToUnstructured(patchInput)
+	g.Expect(err).NotTo(HaveOccurred())
+	unstructuredSecret.SetUnstructuredContent(unstructuredContent)
+	unstructuredSecret.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Secret"))
+
+	g.Expect(tool.WorkloadPatchOrCreateUnstructured(ctx, toolConfig.Logger, cluster, unstructuredSecret)).To(Succeed())
+
+	output := tool.GetOutputFor(cluster)
+
+	for _, value := range patchInput.Data {
+		g.Expect(output).NotTo(ContainSubstring(string(value)))
+	}
+}
+
+func TestTool_WorkloadCreateDryRunRedactsSecrets(t *testing.T) {
+	t.Parallel()
+
+	g := NewWithT(t)
+	ctx := context.TODO()
+	secret := &corev1.Secret{ // nolint:exhaustivestruct
+		ObjectMeta: metav1.ObjectMeta{ // nolint:exhaustivestruct
+			Namespace: fmt.Sprintf("test-%s", util.RandomString(6)),
+			Name:      fmt.Sprintf("test-secret-%s", util.RandomString(6)),
+		},
+		Data: map[string][]byte{
+			"color": []byte("yellow"),
+			"shape": []byte("square"),
+		},
+	}
+
+	cluster := testutils.GenerateCluster("", "")
+
+	testEnv := testutils.NewTestEnv(ctx, t, nil, cluster)
+	toolConfig := &base.ToolConfig{ //nolint:exhaustivestruct
+		DryRun:               true,
+		RestConfig:           testEnv.RestConfig,
+		WorkloadClientGetter: testEnv.WorkloadClientGetter,
+		Logger:               klogr.New(),
+	}
+	tool := &base.Tool{}
+	tool.Configure(toolConfig)
+
+	g.Expect(tool.WorkloadCreate(ctx, toolConfig.Logger, cluster, secret)).To(Succeed())
+	output := tool.GetOutputFor(cluster)
+
+	for _, value := range secret.Data {
+		g.Expect(output).NotTo(ContainSubstring(string(value)))
+	}
+
+	unstructuredSecret := new(unstructured.Unstructured)
+	unstructuredContent, err := runtime.DefaultUnstructuredConverter.ToUnstructured(secret)
+	g.Expect(err).NotTo(HaveOccurred())
+	unstructuredSecret.SetUnstructuredContent(unstructuredContent)
+	unstructuredSecret.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Secret"))
+
+	g.Expect(tool.WorkloadCreate(ctx, toolConfig.Logger, cluster, unstructuredSecret)).To(Succeed())
+	output = strings.TrimPrefix(tool.GetOutputFor(cluster), output)
+
+	for _, value := range secret.Data {
+		g.Expect(output).NotTo(ContainSubstring(string(value)))
+	}
+}
+
 func TestTool_WorkloadPatchOrCreateUnstructured(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
@@ -368,6 +468,7 @@ func TestTool_TestTypedNamespacedWorkloadLifecycle(t *testing.T) {
 	patchInput.Data["size"] = []byte("large")
 
 	testLifecycle(ctx, t, initial, patchInput)
+	testLifecycleDry(ctx, t, initial, patchInput)
 }
 
 func TestTool_TestTypedNonNamespacedWorkloadLifecycle(t *testing.T) {
@@ -419,10 +520,6 @@ func testLifecycle(ctx context.Context, t *testing.T, initial, patchInput contro
 	g.Expect(tool.WorkloadDelete(ctx, toolConfig.Logger, cluster, preCreate.DeepCopyObject().(controllerutil.Object))).
 		To(MatchError(ContainSubstring("not found")))
 
-	// verify patch of non-existing resource acts as expected
-	g.Expect(tool.WorkloadPatch(ctx, toolConfig.Logger, cluster,
-		preCreate.DeepCopyObject().(controllerutil.Object), client.Merge)).To(MatchError(ContainSubstring("not found")))
-
 	// verify real create
 	postCreate, _ := preCreate.DeepCopyObject().(controllerutil.Object)
 	g.Expect(tool.WorkloadCreate(ctx, toolConfig.Logger, cluster, postCreate)).To(Succeed())
@@ -440,20 +537,7 @@ func testLifecycle(ctx context.Context, t *testing.T, initial, patchInput contro
 	g.Expect(tool.WorkloadCreate(ctx, toolConfig.Logger, cluster, preCreate.DeepCopyObject().(controllerutil.Object))).
 		To(MatchError(ContainSubstring("already exists")))
 
-	// verify real patch
-	postPatch, _ := patchInput.DeepCopyObject().(controllerutil.Object)
-	g.Expect(tool.WorkloadPatch(ctx, toolConfig.Logger, cluster, postPatch, client.Merge)).To(Succeed())
-	g.Expect(postPatch).To(testutils.BeDerivativeOf(patchInput))
-
-	postPatchOutput := tool.GetOutputFor(cluster)
-	testutils.VerifySuccessOutputChanged(t, strings.TrimPrefix(postPatchOutput, postCreateOutput))
-
-	// ensure that the resource is the same as when we started
-	actualPostPatch, _ := reflect.New(resourceType).Interface().(controllerutil.Object)
-	g.Expect(tool.WorkloadGet(ctx, cluster, resourceKey, actualPostPatch)).To(Succeed())
-	g.Expect(actualPostPatch).To(testutils.BeDerivativeOf(patchInput))
-
-	preDelete, _ := postPatch.DeepCopyObject().(controllerutil.Object)
+	preDelete, _ := postCreate.DeepCopyObject().(controllerutil.Object)
 	preDelete.SetCreationTimestamp(metav1.NewTime(time.Time{}))
 
 	// verify real delete
@@ -461,7 +545,7 @@ func testLifecycle(ctx context.Context, t *testing.T, initial, patchInput contro
 		preDelete.DeepCopyObject().(controllerutil.Object))).To(Succeed())
 
 	postDeleteOutput := tool.GetOutputFor(cluster)
-	testutils.VerifySuccessOutputChanged(t, strings.TrimPrefix(postDeleteOutput, postPatchOutput))
+	testutils.VerifySuccessOutputChanged(t, strings.TrimPrefix(postDeleteOutput, postCreateOutput))
 
 	// ensure that the resource no longer exists
 	g.Expect(tool.WorkloadGet(
@@ -501,10 +585,6 @@ func testLifecycleDry(ctx context.Context, t *testing.T, initial, patchInput con
 	g.Expect(tool.WorkloadDelete(ctx, toolConfig.Logger, clusterWithout,
 		initial.DeepCopyObject().(controllerutil.Object))).To(MatchError(ContainSubstring("not found")))
 
-	// verify dry-run patch of non-existing resource acts as expected
-	g.Expect(tool.WorkloadPatch(ctx, toolConfig.Logger, clusterWithout,
-		initial.DeepCopyObject().(controllerutil.Object), client.Merge)).To(MatchError(ContainSubstring("not found")))
-
 	// verify dry-run create
 	preCreateOutput := tool.GetOutputFor(clusterWithout)
 	postDryCreate, _ := initial.DeepCopyObject().(controllerutil.Object)
@@ -525,21 +605,6 @@ func testLifecycleDry(ctx context.Context, t *testing.T, initial, patchInput con
 	// verify dry run create of an already existing resource fails
 	g.Expect(tool.WorkloadCreate(ctx, toolConfig.Logger, clusterWith, initial.DeepCopyObject().(controllerutil.Object))).
 		To(MatchError(ContainSubstring("already exists")))
-
-	// verify dry-run patch
-	toolConfig.DryRun = true
-	preDryPatchOutput := tool.GetOutputFor(clusterWith)
-	postDryPatch, _ := patchInput.DeepCopyObject().(controllerutil.Object)
-	g.Expect(tool.WorkloadPatch(ctx, toolConfig.Logger, clusterWith, postDryPatch, client.Merge)).To(Succeed())
-	postDryPatchOutput := tool.GetOutputFor(clusterWith)
-
-	g.Expect(postDryPatch).To(testutils.BeDerivativeOf(patchInput))
-	testutils.VerifySuccessOutputDryRun(t, strings.TrimPrefix(postDryPatchOutput, preDryPatchOutput))
-
-	// ensure that the resource is the same as when we started
-	actualPostDryPatch, _ := reflect.New(resourceType).Interface().(controllerutil.Object)
-	g.Expect(tool.WorkloadGet(ctx, clusterWith, resourceKey, actualPostDryPatch)).To(Succeed())
-	g.Expect(actualPostDryPatch).To(testutils.BeDerivativeOf(initial))
 
 	// verify dry-run delete
 	preDryDeleteOutput := tool.GetOutputFor(clusterWith)

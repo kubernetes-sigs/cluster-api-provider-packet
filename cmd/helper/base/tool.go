@@ -19,14 +19,19 @@ import (
 	"fmt"
 	"io/ioutil"
 	"sync"
+	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/google/go-cmp/cmp"
+	"github.com/muesli/reflow/indent"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -35,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/yaml"
 )
 
 func ObjectToName(obj controllerutil.Object) string {
@@ -95,7 +101,7 @@ func (t *Tool) WorkloadPatchOrCreateUnstructured(
 	obj *unstructured.Unstructured,
 ) error {
 	stdout := t.GetBufferFor(c)
-	existing := obj.NewEmptyInstance()
+	existing, _ := obj.NewEmptyInstance().(*unstructured.Unstructured)
 
 	existingKey, err := client.ObjectKeyFromObject(obj)
 	if err != nil {
@@ -111,7 +117,69 @@ func (t *Tool) WorkloadPatchOrCreateUnstructured(
 	}
 
 	if !equality.Semantic.DeepDerivative(obj, existing) {
-		return t.WorkloadPatch(ctx, logger, c, obj, client.Merge)
+		if err := t.workloadPatch(ctx, c, obj, client.Merge); err != nil {
+			return err
+		}
+
+		name := ObjectToName(obj)
+
+		if t.DryRun() {
+			// TODO: better error handling
+			re, _ := t.scheme.New(obj.GroupVersionKind())
+			redactedExisting, _ := re.(controllerutil.Object)
+			_ = runtime.DefaultUnstructuredConverter.FromUnstructured(existing.UnstructuredContent(), redactedExisting)
+			redactedExisting.SetManagedFields(nil)
+			redactedExisting.SetCreationTimestamp(metav1.NewTime(time.Time{}))
+			redactedExisting.SetUID("")
+			redactedExisting.SetSelfLink("")
+			redactedExisting.SetResourceVersion("")
+			delete(redactedExisting.GetAnnotations(), "kubectl.kubernetes.io/last-applied-configuration")
+
+			r, _ := t.scheme.New(obj.GroupVersionKind())
+			redacted, _ := r.(controllerutil.Object)
+			_ = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), redacted)
+			redacted.SetManagedFields(nil)
+			redacted.SetCreationTimestamp(metav1.NewTime(time.Time{}))
+			redacted.SetUID("")
+			redacted.SetSelfLink("")
+			redacted.SetResourceVersion("")
+			delete(redacted.GetAnnotations(), "kubectl.kubernetes.io/last-applied-configuration")
+
+			// If the resource is a secret, redact it's contents
+			if r, ok := redacted.(*corev1.Secret); ok {
+				re, _ := redactedExisting.(*corev1.Secret)
+
+				// redact data for all keys in the existing secret
+				for key, value := range re.Data {
+					if rVal, ok := r.Data[key]; ok {
+						if cmp.Diff(value, rVal) != "" {
+							r.Data[key] = []byte("redactedDiff")
+						} else {
+							r.Data[key] = []byte("redacted")
+						}
+					}
+
+					re.Data[key] = []byte("redacted")
+				}
+
+				// redact data for any keys that exist in the new
+				// secret that don't exist in the old secret
+				for key := range r.Data {
+					if _, ok := re.Data[key]; !ok {
+						r.Data[key] = []byte("redacted")
+					}
+				}
+			}
+
+			diff := cmp.Diff(redactedExisting, redacted, diff.IgnoreUnset())
+			logger.Info("(Dry Run) Would patch resource", "kind", obj.GetKind(), "name", name, "diff", diff)
+			fmt.Fprintf(t.GetBufferFor(c), "(Dry Run) Would patch %s %s\n%s\n", obj.GetKind(), name, indent.String(diff, 4))
+
+			return nil
+		}
+
+		logger.Info("Successfully patched resource", "kind", obj.GetKind(), "name", name)
+		fmt.Fprintf(t.GetBufferFor(c), "✅ %s %s has been successfully patched\n", obj.GetKind(), name)
 	}
 
 	kind := obj.GetObjectKind().GroupVersionKind().Kind
@@ -122,11 +190,10 @@ func (t *Tool) WorkloadPatchOrCreateUnstructured(
 	return nil
 }
 
-func (t *Tool) WorkloadPatch(
+func (t *Tool) workloadPatch(
 	ctx context.Context,
-	logger logr.Logger,
 	c *clusterv1.Cluster,
-	obj controllerutil.Object,
+	obj runtime.Object,
 	patch client.Patch,
 ) error {
 	var opts []client.PatchOption
@@ -139,31 +206,15 @@ func (t *Tool) WorkloadPatch(
 		return err
 	}
 
-	if err := workloadClient.Patch(ctx, obj, patch, opts...); err != nil {
-		return err
-	}
-
-	gvk, err := apiutil.GVKForObject(obj, t.scheme)
-	if err != nil {
-		return err
-	}
-
-	name := ObjectToName(obj)
-	if t.DryRun() {
-		// TODO: show diff
-		logger.Info("(Dry Run) Would patch resource", "kind", gvk.Kind, "name", name)
-		fmt.Fprintf(t.GetBufferFor(c), "(Dry Run) Would patch %s %s\n", gvk.Kind, name)
-
-		return nil
-	}
-
-	logger.Info("Successfully patched resource", "kind", gvk.Kind, "name", name)
-	fmt.Fprintf(t.GetBufferFor(c), "✅ %s %s has been successfully patched\n", gvk.Kind, name)
-
-	return nil
+	return workloadClient.Patch(ctx, obj, patch, opts...)
 }
 
-func (t *Tool) WorkloadCreate(ctx context.Context, logger logr.Logger, c *clusterv1.Cluster, obj controllerutil.Object) error {
+func (t *Tool) WorkloadCreate(
+	ctx context.Context,
+	logger logr.Logger,
+	c *clusterv1.Cluster,
+	obj controllerutil.Object,
+) error {
 	var opts []client.CreateOption
 	if t.DryRun() {
 		opts = append(opts, client.DryRunAll)
@@ -186,8 +237,40 @@ func (t *Tool) WorkloadCreate(ctx context.Context, logger logr.Logger, c *cluste
 	name := ObjectToName(obj)
 
 	if t.DryRun() {
-		logger.Info("(Dry Run) Would create resource", "kind", gvk.Kind, "name", name)
-		fmt.Fprintf(t.GetBufferFor(c), "(Dry Run) Would create %s %s\n", gvk.Kind, name)
+		// Prepare a copy of the resource for printing by clearing out
+		// fields that we don't need to show the user
+		redacted, _ := obj.DeepCopyObject().(controllerutil.Object)
+		redacted.SetManagedFields(nil)
+		redacted.SetCreationTimestamp(metav1.NewTime(time.Time{}))
+		redacted.SetUID("")
+		redacted.SetSelfLink("")
+
+		// If the resource is a secret, redact it's contents
+		switch c := redacted.(type) {
+		case *corev1.Secret:
+			for key := range c.Data {
+				c.Data[key] = []byte("redacted")
+			}
+		case *unstructured.Unstructured:
+			if gvk.Kind == "Secret" {
+				data, found, err := unstructured.NestedMap(c.UnstructuredContent(), "data")
+				if !found || err != nil {
+					data = make(map[string]interface{})
+				}
+
+				for key := range data {
+					data[key] = "redacted"
+				}
+
+				_ = unstructured.SetNestedMap(c.UnstructuredContent(), data, "data")
+			}
+		}
+
+		// Convert the resource into yaml for printing
+		data, _ := yaml.Marshal(redacted)
+
+		logger.Info("(Dry Run) Would create resource", "kind", gvk.Kind, "name", name, "object", data)
+		fmt.Fprintf(t.GetBufferFor(c), "(Dry Run) Would create %s %s\n%s", gvk.Kind, name, indent.String(string(data), 4))
 
 		return nil
 	}
@@ -198,7 +281,12 @@ func (t *Tool) WorkloadCreate(ctx context.Context, logger logr.Logger, c *cluste
 	return nil
 }
 
-func (t *Tool) WorkloadDelete(ctx context.Context, logger logr.Logger, c *clusterv1.Cluster, obj controllerutil.Object) error {
+func (t *Tool) WorkloadDelete(
+	ctx context.Context,
+	logger logr.Logger,
+	c *clusterv1.Cluster,
+	obj controllerutil.Object,
+) error {
 	var opts []client.DeleteOption
 	if t.DryRun() {
 		opts = append(opts, client.DryRunAll)
@@ -317,6 +405,7 @@ func (t *Tool) ManagementClient() (client.Client, error) {
 
 	if t.config.MgmtClient != nil {
 		t.mgmtClient = t.config.MgmtClient
+
 		return t.mgmtClient, nil
 	}
 

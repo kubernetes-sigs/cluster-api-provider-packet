@@ -378,6 +378,7 @@ func (m *Migrator) MigrateNode(ctx context.Context, node *corev1.Node, c *cluste
 		func() error {
 			if err := m.WorkloadCreate(ctx, logger, c, node); err != nil {
 				if m.DryRun() && apierrors.IsAlreadyExists(err) {
+					// TODO: output diff
 					// add dry run success output here since Create will fail with an already exists error during dry run
 					logger.Info("(Dry Run) Would create Node")
 					fmt.Fprintf(m.GetBufferFor(c), "(Dry Run) Would create Node %s\n", base.ObjectToName(node))

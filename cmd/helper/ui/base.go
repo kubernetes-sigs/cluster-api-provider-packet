@@ -23,7 +23,9 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/reflow/indent"
 	"github.com/muesli/reflow/wordwrap"
+	"github.com/muesli/reflow/wrap"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 )
 
@@ -103,9 +105,9 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m *Model) updateViewport() {
-	outputHeadings := lipgloss.NewStyle().Foreground(headingColor).PaddingLeft(4)  //nolint:gomnd
-	clusterOutputStyle := lipgloss.NewStyle().PaddingLeft(8).Foreground(infoColor) //nolint:gomnd
-	clusterErrorStyle := lipgloss.NewStyle().PaddingLeft(4).Foreground(errorColor) //nolint:gomnd
+	outputHeadings := lipgloss.NewStyle().Foreground(headingColor)
+	clusterOutputStyle := lipgloss.NewStyle().Foreground(infoColor)
+	clusterErrorStyle := lipgloss.NewStyle().Foreground(errorColor)
 
 	body := ""
 
@@ -122,16 +124,20 @@ func (m *Model) updateViewport() {
 		out := m.Tool.GetOutputFor(c)
 
 		if len(out) > 0 {
-			body += outputHeadings.Render("Output:") + "\n"
+			body += indent.String(outputHeadings.Render("Output:"), 4) + "\n"
+
+			out = wrap.String(wordwrap.String(out, m.viewport.Width-8), m.viewport.Width-8) //nolint:gomnd
+			out = indent.String(out, 8)
 			body += clusterOutputStyle.Render(out) + "\n"
 		}
 
 		if err := m.Tool.GetErrorFor(c); err != nil {
-			body += clusterErrorStyle.Render(fmt.Sprintf("Error: %s", err.Error())) + "\n"
+			errOut := wrap.String(wordwrap.String(err.Error(), m.viewport.Width-4), m.viewport.Width-4) //nolint:gomnd
+			errOut = indent.String(errOut, 4)
+			body += clusterErrorStyle.Render(fmt.Sprintf("Error: %s", errOut)) + "\n"
 		}
 	}
 
-	body = wordwrap.String(body, m.viewport.Width)
 	m.viewport.SetContent(body)
 }
 
@@ -272,7 +278,7 @@ func (m Model) View() string {
 	if m.err != nil {
 		errOutput := fmt.Sprintf("Error: %s", m.err.Error())
 		errOutput = lipgloss.NewStyle().Foreground(errorColor).Render(errOutput) + "\n"
-		body += wordwrap.String(errOutput, m.width-padding)
+		body += wrap.String(wordwrap.String(errOutput, m.width-padding), m.width-padding)
 		body = lipgloss.Place(m.width-padding, bodyHeight, lipgloss.Left, lipgloss.Top, body)
 	} else {
 		scrollPercent := fmt.Sprintf("%3.f%%", m.viewport.ScrollPercent()*100) //nolint:gomnd
