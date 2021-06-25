@@ -43,6 +43,13 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+const (
+	DryRunPrefix  = "(Dry Run) "
+	SuccessPrefix = "✅ "
+	NoOpPrefix    = "✔ "
+	SkipPrefix    = "Skipping "
+)
+
 func ObjectToName(obj controllerutil.Object) string {
 	if obj.GetNamespace() != "" {
 		return fmt.Sprintf("%s/%s", obj.GetNamespace(), obj.GetName())
@@ -172,20 +179,21 @@ func (t *Tool) WorkloadPatchOrCreateUnstructured(
 			}
 
 			diff := cmp.Diff(redactedExisting, redacted, diff.IgnoreUnset())
-			logger.Info("(Dry Run) Would patch resource", "kind", obj.GetKind(), "name", name, "diff", diff)
-			fmt.Fprintf(t.GetBufferFor(c), "(Dry Run) Would patch %s %s\n%s\n", obj.GetKind(), name, indent.String(diff, 4))
+			logger.Info(DryRunPrefix+"Would patch resource", "kind", obj.GetKind(), "name", name, "diff", diff)
+			fmt.Fprintf(t.GetBufferFor(c), "%sWould patch %s %s\n%s\n",
+				DryRunPrefix, obj.GetKind(), name, indent.String(diff, 4))
 
 			return nil
 		}
 
 		logger.Info("Successfully patched resource", "kind", obj.GetKind(), "name", name)
-		fmt.Fprintf(t.GetBufferFor(c), "✅ %s %s has been successfully patched\n", obj.GetKind(), name)
+		fmt.Fprintf(t.GetBufferFor(c), "%s%s %s has been successfully patched\n", SuccessPrefix, obj.GetKind(), name)
 	}
 
 	kind := obj.GetObjectKind().GroupVersionKind().Kind
 	name := ObjectToName(obj)
 	logger.Info("Resource already up to date", "kind", kind, "name", name)
-	fmt.Fprintf(stdout, "✔ %s %s already up to date\n", kind, name)
+	fmt.Fprintf(stdout, "%s%s %s already up to date\n", NoOpPrefix, kind, name)
 
 	return nil
 }
@@ -269,14 +277,14 @@ func (t *Tool) WorkloadCreate(
 		// Convert the resource into yaml for printing
 		data, _ := yaml.Marshal(redacted)
 
-		logger.Info("(Dry Run) Would create resource", "kind", gvk.Kind, "name", name, "object", data)
-		fmt.Fprintf(t.GetBufferFor(c), "(Dry Run) Would create %s %s\n%s", gvk.Kind, name, indent.String(string(data), 4))
+		logger.Info(DryRunPrefix+"Would create resource", "kind", gvk.Kind, "name", name, "object", data)
+		fmt.Fprintf(t.GetBufferFor(c), "%sWould create %s %s\n%s", DryRunPrefix, gvk.Kind, name, indent.String(string(data), 4))
 
 		return nil
 	}
 
 	logger.Info("Successfully created resource", "kind", gvk.Kind, "name", name)
-	fmt.Fprintf(t.GetBufferFor(c), "✅ %s %s has been successfully created\n", gvk.Kind, name)
+	fmt.Fprintf(t.GetBufferFor(c), "%s%s %s has been successfully created\n", SuccessPrefix, gvk.Kind, name)
 
 	return nil
 }
@@ -309,14 +317,14 @@ func (t *Tool) WorkloadDelete(
 	name := ObjectToName(obj)
 
 	if t.DryRun() {
-		logger.Info("(Dry Run) Would delete resource", "kind", gvk.Kind, "name", name)
-		fmt.Fprintf(t.GetBufferFor(c), "(Dry Run) Would delete %s %s\n", gvk.Kind, name)
+		logger.Info(DryRunPrefix+"Would delete resource", "kind", gvk.Kind, "name", name)
+		fmt.Fprintf(t.GetBufferFor(c), "%sWould delete %s %s\n", DryRunPrefix, gvk.Kind, name)
 
 		return nil
 	}
 
 	logger.Info("Successfully deleted resource", "kind", gvk.Kind, "name", name)
-	fmt.Fprintf(t.GetBufferFor(c), "✅ %s %s has been successfully deleted\n", gvk.Kind, name)
+	fmt.Fprintf(t.GetBufferFor(c), "%s%s %s has been successfully deleted\n", SuccessPrefix, gvk.Kind, name)
 
 	return nil
 }

@@ -36,6 +36,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/cluster-api-provider-packet/cmd/helper/base"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/controllers/remote"
 	"sigs.k8s.io/cluster-api/util"
@@ -383,26 +384,26 @@ func VerifySuccessOutputDryRun(t *testing.T, output string) {
 	t.Helper()
 	g := gomega.NewWithT(t)
 	// TODO: update prefix strings to be variables instead of hardcoded
-	g.Expect(output).To(gomega.HavePrefix("(Dry Run)"))
+	g.Expect(output).To(gomega.HavePrefix(base.DryRunPrefix))
 }
 
 func VerifySuccessOutputChanged(t *testing.T, output string) {
 	t.Helper()
 	g := gomega.NewWithT(t)
 	// TODO: update prefix strings to be variables instead of hardcoded
-	g.Expect(output).To(gomega.HavePrefix("✅"))
+	g.Expect(output).To(gomega.HavePrefix(base.SuccessPrefix))
 }
 
 func VerifySuccessOutputUnchanged(t *testing.T, output string) {
 	t.Helper()
 	g := gomega.NewWithT(t)
 	// TODO: update prefix strings to be variables instead of hardcoded
-	g.Expect(output).To(gomega.HavePrefix("✔"))
+	g.Expect(output).To(gomega.HavePrefix(base.NoOpPrefix))
 }
 
 func VerifySuccessOutputSkipped(t *testing.T, output string) {
 	t.Helper()
 	g := gomega.NewWithT(t)
 	// TODO: update prefix strings to be variables instead of hardcoded
-	g.Expect(output).To(gomega.HavePrefix("Skipping "))
+	g.Expect(output).To(gomega.HavePrefix(base.SkipPrefix))
 }

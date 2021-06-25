@@ -303,8 +303,8 @@ func removeOldCCMSecret(ctx context.Context, logger logr.Logger, u *base.Tool, c
 	case err != nil && !apierrors.IsNotFound(err):
 		return err
 	case err == nil:
-		logger.Info("Skipping removal of secret because Packet CSI is deployed", "name", secretName)
-		fmt.Fprintf(stdout, "Skipping removal of Secret %s because Packet CSI is deployed", secretName)
+		logger.Info(base.SkipPrefix+"removal of secret because Packet CSI is deployed", "name", secretName)
+		fmt.Fprintf(stdout, "%sremoval of Secret %s because Packet CSI is deployed", base.SkipPrefix, secretName)
 
 		return nil
 	}
@@ -313,7 +313,7 @@ func removeOldCCMSecret(ctx context.Context, logger logr.Logger, u *base.Tool, c
 	if err := u.WorkloadGet(ctx, c, ccmSecretKey, ccmSecret); err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info("Secret already removed", "name", secretName)
-			fmt.Fprintf(stdout, "✔ Secret %s already deleted\n", secretName)
+			fmt.Fprintf(stdout, "%sSecret %s already deleted\n", base.NoOpPrefix, secretName)
 
 			return nil
 		}
@@ -333,7 +333,7 @@ func removeCCMDeployment(ctx context.Context, logger logr.Logger, u *base.Tool, 
 	if err := u.WorkloadGet(ctx, c, ccmKey, ccmDeployment); err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info("Deployment already removed", "name", deploymentName)
-			fmt.Fprintf(stdout, "✔ Deployment %s already deleted\n", deploymentName)
+			fmt.Fprintf(stdout, "%sDeployment %s already deleted\n", base.NoOpPrefix, deploymentName)
 
 			return nil
 		}
@@ -359,7 +359,7 @@ func migrateSecret(ctx context.Context, logger logr.Logger, u *base.Tool, c *clu
 		// If there was no error, then the secret already exists and there is no need to proceed
 
 		logger.Info("Secret already exists", "name", cpemSecretName)
-		fmt.Fprintf(stdout, "✔ Secret %s/%s already exists\n", cpemSecret.Namespace, cpemSecret.Name)
+		fmt.Fprintf(stdout, "%sSecret %s/%s already exists\n", base.NoOpPrefix, cpemSecret.Namespace, cpemSecret.Name)
 
 		return nil
 	}

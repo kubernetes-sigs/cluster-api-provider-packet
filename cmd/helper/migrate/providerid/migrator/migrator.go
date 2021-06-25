@@ -19,10 +19,12 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/blang/semver"
 	"github.com/docker/distribution/reference"
 	"github.com/go-logr/logr"
+	"github.com/muesli/reflow/indent"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -33,6 +35,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -357,7 +360,7 @@ func (m *Migrator) MigrateNode(ctx context.Context, node *corev1.Node, c *cluste
 
 	if strings.HasPrefix(node.Spec.ProviderID, newProviderIDPrefix) {
 		logger.Info("Node already has the updated providerID")
-		fmt.Fprintf(m.GetBufferFor(c), "✔ Node %s already has the updated providerID\n", node.Name)
+		fmt.Fprintf(m.GetBufferFor(c), base.NoOpPrefix+"Node %s already has the updated providerID\n", node.Name)
 		m.updateNodeStatus(c, node, true)
 
 		return nil
@@ -378,10 +381,17 @@ func (m *Migrator) MigrateNode(ctx context.Context, node *corev1.Node, c *cluste
 		func() error {
 			if err := m.WorkloadCreate(ctx, logger, c, node); err != nil {
 				if m.DryRun() && apierrors.IsAlreadyExists(err) {
-					// TODO: output diff
+					node.SetManagedFields(nil)
+					node.SetCreationTimestamp(metav1.NewTime(time.Time{}))
+					node.SetUID("")
+					node.SetSelfLink("")
+
+					// Convert the resource into yaml for printing
+					data, _ := yaml.Marshal(node)
+
 					// add dry run success output here since Create will fail with an already exists error during dry run
-					logger.Info("(Dry Run) Would create Node")
-					fmt.Fprintf(m.GetBufferFor(c), "(Dry Run) Would create Node %s\n", base.ObjectToName(node))
+					logger.Info(base.DryRunPrefix+"Would create Node", "Node", data)
+					fmt.Fprintf(m.GetBufferFor(c), base.DryRunPrefix+"Would create Node %s\n%s", base.ObjectToName(node), indent.String(string(data), 4))
 
 					return nil
 				}

@@ -16,6 +16,7 @@ package migrator_test
 import (
 	"context"
 	"math/rand"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -240,10 +241,7 @@ func TestMigrator_MigrateNodeDry(t *testing.T) {
 	g.Expect(postDryRunNode).To(testutils.BeDerivativeOf(expectedNode))
 
 	postDryRunOutputDiff := strings.TrimPrefix(postDryRunOutput, preDryRunOutput)
-	postDryRunOutputLines := strings.Split(postDryRunOutputDiff, "\n")
-	g.Expect(postDryRunOutputLines).To(HaveLen(3))
-	testutils.VerifySuccessOutputDryRun(t, postDryRunOutputLines[0])
-	testutils.VerifySuccessOutputDryRun(t, postDryRunOutputLines[1])
+	g.Expect(postDryRunOutputDiff).To(MatchRegexp("^(%s.*\n){2}?", regexp.QuoteMeta(base.DryRunPrefix)))
 
 	actualPostDryRunNode := new(corev1.Node)
 	nodeKey := client.ObjectKey{Name: node.Name} //nolint:exhaustivestruct
