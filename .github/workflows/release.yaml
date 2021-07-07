@@ -59,7 +59,7 @@ jobs:
           draft: false
           prerelease: false
       - name: Upload cluster-template
-        uses: actions/upload-release-asset@v1
+        uses: actions/upload-release-asset@v1.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -72,7 +72,7 @@ jobs:
           asset_name: cluster-template.yaml
           asset_content_type: application/yaml
       - name: Upload clusterctl
-        uses: actions/upload-release-asset@v1
+        uses: actions/upload-release-asset@v1.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -81,7 +81,7 @@ jobs:
           asset_name: clusterctl.yaml
           asset_content_type: application/yaml
       - name: Upload infrastructure-components
-        uses: actions/upload-release-asset@v1
+        uses: actions/upload-release-asset@v1.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -90,7 +90,7 @@ jobs:
           asset_name: infrastructure-components.yaml
           asset_content_type: application/yaml
       - name: Upload infrastructure-components
-        uses: actions/upload-release-asset@v1
+        uses: actions/upload-release-asset@v1.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
