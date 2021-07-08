@@ -6,17 +6,15 @@ aliases:
     - timothysc
     - fabriziopandini
   cluster-api-admins:
-    - justinsb
-    - detiber
-    - davidewatson
+    - CecileRobertMichon
     - vincepri
   cluster-api-maintainers:
-    - justinsb
-    - detiber
-    - ncdc
+    - CecileRobertMichon
+    - fabriziopandini
     - vincepri
   cluster-api-packet-maintainers:
     - deitch
+    - detiber
     - gianarb
     - thebsdbox
     - jacobsmith928

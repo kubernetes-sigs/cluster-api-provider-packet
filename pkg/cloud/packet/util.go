@@ -23,14 +23,19 @@ import (
 const (
 	MachineUIDTag = "cluster-api-provider-packet:machine-uid"
 	clusterIDTag  = "cluster-api-provider-packet:cluster-id"
-	AnnotationUID = "cluster.k8s.io/machine-uid"
+	namespaceTag  = "cluster-api-provider-packet:namespace"
 )
 
-func GenerateMachineTag(ID string) string {
-	return fmt.Sprintf("%s:%s", MachineUIDTag, ID)
+func GenerateMachineNameTag(name string) string {
+	return fmt.Sprintf("%s:%s", MachineUIDTag, name)
 }
-func GenerateClusterTag(ID string) string {
-	return fmt.Sprintf("%s:%s", clusterIDTag, ID)
+
+func GenerateClusterTag(clusterName string) string {
+	return fmt.Sprintf("%s:%s", clusterIDTag, clusterName)
+}
+
+func GenerateNamespaceTag(namespace string) string {
+	return fmt.Sprintf("%s:%s", namespaceTag, namespace)
 }
 
 // ItemsInList checks if all items are in the list
@@ -53,4 +58,12 @@ func ItemsInList(list []string, items []string) bool {
 		}
 	}
 	return true
+}
+
+func DefaultCreateTags(namespace, name, clusterName string) []string {
+	return []string{
+		GenerateClusterTag(clusterName),
+		GenerateMachineNameTag(name),
+		GenerateNamespaceTag(namespace),
+	}
 }

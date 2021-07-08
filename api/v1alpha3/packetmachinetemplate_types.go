@@ -27,7 +27,6 @@ type PacketMachineTemplateSpec struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:path=packetmachinetemplates,scope=Namespaced,categories=cluster-api
-// +kubebuilder:storageversion
 
 // PacketMachineTemplate is the Schema for the packetmachinetemplates API
 type PacketMachineTemplate struct {

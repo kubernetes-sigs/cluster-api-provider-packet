@@ -31,16 +31,17 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
 	"k8s.io/utils/pointer"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
-	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
+	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha4"
 	"sigs.k8s.io/cluster-api/controllers/noderefutil"
 	"sigs.k8s.io/cluster-api/controllers/remote"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha4"
 )
 
 const (
@@ -49,11 +50,13 @@ const (
 )
 
 var (
-	ErrMissingClient        = errors.New("Client is required when creating a MachineScope")
-	ErrMissingCluster       = errors.New("Cluster is required when creating a MachineScope")
-	ErrMissingMachine       = errors.New("Machine is required when creating a MachineScope")
-	ErrMissingPacketCluster = errors.New("PacketCluster is required when creating a MachineScope")
-	ErrMissingPacketMachine = errors.New("PacketMachine is required when creating a MachineScope")
+	ErrMissingClient              = errors.New("client is required when creating a MachineScope")
+	ErrMissingCluster             = errors.New("cluster is required when creating a MachineScope")
+	ErrMissingMachine             = errors.New("machine is required when creating a MachineScope")
+	ErrMissingPacketCluster       = errors.New("packetCluster is required when creating a MachineScope")
+	ErrMissingPacketMachine       = errors.New("packetMachine is required when creating a MachineScope")
+	ErrMissingBootstrapDataSecret = errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
+	ErrBootstrapDataMissingKey    = errors.New("error retrieving bootstrap data: secret value key is missing")
 )
 
 // MachineScopeParams defines the input parameters used to create a new MachineScope.
@@ -130,7 +133,7 @@ type MachineScope struct {
 
 // Close the MachineScope by updating the machine spec, machine status.
 func (m *MachineScope) Close() error {
-	return m.patchHelper.Patch(context.TODO(), m.PacketMachine)
+	return m.PatchObject(context.TODO())
 }
 
 // Name returns the PacketMachine name
@@ -194,14 +197,19 @@ func (m *MachineScope) SetReady() {
 	m.PacketMachine.Status.Ready = true
 }
 
-// SetErrorMessage sets the PacketMachine status error message.
-func (m *MachineScope) SetErrorMessage(v error) {
-	m.PacketMachine.Status.ErrorMessage = pointer.StringPtr(v.Error())
+// SetNotReady sets the PacketMachine Ready Status
+func (m *MachineScope) SetNotReady() {
+	m.PacketMachine.Status.Ready = false
 }
 
-// SetErrorReason sets the PacketMachine status error reason.
-func (m *MachineScope) SetErrorReason(v capierrors.MachineStatusError) {
-	m.PacketMachine.Status.ErrorReason = &v
+// SetFailureMessage sets the PacketMachine status error message.
+func (m *MachineScope) SetFailureMessage(v error) {
+	m.PacketMachine.Status.FailureMessage = pointer.StringPtr(v.Error())
+}
+
+// SetFailureReason sets the PacketMachine status error reason.
+func (m *MachineScope) SetFailureReason(v capierrors.MachineStatusError) {
+	m.PacketMachine.Status.FailureReason = &v
 }
 
 // SetAddresses sets the address status.
@@ -219,20 +227,20 @@ func (m *MachineScope) Tags() infrav1.Tags {
 }
 
 // GetRawBootstrapData returns the bootstrap data from the secret in the Machine's bootstrap.dataSecretName.
-func (m *MachineScope) GetRawBootstrapData() ([]byte, error) {
+func (m *MachineScope) GetRawBootstrapData(ctx context.Context) ([]byte, error) {
 	if m.Machine.Spec.Bootstrap.DataSecretName == nil {
-		return nil, errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
+		return nil, ErrMissingBootstrapDataSecret
 	}
 
 	secret := &corev1.Secret{}
 	key := types.NamespacedName{Namespace: m.Namespace(), Name: *m.Machine.Spec.Bootstrap.DataSecretName}
-	if err := m.client.Get(context.TODO(), key, secret); err != nil {
+	if err := m.client.Get(ctx, key, secret); err != nil {
 		return nil, fmt.Errorf("failed to retrieve bootstrap data secret for PacketMachine %s/%s: %w", m.Namespace(), m.Name(), err)
 	}
 
 	value, ok := secret.Data["value"]
 	if !ok {
-		return nil, errors.New("error retrieving bootstrap data: secret value key is missing")
+		return nil, ErrBootstrapDataMissingKey
 	}
 
 	return value, nil
@@ -305,12 +313,7 @@ func providerIDFromCloudProviderDeployments(ctx context.Context, mgmtClient clie
 		workloadClientGetter = remote.NewClusterClient
 	}
 
-	key, err := client.ObjectKeyFromObject(cluster)
-	if err != nil {
-		return "", fmt.Errorf("failed to get key from cluster: %w", err)
-	}
-
-	workloadClient, err := workloadClientGetter(ctx, mgmtClient, key, nil)
+	workloadClient, err := workloadClientGetter(ctx, "capp", mgmtClient, client.ObjectKeyFromObject(cluster))
 	if err != nil {
 		// Generating the workload client can throw a URL error if the
 		// apiserver is not yet responding
@@ -393,4 +396,27 @@ func providerIDPrefixFromPacketMachine(packetMachine *infrav1.PacketMachine) str
 	}
 
 	return ""
+}
+
+// PatchObject persists the machine spec and status.
+func (m *MachineScope) PatchObject(ctx context.Context) error {
+	// Always update the readyCondition by summarizing the state of other conditions.
+	// A step counter is added to represent progress during the provisioning process (instead we are hiding during the deletion process).
+	applicableConditions := []clusterv1.ConditionType{
+		infrav1.DeviceReadyCondition,
+	}
+
+	conditions.SetSummary(m.PacketMachine,
+		conditions.WithConditions(applicableConditions...),
+		conditions.WithStepCounterIf(m.PacketMachine.ObjectMeta.DeletionTimestamp.IsZero()),
+		conditions.WithStepCounter(),
+	)
+
+	return m.patchHelper.Patch(
+		ctx,
+		m.PacketMachine,
+		patch.WithOwnedConditions{Conditions: []clusterv1.ConditionType{
+			clusterv1.ReadyCondition,
+			infrav1.DeviceReadyCondition,
+		}})
 }

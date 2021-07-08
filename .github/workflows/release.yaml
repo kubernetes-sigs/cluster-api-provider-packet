@@ -1,123 +1,102 @@
 # workflow to release assets as part of the release
-
+name: Upload Release Asset
 on:
   push:
     tags:
     - 'v*'
-
-name: Upload Release Asset
 env:
-  IMAGENAME: packethost/cluster-api-provider-packet
-  KUBEBUILDER_DIR: /tmp/kubebuilder_install
-
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 jobs:
-  readiness:
-    name: check for appropriate image
+  manager-image:
+    name: Build and push manager image
     runs-on: ubuntu-latest
     steps:
-    - name: Set version
-      id: get_version
-      run: | 
-        echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
-        echo "COMMIT=${GITHUB_SHA}" >> $GITHUB_ENV
-    - name: information
-      run: echo "checking for existence of image ${IMAGENAME}:${COMMIT}. If it does not exist, this will fail; wait for an earlier PR merge action to complete and re-run this job."
-    - name: docker login
-      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-    - name: check for docker image on hub
-      run: docker buildx imagetools inspect ${IMAGENAME}:${COMMIT}
-    - name: report
-      run: echo "ready for release; the docker image ${IMAGENAME}:${COMMIT} is available"
-
+    - name: Checkout code
+      uses: actions/checkout@v2.3.4
+    - uses: ./.github/actions/setup-go
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v1
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+    - name: Cache Docker layers
+      uses: actions/cache@v2
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-manager-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-manager-
+          ${{ runner.os }}-buildx-
+    - name: Docker manager metadata
+      id: meta
+      uses: docker/metadata-action@v3
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        flavor: latest=false
+        tags: type=ref,event=tag
+    - name: Log in to the Container registry
+      uses: docker/login-action@v1
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Setup Env
+      run: |
+        DOCKER_BUILD_LDFLAGS="$(hack/version.sh)"
+        echo 'DOCKER_BUILD_LDFLAGS<<EOF' >> $GITHUB_ENV
+        echo $DOCKER_BUILD_LDFLAGS >> $GITHUB_ENV
+        echo 'EOF' >> $GITHUB_ENV
+    - name: Build and push manager image
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        push: true
+        build-args: |
+          LDFLAGS=${{ env.DOCKER_BUILD_LDFLAGS }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        platforms: linux/amd64,linux/arm64
+        cache-from: type=local,src=/tmp/.buildx-cache
+        cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+    - name: Move cache
+      # Temp fix
+      # https://github.com/docker/build-push-action/issues/252
+      # https://github.com/moby/buildkit/issues/1896
+      run: |
+        rm -rf /tmp/.buildx-cache
+        mv /tmp/.buildx-cache-new /tmp/.buildx-cache
   release:
-    name: Upload Release Asset
-    needs:
-    - readiness
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2.3.4
-
-      - name: kubebuilder
-        run: make kubebuilder KUBEBUILDER_DIR=${KUBEBUILDER_DIR} # we use this dir because /usr/local/kubebuilder is protected
-      - name: manifest
-        run: make manifest KUBEBUILDER_DIR=${KUBEBUILDER_DIR} # we use this dir because /usr/local/kubebuilder is protected
-        env:
-          KUBEBUILDER_ASSETS: ${{ env.KUBEBUILDER_DIR }}/bin
-      - name: Get the version
-        id: get_version
-        run: | 
-          echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1.1.4
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ env.VERSION }}
-          release_name: ${{ env.VERSION }}
-          draft: false
-          prerelease: false
-      - name: Upload cluster-template
-        uses: actions/upload-release-asset@v1.0.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-         # This pulls from the CREATE RELEASE step above, referencing it's ID to get
-         # its outputs object, which include a `upload_url`. See this blog post for
-         # more info:
-         # https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: out/release/infrastructure-packet/${{ env.VERSION }}/cluster-template.yaml
-          asset_name: cluster-template.yaml
-          asset_content_type: application/yaml
-      - name: Upload clusterctl
-        uses: actions/upload-release-asset@v1.0.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: out/release/infrastructure-packet/${{ env.VERSION }}/clusterctl.yaml
-          asset_name: clusterctl.yaml
-          asset_content_type: application/yaml
-      - name: Upload infrastructure-components
-        uses: actions/upload-release-asset@v1.0.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: out/release/infrastructure-packet/${{ env.VERSION }}/infrastructure-components.yaml
-          asset_name: infrastructure-components.yaml
-          asset_content_type: application/yaml
-      - name: Upload infrastructure-components
-        uses: actions/upload-release-asset@v1.0.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: out/release/infrastructure-packet/${{ env.VERSION }}/metadata.yaml
-          asset_name: metadata.yaml
-          asset_content_type: application/yaml
-
-  images:
+    name: Release
     runs-on: ubuntu-latest
     needs:
-    - readiness
+    - manager-image
     steps:
-    - name: docker login
-      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-    - name: Set version and imagename
-      id: get_version
-      run: | 
-        echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
-        echo "COMMIT=${GITHUB_SHA}" >> $GITHUB_ENV
-    - name: get-image
-      run: docker image pull ${IMAGENAME}:${COMMIT}
-    - name: release-latest
-      run: | 
-        docker tag ${IMAGENAME}:${COMMIT} ${IMAGENAME}:latest
-        docker push ${IMAGENAME}:latest
-    - name: release-semver
-      run: | 
-        docker tag ${IMAGENAME}:${COMMIT} ${IMAGENAME}:${VERSION}
-        docker push ${IMAGENAME}:${VERSION}
+    - name: Checkout code
+      uses: actions/checkout@v2.3.4
+    - uses: ./.github/actions/setup-go
+    - uses: actions/cache@v2
+      with:
+        path: hack/tools/bin
+        key: ${{ runner.os }}-tools-bin-release-${{ hashFiles('Makefile') }}
+        restore-keys: |
+          ${{ runner.os }}-tools-bin-release-
+          ${{ runner.os }}-tools-bin-
+    - name: Docker manager metadata
+      id: meta
+      uses: docker/metadata-action@v3
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        flavor: latest=false
+        tags: type=ref,event=tag
+    - name: manifest
+      run: make release
+      env:
+        TAG: ${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+
+    # TODO: Add release notes somehow
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: out/release/*
+        body: ${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}

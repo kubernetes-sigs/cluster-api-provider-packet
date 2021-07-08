@@ -16,13 +16,6 @@ itself [github.com/kubernetes-sigs/cluster-api/test/e2e](https://github.com/kube
 
 You can see our setup in [./test/e2e/suite_test.go](../../test/e2e/suite_test.go).
 
-## Current situation
-
-At the moment we only have the environment setup done. The cluster-api team
-provides a set of written tests that we should import and run to verify our
-implementation. But all of them assume support for `KubeadmControlPlane` and
-this is something we do not support yet.
-
 ## Requirements
 
 * Go
@@ -32,8 +25,39 @@ this is something we do not support yet.
 
 ## Run e2e tests
 
-Currently we decided to run those tests manually via:
+### Running e2e smoke tests
 
+These are quick running tests that are intended to provide a quick signal for PR blocking tests:
+
+```sh
+./scripts/ci-e2e-capi-smoketest.sh
 ```
-make e2e
+
+### Running e2e conformance tests
+
+These are tests that are intended to validate the conformance of clusters deployed by CAPP
+
+```sh
+./scripts/ci-e2e-capi-conformance.sh
+```
+
+### Running the rest of the e2e tests
+
+The rest of the e2e tests (that do not fall under smoketest or conformance tests), can be run:
+
+```sh
+./scripts/ci-e2e-capi.sh
+```
+
+By default this will only run tests that do not require a published container image for CAPP.
+
+To run the whole suite of tests, you will need to build and publish a container image, first:
+
+```sh
+export REGISTRY=<my_registry_host>
+export IMAGE_NAME=<my_image_name>
+export TAG=<my_tag>
+export SKIP_IMAGE_BUILD=1
+make docker-build-all docker-push-all
+./scripts/ci-e2e-capi.sh
 ```

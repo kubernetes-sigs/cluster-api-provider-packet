@@ -1,0 +1,140 @@
+linters:
+  enable:
+  - asciicheck
+  - bodyclose
+  # - cyclop
+  - depguard
+  - dogsled
+  - dupl
+  - durationcheck
+  - errorlint
+  # - exhaustive
+  # - exhaustivestruct
+  - exportloopref
+  # - forbidigo
+  - forcetypeassert
+  # - funlen
+  - gci
+  # - gochecknoglobals
+  # - gochecknoinits
+  # - gocognit
+  - goconst
+  - gocritic
+  - gocyclo
+  # - godot
+  # - godox
+  - goerr113
+  - gofmt
+  # - gofumpt
+  - goheader
+  - goimports
+  # - gomnd
+  - gomoddirectives
+  - gomodguard
+  - goprintffuncname
+  - gosec
+  - ifshort
+  - importas
+  # - lll
+  - makezero
+  - misspell
+  - nakedret
+  - nilerr
+  # - nlreturn
+  - noctx
+  - nolintlint
+  # - paralleltest
+  - prealloc
+  - predeclared
+  - promlinter
+  - revive
+  - rowserrcheck
+  - sqlclosecheck
+  - stylecheck
+  - tagliatelle
+  # - testpackage
+  # - thelper
+  # - tparallel
+  - unconvert
+  - unparam
+  - wastedassign
+  - whitespace
+  # - wrapcheck
+  # - wsl
+
+linters-settings:
+  importas:
+    no-unaliased: true
+    alias:
+      # Kubernetes
+      - pkg: k8s.io/api/core/v1
+        alias: corev1
+      - pkg: k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1
+        alias: apiextensionsv1
+      - pkg: k8s.io/apimachinery/pkg/apis/meta/v1
+        alias: metav1
+      - pkg: k8s.io/apimachinery/pkg/api/errors
+        alias: apierrors
+      - pkg: k8s.io/apimachinery/pkg/util/errors
+        alias: kerrors
+      # Controller Runtime
+      - pkg: sigs.k8s.io/controller-runtime
+        alias: ctrl
+  gosimple:
+    go: "1.16"
+  staticcheck:
+    go: "1.16"
+  stylecheck:
+    go: "1.16"
+  unused:
+    go: "1.16"
+  tagliatelle:
+    case:
+      # use-field-name: true
+      rules:
+        json: goCamel
+  gomoddirectives:
+    # Allow local `replace` directives. Default is false.
+    replace-local: false
+    # List of allowed `replace` directives. Default is empty.
+    replace-allow-list:
+      - sigs.k8s.io/cluster-api
+      - github.com/osrg/gobgp
+    # Allow to not explain why the version has been retracted in the `retract` directives. Default is false.
+    retract-allow-no-explanation: false
+    # Forbid the use of the `exclude` directives. Default is false.
+    exclude-forbidden: false
+  gci:
+    # put imports beginning with prefix after 3rd-party packages;
+    # only support one prefix
+    # if not set, use goimports.local-prefixes
+    local-prefixes: sigs.k8s.io/cluster-api-provider-packet
+  goimports:
+    # put imports beginning with prefix after 3rd-party packages;
+    # it's a comma-separated list of prefixes
+    local-prefixes: sigs.k8s.io/cluster-api-provider-packet
+  nolintlint:
+    # Enable to ensure that nolint directives are all used. Default is true.
+    allow-unused: false
+    # Disable to ensure that nolint directives don't have a leading space. Default is true.
+    allow-leading-space: true
+    # Exclude following linters from requiring an explanation.  Default is [].
+    allow-no-explanation: []
+    # Enable to require an explanation of nonzero length after each nolint directive. Default is false.
+    require-explanation: false
+    # Enable to require nolint directives to mention the specific linter being suppressed. Default is false.
+    require-specific: true
+issues:
+  exclude-rules:
+    - linters:
+        - lll
+        - wsl
+      source: "^// \\+kubebuilder:"
+
+
+run:
+  timeout: 10m
+  skip-files:
+  - "zz_generated.*\\.go$"
+  - ".*conversion.*\\.go$"
+  allow-parallel-runners: true

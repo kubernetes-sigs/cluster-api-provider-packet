@@ -6,89 +6,104 @@
 # - packet
 
 images:
-- name: "docker.io/packethost/cluster-api-provider-packet:e2e"
+- name: "${REGISTRY:=ghcr.io}/${IMAGE_NAME:=kubernetes-sigs/cluster-api-provider-packet}:${TAG:=e2e}"
   loadBehavior: mustLoad
 
 providers:
 - name: cluster-api
   type: CoreProvider
   versions:
-  - name: v0.3.12
-    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.12/core-components.yaml"
+  - name: v0.3.23 # latest published release
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.23/core-components.yaml"
     type: "url"
-    replacements:
-    - old: "imagePullPolicy: Always"
-      new: "imagePullPolicy: IfNotPresent"
-    - old: "--enable-leader-election"
-      new: "--enable-leader-election=false"
+  - name: v0.4.3
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.4.3/core-components.yaml"
+    type: "url"
+    files:
+    - sourcePath: "../data/shared/v1alpha4/metadata.yaml"
 
 - name: kubeadm
   type: BootstrapProvider
   versions:
-  - name: v0.3.12
-    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.12/bootstrap-components.yaml"
+  - name: v0.3.23 # latest published release
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.23/bootstrap-components.yaml"
     type: "url"
-    replacements:
-    - old: "imagePullPolicy: Always"
-      new: "imagePullPolicy: IfNotPresent"
-    - old: "--enable-leader-election"
-      new: "--enable-leader-election=false"
+  - name: v0.4.3
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.4.3/bootstrap-components.yaml"
+    type: "url"
+    files:
+    - sourcePath: "../data/shared/v1alpha4/metadata.yaml"
 
 - name: kubeadm
   type: ControlPlaneProvider
   versions:
-  - name: v0.3.12
-    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.12/control-plane-components.yaml"
+  - name: v0.3.23 # latest published release
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.23/control-plane-components.yaml"
     type: "url"
-    replacements:
-    - old: "imagePullPolicy: Always"
-      new: "imagePullPolicy: IfNotPresent"
-    - old: "--enable-leader-election"
-      new: "--enable-leader-election=false"
+  - name: v0.4.3
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.4.3/control-plane-components.yaml"
+    type: "url"
+    files:
+    - sourcePath: "../data/shared/v1alpha4/metadata.yaml"
 
 - name: packet
   type: InfrastructureProvider
   versions:
-  - name: v0.3.0
-    value: "../../../config"
+  - name: v0.3.9
+    value: "https://github.com/kubernetes-sigs/cluster-api-provider-packet/releases/download/v0.3.9/infrastructure-components.yaml"
+    type: "url"
+    files:
+      # Add cluster templates
+      - sourcePath: "../data/v1alpha3/cluster-template-packet-ccm.yaml"
+      - sourcePath: "../data/v1alpha3/cluster-template-cpem.yaml"
+  - name: v0.4.0
+    value: "../../../config/default"
     replacements:
-    - old: "imagePullPolicy: .*"
-      new: "imagePullPolicy: Never"
-    - old: "--enable-leader-election"
-      new: "--enable-leader-election=false"
-    - old: "docker.io/packethost/cluster-api-provider-packet:v.*"
-      new: "docker.io/packethost/cluster-api-provider-packet:e2e"
-  files:
-  - sourcePath: "../../../metadata.yaml"
-    targetName: "metadata.yaml"
-  - sourcePath: "../../../templates/cluster-template-ci.yaml"
-    targetName: "cluster-template.yaml"
+    - old: "image: .*/cluster-api-provider-packet:.*"
+      new: "image: ${REGISTRY:=ghcr.io}/${IMAGE_NAME:=kubernetes-sigs/cluster-api-provider-packet}:${TAG:=e2e}"
+    files:
+    - sourcePath: "../../../metadata.yaml"
+    - sourcePath: "../data/v1alpha4/cluster-template.yaml"
+    - sourcePath: "../data/v1alpha4/cluster-template-kcp-scale-in.yaml"
+    - sourcePath: "../data/v1alpha4/cluster-template-node-drain.yaml"
+    - sourcePath: "../data/v1alpha4/cluster-template-md-remediation.yaml"
+    - sourcePath: "../data/v1alpha4/cluster-template-kcp-remediation.yaml"
 
 variables:
-  KUBERNETES_VERSION: "v1.18.2"
-  ETCD_VERSION_UPGRADE_TO: "3.4.3-0"
-  COREDNS_VERSION_UPGRADE_TO: "1.6.7"
-  KUBERNETES_VERSION_UPGRADE_TO: "v1.18.2"
-  KUBERNETES_VERSION_UPGRADE_FROM: "v1.17.2"
+  KUBERNETES_VERSION: "${KUBERNETES_VERSION:-v1.22.0}"
+  ETCD_VERSION_UPGRADE_TO: "3.5.0-0"
+  COREDNS_VERSION_UPGRADE_TO: "1.8.4"
+  KUBERNETES_VERSION_UPGRADE_TO: "v1.22.0"
+  KUBERNETES_VERSION_UPGRADE_FROM: "v1.21.2"
+
+  KUBETEST_CONFIGURATION: "${KUBETEST_CONF_PATH:=./data/kubetest/conformance.yaml}"
   EXP_CLUSTER_RESOURCE_SET: "true"
   NODE_OS: "ubuntu_18_04"
-  CONTROLPLANE_NODE_TYPE: "t1.small"
-  WORKER_NODE_TYPE: "t1.small"
   POD_CIDR: "192.168.0.0/16"
   SERVICE_CIDR: "172.26.0.0/16"
-  CONFORMANCE_WORKER_MACHINE_COUNT: "3"
-  CONFORMANCE_CONTROL_PLANE_MACHINE_COUNT: "1"
-  CNI: "../../templates/addons/calico.yaml"
-  REDACT_LOG_SCRIPT: "../../../hack/log/redact.sh"
+  CNI: "${CNI_PATH:=../../templates/addons/calico.yaml}"
+  NODE_DRAIN_TIMEOUT: "60s"
+  IP_FAMILY: "IPv4"
+  # NOTE: INIT_WITH_BINARY and INIT_WITH_KUBERNETES_VERSION are only used by the clusterctl upgrade test to initialize
+  # the management cluster to be upgraded.
+  INIT_WITH_BINARY: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.23/clusterctl-{OS}-{ARCH}"
+  # CAPI v0.3.x cannot be deployed on Kubernetes >= v1.22.
+  INIT_WITH_KUBERNETES_VERSION: "v1.21.2"
 
 intervals:
   default/wait-controllers: ["3m", "10s"]
   default/wait-cluster: ["20m", "10s"]
-  default/wait-control-plane: ["30m", "10s"]
+  default/wait-control-plane: ["50m", "10s"]
   default/wait-worker-nodes: ["30m", "10s"]
   default/wait-delete-cluster: ["20m", "10s"]
-  default/wait-machine-upgrade: ["50m", "10s"]
+  default/wait-machine-upgrade: ["60m", "10s"]
+  default/wait-machine-status: ["20m", "10s"]
+  default/wait-failed-machine-status: ["2m", "10s"]
   default/wait-machine-remediation: ["30m", "10s"]
   default/wait-deployment: ["5m", "10s"]
   default/wait-job: ["5m", "10s"]
   default/wait-service: ["3m", "10s"]
+  node-drain/wait-deployment-available: ["3m", "10s"]
+  node-drain/wait-control-plane: ["30m", "10s"]
+  node-drain/wait-machine-deleted: ["5m", "10s"]
+  kcp-upgrade/wait-machine-upgrade: ["90m", "10s"]

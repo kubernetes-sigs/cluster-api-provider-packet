@@ -1,0 +1,5 @@
+bases:
+- ../bases/cluster-with-kcp-cpem.yaml
+- ../bases/md.yaml
+- ../bases/crs-cni.yaml
+

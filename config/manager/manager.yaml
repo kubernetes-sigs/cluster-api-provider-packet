@@ -4,22 +4,22 @@ metadata:
   name: controller-manager
   namespace: system
   labels:
-    control-plane: packet-controller-manager
+    control-plane: controller-manager
 spec:
   selector:
     matchLabels:
-      control-plane: packet-controller-manager
+      control-plane: controller-manager
   replicas: 1
   template:
     metadata:
       labels:
-        control-plane: packet-controller-manager
+        control-plane: controller-manager
     spec:
       containers:
       - command:
         - /manager
         args:
-        - --enable-leader-election
+        - --leader-elect
         image: packet-controller
         imagePullPolicy: IfNotPresent
         name: manager
@@ -46,3 +46,6 @@ spec:
       tolerations:
       - effect: NoSchedule
         key: node-role.kubernetes.io/master
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+      serviceAccountName: controller-manager
