@@ -1,0 +1,7 @@
+resources:
+- ../../../../../templates/experimental-crs-cni
+
+patches:
+- path: ../patches/kcp-scale-in.yaml
+  target:
+    kind: KubeadmControlPlane

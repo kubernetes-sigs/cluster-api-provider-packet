@@ -21,14 +21,8 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // PacketClusterSpec defines the desired state of PacketCluster
 type PacketClusterSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// ProjectID represents the Packet Project where this cluster will be placed into
 	ProjectID string `json:"projectID"`
 
@@ -42,16 +36,16 @@ type PacketClusterSpec struct {
 
 // PacketClusterStatus defines the observed state of PacketCluster
 type PacketClusterStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// Ready denotes that the cluster (infrastructure) is ready.
 	// +optional
 	Ready bool `json:"ready"`
 }
 
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:path=packetclusters,scope=Namespaced,categories=cluster-api
 // +kubebuilder:object:root=true
+// +kubebuilder:printcolumn:name="Cluster",type="string",JSONPath=".metadata.labels.cluster\\.x-k8s\\.io/cluster-name",description="Cluster to which this PacketCluster belongs"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="PacketCluster ready status"
 
 // PacketCluster is the Schema for the packetclusters API
 type PacketCluster struct {

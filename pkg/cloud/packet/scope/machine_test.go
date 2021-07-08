@@ -29,14 +29,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/pointer"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
-	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
-	kubeadmv1beta1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/types/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
+	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha4"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake" //nolint:staticcheck
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha4"
 )
 
 const generatedNameLength = 6
@@ -57,7 +56,7 @@ func TestNewMachineScopeNoCluster(t *testing.T) {
 	g := NewWithT(t)
 
 	_, err := NewMachineScope(context.TODO(), MachineScopeParams{
-		Client:        fake.NewFakeClient(),
+		Client:        fake.NewClientBuilder().Build(),
 		Machine:       new(clusterv1.Machine),
 		PacketCluster: new(infrav1.PacketCluster),
 		PacketMachine: new(infrav1.PacketMachine),
@@ -69,7 +68,7 @@ func TestNewMachineScopeNoMachine(t *testing.T) {
 	g := NewWithT(t)
 
 	_, err := NewMachineScope(context.TODO(), MachineScopeParams{
-		Client:        fake.NewFakeClient(),
+		Client:        fake.NewClientBuilder().Build(),
 		Cluster:       new(clusterv1.Cluster),
 		PacketCluster: new(infrav1.PacketCluster),
 		PacketMachine: new(infrav1.PacketMachine),
@@ -81,7 +80,7 @@ func TestNewMachineScopeNoPacketCluster(t *testing.T) {
 	g := NewWithT(t)
 
 	_, err := NewMachineScope(context.TODO(), MachineScopeParams{
-		Client:        fake.NewFakeClient(),
+		Client:        fake.NewClientBuilder().Build(),
 		Cluster:       new(clusterv1.Cluster),
 		Machine:       new(clusterv1.Machine),
 		PacketMachine: new(infrav1.PacketMachine),
@@ -93,7 +92,7 @@ func TestNewMachineScopeNoPacketMachine(t *testing.T) {
 	g := NewWithT(t)
 
 	_, err := NewMachineScope(context.TODO(), MachineScopeParams{
-		Client:        fake.NewFakeClient(),
+		Client:        fake.NewClientBuilder().Build(),
 		Cluster:       new(clusterv1.Cluster),
 		Machine:       new(clusterv1.Machine),
 		PacketCluster: new(infrav1.PacketCluster),
@@ -125,7 +124,7 @@ func TestNewMachineScopeExistingProviderID(t *testing.T) {
 		},
 	}
 
-	fakeClient := fake.NewFakeClientWithScheme(scheme, initialPacketMachine.DeepCopy())
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(initialPacketMachine.DeepCopy()).Build()
 
 	machineScope, err := NewMachineScope(ctx, MachineScopeParams{
 		Client:        fakeClient,
@@ -154,8 +153,7 @@ func TestNewMachineScopeExistingProviderID(t *testing.T) {
 	g.Expect(machineScope.Close()).To(Succeed())
 
 	actualPacketMachine := new(infrav1.PacketMachine)
-	key, err := client.ObjectKeyFromObject(initialPacketMachine)
-	g.Expect(err).NotTo(HaveOccurred())
+	key := client.ObjectKeyFromObject(initialPacketMachine)
 	g.Expect(fakeClient.Get(ctx, key, actualPacketMachine)).To(Succeed())
 	g.Expect(actualPacketMachine.Spec.ProviderID).NotTo(BeNil())
 	g.Expect(*actualPacketMachine.Spec.ProviderID).To(BeEquivalentTo(expectedProviderID))
@@ -170,8 +168,8 @@ func TestNewMachineScopeProviderIDExplicitInit(t *testing.T) {
 			Name:      util.RandomString(generatedNameLength),
 		},
 		Spec: bootstrapv1.KubeadmConfigSpec{
-			InitConfiguration: &kubeadmv1beta1.InitConfiguration{
-				NodeRegistration: kubeadmv1beta1.NodeRegistrationOptions{
+			InitConfiguration: &bootstrapv1.InitConfiguration{
+				NodeRegistration: bootstrapv1.NodeRegistrationOptions{
 					KubeletExtraArgs: map[string]string{
 						"provider-id": "testmetal://{{ `{{ v1.instance_id }}` }}",
 					},
@@ -192,8 +190,8 @@ func TestNewMachineScopeProviderIDExplicitJoin(t *testing.T) {
 			Name:      util.RandomString(generatedNameLength),
 		},
 		Spec: bootstrapv1.KubeadmConfigSpec{
-			JoinConfiguration: &kubeadmv1beta1.JoinConfiguration{
-				NodeRegistration: kubeadmv1beta1.NodeRegistrationOptions{
+			JoinConfiguration: &bootstrapv1.JoinConfiguration{
+				NodeRegistration: bootstrapv1.NodeRegistrationOptions{
 					KubeletExtraArgs: map[string]string{
 						"provider-id": "testrust://{{ `{{ v1.instance_id }}` }}",
 					},
@@ -294,17 +292,17 @@ func testNewMachineScopeProviderIDFromKubeConfig(t *testing.T, namespace string,
 		},
 	}
 
-	fakeClient := fake.NewFakeClientWithScheme(scheme, initialPacketMachine.DeepCopy(),
-		initialKubeadmConfig.DeepCopy())
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).
+		WithRuntimeObjects(initialPacketMachine.DeepCopy(), initialKubeadmConfig.DeepCopy()).Build()
 
-	fakeWorkloadClient := fake.NewFakeClient()
+	fakeWorkloadClient := fake.NewClientBuilder().Build()
 	machineScope, err := NewMachineScope(ctx, MachineScopeParams{
 		Client:        fakeClient,
 		Cluster:       new(clusterv1.Cluster),
 		Machine:       initialMachine.DeepCopy(),
 		PacketCluster: new(infrav1.PacketCluster),
 		PacketMachine: initialPacketMachine.DeepCopy(),
-		workloadClientGetter: func(_ context.Context, _ client.Client, _ client.ObjectKey, _ *runtime.Scheme) (client.Client, error) {
+		workloadClientGetter: func(_ context.Context, _ string, _ client.Client, _ client.ObjectKey) (client.Client, error) {
 			return fakeWorkloadClient, nil
 		},
 	})
@@ -324,8 +322,7 @@ func testNewMachineScopeProviderIDFromKubeConfig(t *testing.T, namespace string,
 	g.Expect(machineScope.Close()).To(Succeed())
 
 	actualPacketMachine := new(infrav1.PacketMachine)
-	key, err := client.ObjectKeyFromObject(initialPacketMachine)
-	g.Expect(err).NotTo(HaveOccurred())
+	key := client.ObjectKeyFromObject(initialPacketMachine)
 	g.Expect(fakeClient.Get(ctx, key, actualPacketMachine)).To(Succeed())
 	g.Expect(actualPacketMachine.Spec.ProviderID).NotTo(BeNil())
 	g.Expect(*actualPacketMachine.Spec.ProviderID).To(BeEquivalentTo(expectedProviderID))
@@ -381,8 +378,8 @@ func TestNewMachineScopeWorkloadClientError(t *testing.T) {
 		},
 	}
 
-	fakeClient := fake.NewFakeClientWithScheme(scheme, initialPacketMachine.DeepCopy(),
-		initialKubeadmConfig.DeepCopy())
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).
+		WithRuntimeObjects(initialPacketMachine.DeepCopy(), initialKubeadmConfig.DeepCopy()).Build()
 
 	machineScope, err := NewMachineScope(ctx, MachineScopeParams{
 		Client:        fakeClient,
@@ -390,7 +387,7 @@ func TestNewMachineScopeWorkloadClientError(t *testing.T) {
 		Machine:       initialMachine.DeepCopy(),
 		PacketCluster: new(infrav1.PacketCluster),
 		PacketMachine: initialPacketMachine.DeepCopy(),
-		workloadClientGetter: func(_ context.Context, _ client.Client, _ client.ObjectKey, _ *runtime.Scheme) (client.Client, error) {
+		workloadClientGetter: func(_ context.Context, _ string, _ client.Client, _ client.ObjectKey) (client.Client, error) {
 			return nil, &url.Error{
 				Op:  "Get",
 				URL: "https://localhost:6443/api",
@@ -413,8 +410,7 @@ func TestNewMachineScopeWorkloadClientError(t *testing.T) {
 	g.Expect(machineScope.Close()).To(Succeed())
 
 	actualPacketMachine := new(infrav1.PacketMachine)
-	key, err := client.ObjectKeyFromObject(initialPacketMachine)
-	g.Expect(err).NotTo(HaveOccurred())
+	key := client.ObjectKeyFromObject(initialPacketMachine)
 	g.Expect(fakeClient.Get(ctx, key, actualPacketMachine)).To(Succeed())
 	g.Expect(actualPacketMachine.Spec.ProviderID).NotTo(BeNil())
 	g.Expect(*actualPacketMachine.Spec.ProviderID).To(BeEquivalentTo(expectedProviderID))
@@ -459,9 +455,9 @@ func testNewMachineScopeCloudProviderDeployed(t *testing.T, deploymentName, expe
 		},
 	}
 
-	fakeClient := fake.NewFakeClientWithScheme(scheme, initialPacketMachine.DeepCopy())
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(initialPacketMachine.DeepCopy()).Build()
 
-	fakeWorkloadClient := fake.NewFakeClient(cloudProviderDeployment.DeepCopy())
+	fakeWorkloadClient := fake.NewClientBuilder().WithRuntimeObjects(cloudProviderDeployment.DeepCopy()).Build()
 
 	machineScope, err := NewMachineScope(ctx, MachineScopeParams{
 		Client:        fakeClient,
@@ -469,7 +465,7 @@ func testNewMachineScopeCloudProviderDeployed(t *testing.T, deploymentName, expe
 		Machine:       new(clusterv1.Machine),
 		PacketCluster: new(infrav1.PacketCluster),
 		PacketMachine: initialPacketMachine.DeepCopy(),
-		workloadClientGetter: func(_ context.Context, _ client.Client, _ client.ObjectKey, _ *runtime.Scheme) (client.Client, error) {
+		workloadClientGetter: func(_ context.Context, _ string, _ client.Client, _ client.ObjectKey) (client.Client, error) {
 			return fakeWorkloadClient, nil
 		},
 	})
@@ -489,8 +485,7 @@ func testNewMachineScopeCloudProviderDeployed(t *testing.T, deploymentName, expe
 	g.Expect(machineScope.Close()).To(Succeed())
 
 	actualPacketMachine := new(infrav1.PacketMachine)
-	key, err := client.ObjectKeyFromObject(initialPacketMachine)
-	g.Expect(err).NotTo(HaveOccurred())
+	key := client.ObjectKeyFromObject(initialPacketMachine)
 	g.Expect(fakeClient.Get(ctx, key, actualPacketMachine)).To(Succeed())
 	g.Expect(actualPacketMachine.Spec.ProviderID).NotTo(BeNil())
 	g.Expect(*actualPacketMachine.Spec.ProviderID).To(BeEquivalentTo(expectedProviderID))

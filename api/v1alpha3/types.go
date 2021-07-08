@@ -29,7 +29,7 @@ var (
 	// from how many resources waiting to be deleted we have for you.
 	PacketResourceStatusQueued = PacketResourceStatus("queued")
 	// PacketResourceStatusProvisioning represents a resource that got dequeued
-	// and it is activelly processed by a worker.
+	// and it is actively processed by a worker.
 	PacketResourceStatusProvisioning = PacketResourceStatus("provisioning")
 	// PacketResourceStatusRunning represents a Packet resource already provisioned and in a active state.
 	PacketResourceStatusRunning = PacketResourceStatus("active")

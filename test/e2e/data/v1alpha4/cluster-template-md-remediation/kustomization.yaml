@@ -1,0 +1,8 @@
+resources:
+- ../../../../../templates/experimental-crs-cni
+- ../bases/md-mhc.yaml
+
+patches:
+- path: ../patches/md-remediation.yaml
+  target:
+    kind: MachineDeployment
