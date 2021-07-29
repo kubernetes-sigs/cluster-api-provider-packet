@@ -52,5 +52,5 @@ jobs:
       # This currently runs the tests serially, if we need to parallize
       # need to install ginkgo and use it to run the tests
       run: |
-        chmod +x e2e.text
+        chmod +x e2e.test
         ./e2e.test -e2e.artifacts-folder=artifacts -e2e.config=config/e2e-config.yaml -ginkgo.focus='\[Smoke Test\]' -ginkgo.progress -ginkgo.trace -ginkgo.v
