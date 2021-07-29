@@ -13,9 +13,6 @@ jobs:
     steps:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
-    - uses: actions/setup-go@v2
-      with:
-        go-version: '1.16' # The Go version to download (if necessary) and use.
     - name: Setup kind
       uses: engineerd/setup-kind@v0.5.0
       with:
@@ -54,4 +51,6 @@ jobs:
         PROJECT_ID: ${{ secrets.PROJECT_ID }}
       # This currently runs the tests serially, if we need to parallize
       # need to install ginkgo and use it to run the tests
-      run: ./e2e.test -e2e.artifacts-folder=artifacts -e2e.config=config/e2e-config.yaml -ginkgo.focus='\[Smoke Test\]' -ginkgo.progress -ginkgo.trace -ginkgo.v
+      run: |
+        chmod +x e2e.text
+        ./e2e.test -e2e.artifacts-folder=artifacts -e2e.config=config/e2e-config.yaml -ginkgo.focus='\[Smoke Test\]' -ginkgo.progress -ginkgo.trace -ginkgo.v
