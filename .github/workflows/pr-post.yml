@@ -1,0 +1,24 @@
+name: Pull Request E2E
+on:
+ workflow_run:
+   workflows: ["Pull Request Validation"]
+   types: [completed]
+jobs:
+  e2e-smoketest:
+    name: E2E Smoketest
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2.3.4
+    - uses: actions/setup-go@v2
+      with:
+        go-version: '1.16' # The Go version to download (if necessary) and use.
+    - name: download e2e artifacts
+      uses: actions/download-artifact@v2
+      with:
+        name: e2e-artifacts
+        path: /tmp/e2e-artifacts
+    - name: Display structure of downloaded files
+      run: ls -R
+      working-directory: /tmp/e2e-artifacts
