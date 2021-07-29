@@ -7,18 +7,31 @@ jobs:
   e2e-smoketest:
     name: E2E Smoketest
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: >
+      ${{ github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' }}
     steps:
-    - name: checkout
-      uses: actions/checkout@v2.3.4
-    - uses: actions/setup-go@v2
+    - name: 'Download artifact'
+      uses: actions/github-script@v4.0.2
       with:
-        go-version: '1.16' # The Go version to download (if necessary) and use.
-    - name: download e2e artifacts
-      uses: actions/download-artifact@v2
-      with:
-        name: e2e-artifacts
-        path: /tmp/e2e-artifacts
+        script: |
+          var artifacts = await github.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: ${{github.event.workflow_run.id }},
+          });
+          var matchArtifact = artifacts.data.artifacts.filter((artifact) => {
+            return artifact.name == "e2e-artifacts"
+          })[0];
+          var download = await github.actions.downloadArtifact({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              artifact_id: matchArtifact.id,
+              archive_format: 'zip',
+          });
+          var fs = require('fs');
+          fs.writeFileSync('${{github.workspace}}/e2e-artifacts.zip', Buffer.from(download.data));
+    - run: unzip e2e-artifacts.zip
     - name: Display structure of downloaded files
       run: ls -R
       working-directory: /tmp/e2e-artifacts
