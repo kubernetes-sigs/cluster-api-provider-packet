@@ -11,6 +11,16 @@ jobs:
       ${{ github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success' }}
     steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+    - uses: actions/setup-go@v2
+      with:
+        go-version: '1.16' # The Go version to download (if necessary) and use.
+    - name: Setup kind
+      uses: engineerd/setup-kind@v0.5.0
+      with:
+        version: v0.11.1
+        skipClusterCreation: true
     - name: 'Download artifact'
       uses: actions/github-script@v4.0.2
       with:
@@ -34,4 +44,14 @@ jobs:
     - run: unzip e2e-artifacts.zip
     - name: Display structure of downloaded files
       run: ls -R
-      working-directory: /tmp/e2e-artifacts
+    - name: Load image
+      run: |
+        docker load --input capp-e2e-image.tar
+        docker image ls -a
+    - name: e2e smoketest
+      env:
+        PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
+        PROJECT_ID: ${{ secrets.PROJECT_ID }}
+      # This currently runs the tests serially, if we need to parallize
+      # need to install ginkgo and use it to run the tests
+      run: ./e2e.test -e2e.artifacts-folder=artifacts -e2e.config=config/e2e-config.yaml -ginkgo.focus='\[Smoke Test\]' -ginkgo.progress -ginkgo.trace -ginkgo.v
