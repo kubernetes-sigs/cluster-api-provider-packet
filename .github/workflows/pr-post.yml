@@ -39,8 +39,6 @@ jobs:
           var fs = require('fs');
           fs.writeFileSync('${{github.workspace}}/e2e-artifacts.zip', Buffer.from(download.data));
     - run: unzip e2e-artifacts.zip
-    - name: Display structure of downloaded files
-      run: ls -R
     - name: Load image
       run: |
         docker load --input capp-e2e-image.tar
@@ -53,4 +51,4 @@ jobs:
       # need to install ginkgo and use it to run the tests
       run: |
         chmod +x e2e.test
-        ./e2e.test -e2e.artifacts-folder=artifacts -e2e.config=config/e2e-config.yaml -ginkgo.focus='\[Smoke Test\]' -ginkgo.progress -ginkgo.trace -ginkgo.v
+        ./e2e.test -e2e.artifacts-folder=${PWD}/artifacts -e2e.config=config/e2e-config.yaml -ginkgo.focus='\[Smoke Test\]' -ginkgo.progress -ginkgo.trace -ginkgo.v
