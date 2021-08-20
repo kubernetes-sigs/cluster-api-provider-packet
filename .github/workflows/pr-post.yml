@@ -19,7 +19,7 @@ jobs:
         version: v0.11.1
         skipClusterCreation: true
     - name: 'Download artifact'
-      uses: actions/github-script@v4.0.2
+      uses: actions/github-script@v4.1
       with:
         script: |
           var artifacts = await github.actions.listWorkflowRunArtifacts({
