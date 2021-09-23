@@ -48,7 +48,8 @@ type PacketMachineSpec struct {
 	// +optional
 	IPXEUrl string `json:"ipxeURL,omitempty"`
 
-	// HardwareReservationID is the unique device hardware reservation ID or `next-available` to
+	// HardwareReservationID is the unique device hardware reservation ID, a comma separated list of
+	// hardware reservation IDs, or `next-available` to
 	// automatically let the Packet api determine one.
 	// +optional
 	HardwareReservationID string `json:"hardwareReservationID,omitempty"`

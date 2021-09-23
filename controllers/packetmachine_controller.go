@@ -245,6 +245,10 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		case err != nil && strings.Contains(err.Error(), " no available hardware reservations "):
 			// Do not treat an error indicating there are no hardware reservations available as fatal
 			return ctrl.Result{}, fmt.Errorf("failed to create machine %s: %w", machineScope.Name(), err)
+		case err != nil && strings.Contains(err.Error(), "Server is not provisionable"):
+			// Do not treat an error indicating that reserved hardware is not provisionable as fatal
+			// This occurs when reserved hardware is in the process of being deprovisioned
+			return ctrl.Result{}, fmt.Errorf("failed to create machine %s: %w", machineScope.Name(), err)
 		case err != nil:
 			errs := fmt.Errorf("failed to create machine %s: %w", machineScope.Name(), err)
 			machineScope.SetErrorReason(capierrors.CreateMachineError)
