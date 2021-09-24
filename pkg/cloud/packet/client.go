@@ -38,7 +38,10 @@ const (
 	ipxeOS          = "custom_ipxe"
 )
 
-var ErrControlPlanEndpointNotFound = errors.New("control plane not found")
+var (
+	ErrControlPlanEndpointNotFound = errors.New("control plane not found")
+	ErrInvalidRequest              = errors.New("invalid request")
+)
 
 type PacketClient struct {
 	*packngo.Client
@@ -75,6 +78,13 @@ type CreateDeviceRequest struct {
 }
 
 func (p *PacketClient) NewDevice(req CreateDeviceRequest) (*packngo.Device, error) {
+	if req.MachineScope.PacketMachine.Spec.IPXEUrl != "" {
+		// Error if pxe url and OS conflict
+		if req.MachineScope.PacketMachine.Spec.OS != ipxeOS {
+			return nil, fmt.Errorf("os should be set to custom_pxe when using pxe urls: %w", ErrInvalidRequest)
+		}
+	}
+
 	userDataRaw, err := req.MachineScope.GetRawBootstrapData()
 	if err != nil {
 		return nil, errors.Wrap(err, "impossible to retrieve bootstrap data from secret")
@@ -119,28 +129,42 @@ func (p *PacketClient) NewDevice(req CreateDeviceRequest) (*packngo.Device, erro
 	}
 
 	serverCreateOpts := &packngo.DeviceCreateRequest{
-		Hostname:              req.MachineScope.Name(),
-		ProjectID:             req.MachineScope.PacketCluster.Spec.ProjectID,
-		Facility:              []string{facility},
-		BillingCycle:          req.MachineScope.PacketMachine.Spec.BillingCycle,
-		HardwareReservationID: req.MachineScope.PacketMachine.Spec.HardwareReservationID,
-		Plan:                  req.MachineScope.PacketMachine.Spec.MachineType,
-		OS:                    req.MachineScope.PacketMachine.Spec.OS,
-		Tags:                  tags,
-		UserData:              userData,
+		Hostname:      req.MachineScope.Name(),
+		ProjectID:     req.MachineScope.PacketCluster.Spec.ProjectID,
+		Facility:      []string{facility},
+		BillingCycle:  req.MachineScope.PacketMachine.Spec.BillingCycle,
+		Plan:          req.MachineScope.PacketMachine.Spec.MachineType,
+		OS:            req.MachineScope.PacketMachine.Spec.OS,
+		IPXEScriptURL: req.MachineScope.PacketMachine.Spec.IPXEUrl,
+		Tags:          tags,
+		UserData:      userData,
 	}
 
-	// Update server options to pass pxe url if specified
-	if req.MachineScope.PacketMachine.Spec.IPXEUrl != "" {
-		// Error if pxe url and OS conflict
-		if req.MachineScope.PacketMachine.Spec.OS != ipxeOS {
-			return nil, fmt.Errorf("os should be set to custom_pxe when using pxe urls")
+	reservationIDs := strings.Split(req.MachineScope.PacketMachine.Spec.HardwareReservationID, ",")
+
+	// If there are no reservationIDs to process, go ahead and return early
+	if len(reservationIDs) == 0 {
+		dev, _, err := p.Client.Devices.Create(serverCreateOpts)
+		return dev, err
+	}
+
+	// Do a naive loop through the list of reservationIDs, continuing if we hit any error
+	// TODO: if we can determine how to differentiate a failure based on the reservation
+	// being in use vs other errors, then we can make this a bit smarter in the future.
+	var lastErr error
+
+	for _, resID := range reservationIDs {
+		serverCreateOpts.HardwareReservationID = resID
+		dev, _, err := p.Client.Devices.Create(serverCreateOpts)
+		if err != nil {
+			lastErr = err
+			continue
 		}
-		serverCreateOpts.IPXEScriptURL = req.MachineScope.PacketMachine.Spec.IPXEUrl
+
+		return dev, nil
 	}
 
-	dev, _, err := p.Client.Devices.Create(serverCreateOpts)
-	return dev, err
+	return nil, lastErr
 }
 
 func (p *PacketClient) GetDeviceAddresses(device *packngo.Device) ([]corev1.NodeAddress, error) {
