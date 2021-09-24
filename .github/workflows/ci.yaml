@@ -4,7 +4,7 @@ on:
    types: [opened, synchronize, reopened]
  push:
    branches:
-   - master
+   - main
 
 env:
   KUBEBUILDER_DIR: /tmp/kubebuilder_install
@@ -47,11 +47,11 @@ jobs:
       env:
         KUBEBUILDER_ASSETS: ${{ env.KUBEBUILDER_DIR }}/bin
 
-    # these next steps are used for merge to master (push the images)
+    # these next steps are used for merge to main (push the images)
     # they really should be separate workflows or jobs, but github actions is awful about sharing between them, so it must be one job
     - name: docker login
-      if: github.event_name == 'push' && endsWith(github.ref,'/master')
+      if: github.event_name == 'push' && endsWith(github.ref,'/main')
       run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-    - name: deploy   # when merged into master, tag master and push - ideally, this would be a separate job, but you cannot share docker build cache between jobs
-      if: github.event_name == 'push' && endsWith(github.ref,'/master')
-      run: make cd CONFIRM=true BRANCH_NAME=master
+    - name: deploy   # when merged into main, tag main and push - ideally, this would be a separate job, but you cannot share docker build cache between jobs
+      if: github.event_name == 'push' && endsWith(github.ref,'/main')
+      run: make cd CONFIRM=true BRANCH_NAME=main

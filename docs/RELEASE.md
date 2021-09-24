@@ -47,7 +47,7 @@ When the VERSION file changes:
 * CI copies the artifacts in `out/release/infrastructure-packet/<version>/*yaml` to the github releases
 * CI builds docker images for each supported architecture as well as a multi-arch manifest, and tags it with:
   * the git hash of the commit
-  * `master`
+  * `main`
   * the semver tag of the release, e.g. `v0.3.1`
   * the tag `latest`
 
