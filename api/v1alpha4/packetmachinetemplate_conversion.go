@@ -16,8 +16,48 @@ limitations under the License.
 
 package v1alpha4
 
-// Hub marks PacketMachineTemplate as a conversion hub.
-func (*PacketMachineTemplate) Hub() {}
+import (
+	utilconversion "sigs.k8s.io/cluster-api/util/conversion"
+	"sigs.k8s.io/controller-runtime/pkg/conversion"
 
-// Hub marks PacketMachineTemplateList as a conversion hub.
-func (*PacketMachineTemplateList) Hub() {}
+	v1beta1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
+)
+
+// ConvertTo converts this PacketMachineTemplate to the Hub version (v1beta1).
+func (src *PacketMachineTemplate) ConvertTo(dstRaw conversion.Hub) error {
+	dst := dstRaw.(*v1beta1.PacketMachineTemplate)
+
+	if err := Convert_v1alpha4_PacketMachineTemplate_To_v1beta1_PacketMachineTemplate(src, dst, nil); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ConvertFrom converts from the Hub version (v1beta1) to this version.
+func (dst *PacketMachineTemplate) ConvertFrom(srcRaw conversion.Hub) error {
+	src := srcRaw.(*v1beta1.PacketMachineTemplate)
+
+	if err := Convert_v1beta1_PacketMachineTemplate_To_v1alpha4_PacketMachineTemplate(src, dst, nil); err != nil {
+		return err
+	}
+
+	// Preserve Hub data on down-conversion.
+	if err := utilconversion.MarshalData(src, dst); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ConvertTo converts this PacketMachineTemplateList to the Hub version (v1beta1).
+func (src *PacketMachineTemplateList) ConvertTo(dstRaw conversion.Hub) error {
+	dst := dstRaw.(*v1beta1.PacketMachineTemplateList)
+	return Convert_v1alpha4_PacketMachineTemplateList_To_v1beta1_PacketMachineTemplateList(src, dst, nil)
+}
+
+// ConvertFrom converts from the Hub version (v1beta1) to this version.
+func (dst *PacketMachineTemplateList) ConvertFrom(srcRaw conversion.Hub) error {
+	src := srcRaw.(*v1beta1.PacketMachineTemplateList)
+	return Convert_v1beta1_PacketMachineTemplateList_To_v1alpha4_PacketMachineTemplateList(src, dst, nil)
+}

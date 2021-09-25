@@ -30,14 +30,15 @@ import (
 	cgrecord "k8s.io/client-go/tools/record"
 	"k8s.io/component-base/version"
 	"k8s.io/klog/v2/klogr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
-	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha4"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
 	infrav1alpha3 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
 	infrav1alpha4 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha4"
+	infrav1beta1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-packet/controllers"
 	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 	// +kubebuilder:scaffold:imports
@@ -52,6 +53,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(infrav1alpha3.AddToScheme(scheme))
 	utilruntime.Must(infrav1alpha4.AddToScheme(scheme))
+	utilruntime.Must(infrav1beta1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 	utilruntime.Must(bootstrapv1.AddToScheme(scheme))
 
@@ -151,15 +153,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&infrav1alpha4.PacketCluster{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = (&infrav1beta1.PacketCluster{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "PacketCluster")
 		os.Exit(1)
 	}
-	if err = (&infrav1alpha4.PacketMachine{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = (&infrav1beta1.PacketMachine{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "PacketMachine")
 		os.Exit(1)
 	}
-	if err = (&infrav1alpha4.PacketMachineTemplate{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = (&infrav1beta1.PacketMachineTemplate{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "PacketMachineTemplate")
 		os.Exit(1)
 	}

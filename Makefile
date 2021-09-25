@@ -57,11 +57,11 @@ else
 endif
 
 # Binaries.
-CONTROLLER_GEN_VER := v0.6.2
+CONTROLLER_GEN_VER := v0.7.0
 CONTROLLER_GEN_BIN := controller-gen
 CONTROLLER_GEN := $(TOOLS_BIN_DIR)/$(CONTROLLER_GEN_BIN)-$(CONTROLLER_GEN_VER)
 
-CONVERSION_GEN_VER := v0.21.3
+CONVERSION_GEN_VER := v0.22.2
 CONVERSION_GEN_BIN := conversion-gen
 CONVERSION_GEN := $(TOOLS_BIN_DIR)/$(CONVERSION_GEN_BIN)-$(CONVERSION_GEN_VER)
 
@@ -98,6 +98,9 @@ export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
 export TAG ?= dev
 export ARCH ?= amd64
 ALL_ARCH = amd64 arm64
+
+HELPER_IMAGE_NAME ?= kubernetes-sigs/cluster-api-provider-packet-helper
+export HELPER_IMG ?= $(REGISTRY)/$(HELPER_IMAGE_NAME)
 
 # Allow overriding manifest generation destination directory
 MANIFEST_ROOT ?= config
@@ -211,7 +214,7 @@ test-e2e-ci:
 TEST_TEMPLATES_TARGET_DIR ?= $(REPO_ROOT)/test/e2e/data
 
 .PHONY: e2e-test-templates
-e2e-test-templates: $(KUSTOMIZE) e2e-test-templates-v1alpha3 e2e-test-templates-v1alpha4 ## Generate cluster templates for all versions
+e2e-test-templates: $(KUSTOMIZE) e2e-test-templates-v1alpha3 e2e-test-templates-v1alpha4 e2e-test-templates-v1beta1 ## Generate cluster templates for all versions
 
 e2e-test-templates-v1alpha3: $(KUSTOMIZE) ## Generate cluster templates for v1alpha3
 	mkdir -p $(TEST_TEMPLATES_TARGET_DIR)/v1alpha3/
@@ -220,11 +223,49 @@ e2e-test-templates-v1alpha3: $(KUSTOMIZE) ## Generate cluster templates for v1al
 
 e2e-test-templates-v1alpha4: $(KUSTOMIZE) ## Generate cluster templates for v1alpha4
 	mkdir -p $(TEST_TEMPLATES_TARGET_DIR)/v1alpha4/
-	$(KUSTOMIZE) build $(REPO_ROOT)/templates/experimental-crs-cni --load_restrictor none > $(TEST_TEMPLATES_TARGET_DIR)/v1alpha4/cluster-template.yaml
-	$(KUSTOMIZE) build $(REPO_ROOT)/test/e2e/data/v1alpha4/cluster-template-kcp-scale-in --load_restrictor none > $(TEST_TEMPLATES_TARGET_DIR)/v1alpha4/cluster-template-kcp-scale-in.yaml
-	$(KUSTOMIZE) build $(REPO_ROOT)/test/e2e/data/v1alpha4/cluster-template-node-drain --load_restrictor none > $(TEST_TEMPLATES_TARGET_DIR)/v1alpha4/cluster-template-node-drain.yaml
-	$(KUSTOMIZE) build $(REPO_ROOT)/test/e2e/data/v1alpha4/cluster-template-md-remediation --load_restrictor none > $(TEST_TEMPLATES_TARGET_DIR)/v1alpha4/cluster-template-md-remediation.yaml
-	$(KUSTOMIZE) build $(REPO_ROOT)/test/e2e/data/v1alpha4/cluster-template-kcp-remediation --load_restrictor none > $(TEST_TEMPLATES_TARGET_DIR)/v1alpha4/cluster-template-kcp-remediation.yaml
+	$(KUSTOMIZE) build $(REPO_ROOT)/test/e2e/data/v1alpha4/cluster-template-packet-ccm --load_restrictor none > $(TEST_TEMPLATES_TARGET_DIR)/v1alpha4/cluster-template-packet-ccm.yaml
+	$(KUSTOMIZE) build $(REPO_ROOT)/test/e2e/data/v1alpha4/cluster-template-cpem --load_restrictor none > $(TEST_TEMPLATES_TARGET_DIR)/v1alpha4/cluster-template-cpem.yaml
+
+e2e-test-templates-v1beta1: $(KUSTOMIZE) ## Generate cluster templates for v1beta1
+	mkdir -p $(TEST_TEMPLATES_TARGET_DIR)/v1beta1/
+	$(KUSTOMIZE) build $(REPO_ROOT)/templates/experimental-crs-cni --load_restrictor none > $(TEST_TEMPLATES_TARGET_DIR)/v1beta1/cluster-template.yaml
+	$(KUSTOMIZE) build $(REPO_ROOT)/test/e2e/data/v1beta1/cluster-template-with-cpem --load_restrictor none > $(TEST_TEMPLATES_TARGET_DIR)/v1beta1/cluster-template-with-cpem.yaml
+	$(KUSTOMIZE) build $(REPO_ROOT)/test/e2e/data/v1beta1/cluster-template-kcp-scale-in --load_restrictor none > $(TEST_TEMPLATES_TARGET_DIR)/v1beta1/cluster-template-kcp-scale-in.yaml
+	$(KUSTOMIZE) build $(REPO_ROOT)/test/e2e/data/v1beta1/cluster-template-node-drain --load_restrictor none > $(TEST_TEMPLATES_TARGET_DIR)/v1beta1/cluster-template-node-drain.yaml
+	$(KUSTOMIZE) build $(REPO_ROOT)/test/e2e/data/v1beta1/cluster-template-md-remediation --load_restrictor none > $(TEST_TEMPLATES_TARGET_DIR)/v1beta1/cluster-template-md-remediation.yaml
+	$(KUSTOMIZE) build $(REPO_ROOT)/test/e2e/data/v1beta1/cluster-template-kcp-remediation --load_restrictor none > $(TEST_TEMPLATES_TARGET_DIR)/v1beta1/cluster-template-kcp-remediation.yaml
+
+## --------------------------------------
+## Helper docker image
+## --------------------------------------
+
+.PHONY: helper-docker-build
+helper-docker-build: ## Build the docker image for controller-manager
+	docker build --pull --build-arg ARCH=$(ARCH) --build-arg LDFLAGS="$(LDFLAGS)" -f Dockerfile.helper . -t $(HELPER_IMG)-$(ARCH):$(TAG)
+
+.PHONY: helper-docker-push
+helper-docker-push: ## Push the docker image
+	docker push $(HELPER_IMG)-$(ARCH):$(TAG)
+
+.PHONY: helper-docker-build-all ## Build all the architecture docker images
+helper-docker-build-all: $(addprefix helper-docker-build-,$(ALL_ARCH))
+
+helper-docker-build-%:
+	$(MAKE) ARCH=$* helper-docker-build
+
+.PHONY: helper-docker-push-all ## Push all the architecture docker images
+helper-docker-push-all: $(addprefix helper-docker-push-,$(ALL_ARCH))
+	$(MAKE) helper-docker-push-manifest
+
+helper-docker-push-%:
+	$(MAKE) ARCH=$* helper-docker-push
+
+.PHONY: helper-docker-push-manifest
+helper-docker-push-manifest: ## Push the fat manifest docker image.
+	## Minimum docker version 18.06.0 is required for creating and pushing manifest images.
+	docker manifest create --amend $(HELPER_IMG):$(TAG) $(shell echo $(ALL_ARCH) | sed -e "s~[^ ]*~$(HELPER_IMG)\-&:$(TAG)~g")
+	@for arch in $(ALL_ARCH); do docker manifest annotate --arch $${arch} ${HELPER_IMG}:${TAG} ${HELPER_IMG}-$${arch}:${TAG}; done
+	docker manifest push --purge ${HELPER_IMG}:${TAG}
 
 ## --------------------------------------
 ## Tooling Binaries
@@ -287,7 +328,10 @@ generate: ## Generate code
 
 .PHONY: generate-templates
 generate-templates: $(KUSTOMIZE) ## Generate cluster templates
+	$(KUSTOMIZE) build templates/bare-with-kube-vip --load_restrictor none > templates/cluster-template-no-cpem.yaml
 	$(KUSTOMIZE) build templates/experimental-crs-cni --load_restrictor none > templates/cluster-template-crs-cni.yaml
+	$(KUSTOMIZE) build templates/legacy --load_restrictor none > templates/cluster-template.yaml
+	
 
 .PHONY: generate-go
 generate-go: $(CONTROLLER_GEN) $(CONVERSION_GEN) ## Runs Go related generate targets
@@ -298,6 +342,12 @@ generate-go: $(CONTROLLER_GEN) $(CONVERSION_GEN) ## Runs Go related generate tar
 		--input-dirs=./api/v1alpha3 \
 		--build-tag=ignore_autogenerated_core_v1alpha3 \
 		--extra-peer-dirs=sigs.k8s.io/cluster-api/api/v1alpha3 \
+		--output-file-base=zz_generated.conversion \
+		--go-header-file=./hack/boilerplate.go.txt $(GEN_OUTPUT_BASE)
+	$(CONVERSION_GEN) \
+		--input-dirs=./api/v1alpha4 \
+		--build-tag=ignore_autogenerated_core_v1alpha4 \
+		--extra-peer-dirs=sigs.k8s.io/cluster-api/api/v1alpha4 \
 		--output-file-base=zz_generated.conversion \
 		--go-header-file=./hack/boilerplate.go.txt $(GEN_OUTPUT_BASE)
 	go generate ./...

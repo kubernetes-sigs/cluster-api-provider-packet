@@ -42,7 +42,7 @@ import (
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 	"sigs.k8s.io/cluster-api/util"
 
-	"sigs.k8s.io/cluster-api-provider-packet/api/v1alpha4"
+	"sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 )
 
 const (
@@ -187,7 +187,7 @@ var _ = SynchronizedAfterSuite(func() {
 func initScheme() *runtime.Scheme {
 	sc := runtime.NewScheme()
 	framework.TryAddDefaultSchemes(sc)
-	Expect(v1alpha4.AddToScheme(sc)).To(Succeed())
+	Expect(v1beta1.AddToScheme(sc)).To(Succeed())
 
 	return sc
 }

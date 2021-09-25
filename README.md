@@ -6,7 +6,7 @@
 [![Go Report Card](https://goreportcard.com/badge/sigs.k8s.io/cluster-api-provider-packet)](https://goreportcard.com/report/sigs.k8s.io/cluster-api-provider-packet)
 [![Docker Pulls](https://img.shields.io/docker/pulls/packethost/cluster-api-provider-packet.svg)](https://hub.docker.com/r/packethost/cluster-api-provider-packet/)
 
-This is the official [cluster-api](https://github.com/kubernetes-sigs/cluster-api) provider for [Equinix Metal](https://metal.equinix.com/), formerly known as Packet. It implements cluster-api provider version v1alpha4.
+This is the official [cluster-api](https://github.com/kubernetes-sigs/cluster-api) provider for [Equinix Metal](https://metal.equinix.com/), formerly known as Packet. It implements cluster-api provider version v1beta1.
 
 ![Packetbot works hard to keep Kubernetes cluster in a good shape](./docs/banner.png)
 

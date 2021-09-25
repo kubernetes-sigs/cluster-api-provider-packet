@@ -53,7 +53,6 @@ type PacketClusterStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=packetclusters,scope=Namespaced,categories=cluster-api
 // +kubebuilder:object:root=true
-// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="Cluster",type="string",JSONPath=".metadata.labels.cluster\\.x-k8s\\.io/cluster-name",description="Cluster to which this PacketCluster belongs"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="PacketCluster ready status"
 

@@ -30,13 +30,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
 
-	infrastructurev1 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha4"
+	infrastructurev1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
 )
 
 const (
 	apiTokenVarName = "PACKET_API_KEY" //nolint:gosec
-	clientName      = "CAPP-v1alpha4"
+	clientName      = "CAPP-v1beta1"
 	ipxeOS          = "custom_ipxe"
 )
 

@@ -1,0 +1,14 @@
+resources:
+- ../bare-template
+patches:
+# TODO: allow for configuring kube-vip w/ bgp and other custom configuration
+# TODO: update back to ghcr.io/kube-vip:v0.3.8 after https://github.com/kube-vip/kube-vip/pull/267 is in a release
+- patch: |-
+    - op: add
+      path: /spec/kubeadmConfigSpec/joinConfiguration/nodeRegistration/ignorePreflightErrors/-
+      value: "DirAvailable--etc-kubernetes-manifests"
+    - op: add
+      path: /spec/kubeadmConfigSpec/preKubeadmCommands/-
+      value: 'mkdir -p /etc/kubernetes/manifests && ctr images pull docker.io/detiber/kube-vip:v0.3.8 && ctr run --rm --net-host docker.io/detiber/kube-vip:v0.3.8 vip /kube-vip manifest pod --interface bond0 --address {{ .controlPlaneEndpoint }} --controlplane --arp --leaderElection --metal --metalKey {{ .apiKey }} --metalProjectID ${PROJECT_ID} > /etc/kubernetes/manifests/kube-vip.yaml'
+  target:
+    kind: KubeadmControlPlane

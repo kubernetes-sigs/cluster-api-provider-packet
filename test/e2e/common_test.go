@@ -41,7 +41,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd/api"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 	clusterv1old "sigs.k8s.io/cluster-api/api/v1alpha3"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/test/infrastructure/container"
 	capiversionutil "sigs.k8s.io/cluster-api/util/version"

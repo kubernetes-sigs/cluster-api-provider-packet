@@ -20,11 +20,11 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha4"
+	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 )
 
 // ClusterScopeParams defines the input parameters used to create a new Scope.

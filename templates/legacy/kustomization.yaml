@@ -1,0 +1,9 @@
+resources:
+- ../external-cloud-provider
+patches:
+- patch: |-
+    - op: add
+      path: /spec/kubeadmConfigSpec/postKubeadmCommands/-
+      value: 'if [ -f "/run/kubeadm/kubeadm.yaml" ]; then kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system metal-cloud-config --from-literal=cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "eipTag": ""}''; kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.2.2/deployment.yaml; fi'
+  target:
+    kind: KubeadmControlPlane

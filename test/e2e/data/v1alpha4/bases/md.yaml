@@ -1,0 +1,86 @@
+---
+# PacketMachineTemplate referenced by the MachineDeployment
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
+kind: PacketMachineTemplate
+metadata:
+  name: "${CLUSTER_NAME}-md-0"
+spec:
+  template:
+    spec:
+      billingCycle: hourly
+      machineType: ${WORKER_NODE_TYPE}
+      os: ${NODE_OS:=ubuntu_18_04}
+      sshKeys:
+      - ${SSH_KEY}
+      tags: []
+---
+# KubeadmConfigTemplate referenced by the MachineDeployment
+apiVersion: bootstrap.cluster.x-k8s.io/v1alpha4
+kind: KubeadmConfigTemplate
+metadata:
+  name: "${CLUSTER_NAME}-md-0"
+spec:
+  template:
+    spec:
+      preKubeadmCommands:
+      - sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
+      - swapoff -a
+      - mount -a
+      - |
+        cat <<EOF > /etc/modules-load.d/containerd.conf
+        overlay
+        br_netfilter
+        EOF
+      - modprobe overlay
+      - modprobe br_netfilter
+      - |
+        cat <<EOF > /etc/sysctl.d/99-kubernetes-cri.conf
+        net.bridge.bridge-nf-call-iptables  = 1
+        net.ipv4.ip_forward                 = 1
+        net.bridge.bridge-nf-call-ip6tables = 1
+        EOF
+      - sysctl --system
+      - apt-get -y update
+      - DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
+      - curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+      - echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
+      - apt-get update -y
+      - TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\./g' | sed 's/^v//')
+      - RESOLVED_KUBERNETES_VERSION=$(apt-cache policy kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$1~ VERSION { print $1 }' | head -n1)
+      - apt-get install -y ca-certificates socat jq ebtables apt-transport-https cloud-utils prips containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
+      - systemctl daemon-reload
+      - systemctl enable containerd
+      - systemctl start containerd
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            cloud-provider: external
+            provider-id: equinixmetal://{{ `{{ v1.instance_id }}` }}
+---
+# MachineDeployment object with
+# - the label nodepool=pool1 that applies to all the machines, so those machine can be targeted by the MachineHealthCheck object
+apiVersion: cluster.x-k8s.io/v1alpha4
+kind: MachineDeployment
+metadata:
+  name: "${CLUSTER_NAME}-md-0"
+spec:
+  clusterName: "${CLUSTER_NAME}"
+  replicas: ${WORKER_MACHINE_COUNT}
+  selector:
+    matchLabels:
+  template:
+    metadata:
+      labels:
+        "nodepool": "pool1"
+    spec:
+      clusterName: "${CLUSTER_NAME}"
+      version: "${KUBERNETES_VERSION}"
+      bootstrap:
+        configRef:
+          name: "${CLUSTER_NAME}-md-0"
+          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha4
+          kind: KubeadmConfigTemplate
+      infrastructureRef:
+        name: "${CLUSTER_NAME}-md-0"
+        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
+        kind: PacketMachineTemplate

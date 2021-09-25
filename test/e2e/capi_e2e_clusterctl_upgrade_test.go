@@ -25,6 +25,9 @@ import (
 	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
 )
 
+// TODO: ensure we are testing both v1alpha3 -> v1beta1 and v1alpha4 -> v1beta1
+// Upstream this is done by overriding INIT_WITH_PROVIDERS_CONTRACT in the e2e config
+
 var _ = Describe("[Management Upgrade] Running the Cluster API E2E tests", func() {
 	ctx := context.TODO()
 

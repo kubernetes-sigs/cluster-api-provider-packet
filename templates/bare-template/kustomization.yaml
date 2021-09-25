@@ -1,0 +1,35 @@
+resources:
+- ../bases/cluster-template-base.yaml
+patches:
+- patch: |-
+    kind: KubeadmControlPlane
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    metadata:
+      name: not-used
+    spec:
+      kubeadmConfigSpec:
+        initConfiguration:
+          nodeRegistration:
+            kubeletExtraArgs:
+              provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
+        joinConfiguration:
+          nodeRegistration:
+            ignorePreflightErrors: []
+            kubeletExtraArgs:
+              provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
+  target:
+    kind: KubeadmControlPlane
+- patch: |-
+    kind: KubeadmConfigTemplate
+    apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+    metadata:
+      name: not-used
+    spec:
+      template:
+        spec:
+          joinConfiguration:
+            nodeRegistration:
+              kubeletExtraArgs:
+                provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
+  target:
+    kind: KubeadmConfigTemplate

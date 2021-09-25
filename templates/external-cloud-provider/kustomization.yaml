@@ -1,0 +1,41 @@
+resources:
+- ../bare-with-kube-vip
+patches:
+- patch: |-
+    kind: KubeadmControlPlane
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    metadata:
+        name: not-used
+    spec:
+        kubeadmConfigSpec:
+            initConfiguration:
+                nodeRegistration:
+                    kubeletExtraArgs:
+                        cloud-provider: external
+            clusterConfiguration:
+                apiServer:
+                    extraArgs:
+                        cloud-provider: external
+                controllerManager:
+                    extraArgs:
+                        cloud-provider: external
+            joinConfiguration:
+                nodeRegistration:
+                    kubeletExtraArgs:
+                        cloud-provider: external
+  target:
+    kind: KubeadmControlPlane
+- patch: |-
+    kind: KubeadmConfigTemplate
+    apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+    metadata:
+        name: not-used
+    spec:
+        template:
+            spec:
+                joinConfiguration:
+                    nodeRegistration:
+                        kubeletExtraArgs:
+                            cloud-provider: external
+  target:
+    kind: KubeadmConfigTemplate

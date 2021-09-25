@@ -16,11 +16,21 @@ providers:
   - name: v0.3.23 # latest published release
     value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.23/core-components.yaml"
     type: "url"
+    contract: v1alpha3
+    files:
+      - sourcePath: "../data/shared/v1alpha3/metadata.yaml"
   - name: v0.4.3
     value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.4.3/core-components.yaml"
     type: "url"
+    contract: v1alpha4
     files:
     - sourcePath: "../data/shared/v1alpha4/metadata.yaml"
+  - name: v1.0.0-rc.0
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.0.0-rc.0/core-components.yaml"
+    type: "url"
+    contract: v1beta1
+    files:
+    - sourcePath: "../data/shared/v1beta1/metadata.yaml"
 
 - name: kubeadm
   type: BootstrapProvider
@@ -28,11 +38,21 @@ providers:
   - name: v0.3.23 # latest published release
     value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.23/bootstrap-components.yaml"
     type: "url"
+    contract: v1alpha3
+    files:
+      - sourcePath: "../data/shared/v1alpha3/metadata.yaml"
   - name: v0.4.3
     value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.4.3/bootstrap-components.yaml"
     type: "url"
+    contract: v1alpha4
     files:
     - sourcePath: "../data/shared/v1alpha4/metadata.yaml"
+  - name: v1.0.0-rc.0
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.0.0-rc.0/bootstrap-components.yaml"
+    type: "url"
+    contract: v1beta1
+    files:
+    - sourcePath: "../data/shared/v1beta1/metadata.yaml"
 
 - name: kubeadm
   type: ControlPlaneProvider
@@ -40,32 +60,53 @@ providers:
   - name: v0.3.23 # latest published release
     value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.23/control-plane-components.yaml"
     type: "url"
+    contract: v1alpha3
+    files:
+      - sourcePath: "../data/shared/v1alpha3/metadata.yaml"
   - name: v0.4.3
     value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.4.3/control-plane-components.yaml"
     type: "url"
+    contract: v1alpha4
     files:
     - sourcePath: "../data/shared/v1alpha4/metadata.yaml"
+  - name: v1.0.0-rc.0
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.0.0-rc.0/control-plane-components.yaml"
+    type: "url"
+    contract: v1beta1
+    files:
+    - sourcePath: "../data/shared/v1beta1/metadata.yaml"
 
 - name: packet
   type: InfrastructureProvider
   versions:
-  - name: v0.3.9
-    value: "https://github.com/kubernetes-sigs/cluster-api-provider-packet/releases/download/v0.3.9/infrastructure-components.yaml"
+  - name: v0.3.10
+    value: "https://github.com/kubernetes-sigs/cluster-api-provider-packet/releases/download/v0.3.10/infrastructure-components.yaml"
     type: "url"
+    contract: v1alpha3
     files:
-      # Add cluster templates
-      - sourcePath: "../data/v1alpha3/cluster-template-packet-ccm.yaml"
-      - sourcePath: "../data/v1alpha3/cluster-template-cpem.yaml"
+    - sourcePath: "${MANIFEST_PATH:=..}/metadata.yaml"
+    - sourcePath: "../data/v1alpha3/cluster-template-packet-ccm.yaml"
+    - sourcePath: "../data/v1alpha3/cluster-template-cpem.yaml"
   - name: v0.4.0
     value: "${MANIFEST_PATH:=..}/infrastructure-components.yaml"
     type: "url"
+    contract: v1alpha4
     files:
     - sourcePath: "${MANIFEST_PATH:=..}/metadata.yaml"
-    - sourcePath: "../data/v1alpha4/cluster-template.yaml"
-    - sourcePath: "../data/v1alpha4/cluster-template-kcp-scale-in.yaml"
-    - sourcePath: "../data/v1alpha4/cluster-template-node-drain.yaml"
-    - sourcePath: "../data/v1alpha4/cluster-template-md-remediation.yaml"
-    - sourcePath: "../data/v1alpha4/cluster-template-kcp-remediation.yaml"
+    - sourcePath: "../data/v1alpha4/cluster-template-packet-ccm.yaml"
+    - sourcePath: "../data/v1alpha4/cluster-template-cpem.yaml"
+  - name: v1.0.0
+    value: "${MANIFEST_PATH:=..}/infrastructure-components.yaml"
+    type: "url"
+    contract: v1beta1
+    files:
+    - sourcePath: "${MANIFEST_PATH:=..}/metadata.yaml"
+    - sourcePath: "../data/v1beta1/cluster-template.yaml"
+    - sourcePath: "../data/v1beta1/cluster-template-with-cpem.yaml"
+    - sourcePath: "../data/v1beta1/cluster-template-kcp-scale-in.yaml"
+    - sourcePath: "../data/v1beta1/cluster-template-node-drain.yaml"
+    - sourcePath: "../data/v1beta1/cluster-template-md-remediation.yaml"
+    - sourcePath: "../data/v1beta1/cluster-template-kcp-remediation.yaml"
 
 variables:
   KUBERNETES_VERSION: "${KUBERNETES_VERSION:-v1.22.0}"
@@ -85,8 +126,14 @@ variables:
   # NOTE: INIT_WITH_BINARY and INIT_WITH_KUBERNETES_VERSION are only used by the clusterctl upgrade test to initialize
   # the management cluster to be upgraded.
   INIT_WITH_BINARY: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.23/clusterctl-{OS}-{ARCH}"
+  INIT_WITH_PROVIDERS_CONTRACT: "v1alpha3"
   # CAPI v0.3.x cannot be deployed on Kubernetes >= v1.22.
   INIT_WITH_KUBERNETES_VERSION: "v1.21.2"
+  # # NOTE: INIT_WITH_BINARY and INIT_WITH_KUBERNETES_VERSION are only used by the clusterctl upgrade test to initialize
+  # # the management cluster to be upgraded.
+  # INIT_WITH_BINARY: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.4.3/clusterctl-{OS}-{ARCH}"
+  # INIT_WITH_PROVIDERS_CONTRACT: "v1alpha4"
+  # INIT_WITH_KUBERNETES_VERSION: "v1.22.0"
 
 intervals:
   default/wait-controllers: ["3m", "10s"]

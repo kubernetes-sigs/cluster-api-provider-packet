@@ -1,35 +1,16 @@
-kind: KubeadmControlPlane
-apiVersion: controlplane.cluster.x-k8s.io/v1alpha4
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: KubeadmConfigTemplate
 metadata:
-  name: "${CLUSTER_NAME}-control-plane"
+  name: ${CLUSTER_NAME}-worker-a
 spec:
-  version: ${KUBERNETES_VERSION}
-  replicas: ${CONTROL_PLANE_MACHINE_COUNT}
-  machineTemplate:
-    infrastructureRef:
-      apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
-      kind: PacketMachineTemplate
-      name: "${CLUSTER_NAME}-control-plane"
-  kubeadmConfigSpec:
-    clusterConfiguration:
-      apiServer:
-          extraArgs:
-              cloud-provider: external
-      controllerManager:
-          extraArgs:
-              cloud-provider: external
-    initConfiguration:
-      nodeRegistration:
-        kubeletExtraArgs:
-          cloud-provider: external
-          provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
-    joinConfiguration:
-      nodeRegistration:
-        ignorePreflightErrors: []
-        kubeletExtraArgs:
-          cloud-provider: external
-          provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
-    preKubeadmCommands:
+  template:
+    spec:
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            cloud-provider: external
+            provider-id: equinixmetal://{{ `{{ v1.instance_id }}` }}
+      preKubeadmCommands:
       - sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
       - swapoff -a
       - mount -a
@@ -58,71 +39,38 @@ spec:
       - systemctl daemon-reload
       - systemctl enable containerd
       - systemctl start containerd
-      - ping -c 3 -q {{ .controlPlaneEndpoint }} && echo OK || ip addr add {{ .controlPlaneEndpoint }} dev lo
-    postKubeadmCommands:
-      - |
-        cat <<EOF >> /etc/network/interfaces
-        auto lo:0
-        iface lo:0 inet static
-          address {{ .controlPlaneEndpoint }}
-          netmask 255.255.255.255
-        EOF
-      - systemctl restart networking
-      - 'if [ -f "/run/kubeadm/kubeadm.yaml" ]; then kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system metal-cloud-config --from-literal=cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "eipTag": "cluster-api-provider-packet:cluster-id:${CLUSTER_NAME}"}''; kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.2.2/deployment.yaml; fi'
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
-kind: PacketMachineTemplate
-metadata:
-  name: "${CLUSTER_NAME}-control-plane"
-spec:
-  template:
-    spec:
-      os: "${NODE_OS:=ubuntu_18_04}"
-      billingCycle: hourly
-      machineType: "${CONTROLPLANE_NODE_TYPE}"
-      sshKeys:
-        - "${SSH_KEY}"
-      tags: []
----
-apiVersion: cluster.x-k8s.io/v1alpha4
+apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
-  name: "${CLUSTER_NAME}"
+  name: ${CLUSTER_NAME}
 spec:
   clusterNetwork:
     pods:
       cidrBlocks:
-        - ${POD_CIDR:=192.168.0.0/16}
+      - ${POD_CIDR:=192.168.0.0/16}
     services:
       cidrBlocks:
-        - ${SERVICE_CIDR:=172.26.0.0/16}
-  infrastructureRef:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
-    kind: PacketCluster
-    name: "${CLUSTER_NAME}"
+      - ${SERVICE_CIDR:=172.26.0.0/16}
   controlPlaneRef:
-    apiVersion: controlplane.cluster.x-k8s.io/v1alpha4
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
     kind: KubeadmControlPlane
-    name: "${CLUSTER_NAME}-control-plane"
+    name: ${CLUSTER_NAME}-control-plane
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: PacketCluster
+    name: ${CLUSTER_NAME}
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
-kind: PacketCluster
-metadata:
-  name: "${CLUSTER_NAME}"
-spec:
-  projectID: "${PROJECT_ID}"
-  facility: "${FACILITY}"
----
-apiVersion: cluster.x-k8s.io/v1alpha4
+apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineDeployment
 metadata:
-  name: ${CLUSTER_NAME}-worker-a
   labels:
     cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
     pool: worker-a
+  name: ${CLUSTER_NAME}-worker-a
 spec:
-  replicas: ${WORKER_MACHINE_COUNT}
   clusterName: ${CLUSTER_NAME}
+  replicas: ${WORKER_MACHINE_COUNT}
   selector:
     matchLabels:
       cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
@@ -133,70 +81,115 @@ spec:
         cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
         pool: worker-a
     spec:
-      version: ${KUBERNETES_VERSION}
-      clusterName: ${CLUSTER_NAME}
       bootstrap:
         configRef:
-          name: ${CLUSTER_NAME}-worker-a
-          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha4
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
           kind: KubeadmConfigTemplate
+          name: ${CLUSTER_NAME}-worker-a
+      clusterName: ${CLUSTER_NAME}
       infrastructureRef:
-        name: ${CLUSTER_NAME}-worker-a
-        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
         kind: PacketMachineTemplate
+        name: ${CLUSTER_NAME}-worker-a
+      version: ${KUBERNETES_VERSION}
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: KubeadmControlPlane
+metadata:
+  name: ${CLUSTER_NAME}-control-plane
+spec:
+  kubeadmConfigSpec:
+    clusterConfiguration:
+      apiServer:
+        extraArgs:
+          cloud-provider: external
+      controllerManager:
+        extraArgs:
+          cloud-provider: external
+    initConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          cloud-provider: external
+          provider-id: equinixmetal://{{ `{{ v1.instance_id }}` }}
+    joinConfiguration:
+      nodeRegistration:
+        ignorePreflightErrors:
+        - DirAvailable--etc-kubernetes-manifests
+        kubeletExtraArgs:
+          cloud-provider: external
+          provider-id: equinixmetal://{{ `{{ v1.instance_id }}` }}
+    postKubeadmCommands:
+    - 'if [ -f "/run/kubeadm/kubeadm.yaml" ]; then kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system metal-cloud-config --from-literal=cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "eipTag": ""}''; kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.2.2/deployment.yaml; fi'
+    preKubeadmCommands:
+    - sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
+    - swapoff -a
+    - mount -a
+    - |
+      cat <<EOF > /etc/modules-load.d/containerd.conf
+      overlay
+      br_netfilter
+      EOF
+    - modprobe overlay
+    - modprobe br_netfilter
+    - |
+      cat <<EOF > /etc/sysctl.d/99-kubernetes-cri.conf
+      net.bridge.bridge-nf-call-iptables  = 1
+      net.ipv4.ip_forward                 = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      EOF
+    - sysctl --system
+    - apt-get -y update
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
+    - curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+    - echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
+    - apt-get update -y
+    - TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\./g' | sed 's/^v//')
+    - RESOLVED_KUBERNETES_VERSION=$(apt-cache policy kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$1~ VERSION { print $1 }' | head -n1)
+    - apt-get install -y ca-certificates socat jq ebtables apt-transport-https cloud-utils prips containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
+    - systemctl daemon-reload
+    - systemctl enable containerd
+    - systemctl start containerd
+    - mkdir -p /etc/kubernetes/manifests && ctr images pull docker.io/detiber/kube-vip:v0.3.8 && ctr run --rm --net-host docker.io/detiber/kube-vip:v0.3.8 vip /kube-vip manifest pod --interface bond0 --address {{ .controlPlaneEndpoint }} --controlplane --arp --leaderElection --metal --metalKey {{ .apiKey }} --metalProjectID ${PROJECT_ID} > /etc/kubernetes/manifests/kube-vip.yaml
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: PacketMachineTemplate
+      name: ${CLUSTER_NAME}-control-plane
+  replicas: ${CONTROL_PLANE_MACHINE_COUNT}
+  version: ${KUBERNETES_VERSION}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: PacketCluster
+metadata:
+  name: ${CLUSTER_NAME}
+spec:
+  facility: ${FACILITY}
+  projectID: ${PROJECT_ID}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: PacketMachineTemplate
+metadata:
+  name: ${CLUSTER_NAME}-control-plane
+spec:
+  template:
+    spec:
+      billingCycle: hourly
+      machineType: ${CONTROLPLANE_NODE_TYPE}
+      os: ${NODE_OS:=ubuntu_18_04}
+      sshKeys:
+      - ${SSH_KEY}
+      tags: []
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: PacketMachineTemplate
 metadata:
   name: ${CLUSTER_NAME}-worker-a
 spec:
   template:
     spec:
-      os: "${NODE_OS:=ubuntu_18_04}"
       billingCycle: hourly
-      machineType: "${WORKER_NODE_TYPE}"
+      machineType: ${WORKER_NODE_TYPE}
+      os: ${NODE_OS:=ubuntu_18_04}
       sshKeys:
-        - "${SSH_KEY}"
+      - ${SSH_KEY}
       tags: []
----
-kind: KubeadmConfigTemplate
-apiVersion: bootstrap.cluster.x-k8s.io/v1alpha4
-metadata:
-  name: "${CLUSTER_NAME}-worker-a"
-spec:
-  template:
-    spec:
-      joinConfiguration:
-        nodeRegistration:
-          kubeletExtraArgs:
-            cloud-provider: external
-            provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
-      preKubeadmCommands:
-        - sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
-        - swapoff -a
-        - mount -a
-        - |
-          cat <<EOF > /etc/modules-load.d/containerd.conf
-          overlay
-          br_netfilter
-          EOF
-        - modprobe overlay
-        - modprobe br_netfilter
-        - |
-          cat <<EOF > /etc/sysctl.d/99-kubernetes-cri.conf
-          net.bridge.bridge-nf-call-iptables  = 1
-          net.ipv4.ip_forward                 = 1
-          net.bridge.bridge-nf-call-ip6tables = 1
-          EOF
-        - sysctl --system
-        - apt-get -y update
-        - DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
-        - curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
-        - echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
-        - apt-get update -y
-        - TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\./g' | sed 's/^v//')
-        - RESOLVED_KUBERNETES_VERSION=$(apt-cache policy kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$1~ VERSION { print $1 }' | head -n1)
-        - apt-get install -y ca-certificates socat jq ebtables apt-transport-https cloud-utils prips containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
-        - systemctl daemon-reload
-        - systemctl enable containerd
-        - systemctl start containerd

@@ -16,8 +16,62 @@ limitations under the License.
 
 package v1alpha4
 
-// Hub marks PacketCluster as a conversion hub.
-func (*PacketCluster) Hub() {}
+import (
+	apiconversion "k8s.io/apimachinery/pkg/conversion"
+	utilconversion "sigs.k8s.io/cluster-api/util/conversion"
+	"sigs.k8s.io/controller-runtime/pkg/conversion"
 
-// Hub marks PacketClusterList as a conversion hub.
-func (*PacketClusterList) Hub() {}
+	v1beta1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
+)
+
+// ConvertTo converts this PacketCluster to the Hub version (v1beta1).
+func (src *PacketCluster) ConvertTo(dstRaw conversion.Hub) error {
+	dst := dstRaw.(*v1beta1.PacketCluster)
+
+	if err := Convert_v1alpha4_PacketCluster_To_v1beta1_PacketCluster(src, dst, nil); err != nil {
+		return err
+	}
+
+	// Manually restore data from annotations.
+	restored := &v1beta1.PacketCluster{}
+	if ok, err := utilconversion.UnmarshalData(src, restored); err != nil || !ok {
+		return err
+	}
+
+	dst.Status.Conditions = restored.Status.Conditions.DeepCopy()
+
+	return nil
+}
+
+// ConvertFrom converts from the Hub version (v1beta1) to this version.
+func (dst *PacketCluster) ConvertFrom(srcRaw conversion.Hub) error {
+	src := srcRaw.(*v1beta1.PacketCluster)
+
+	if err := Convert_v1beta1_PacketCluster_To_v1alpha4_PacketCluster(src, dst, nil); err != nil {
+		return err
+	}
+
+	// Preserve Hub data on down-conversion.
+	if err := utilconversion.MarshalData(src, dst); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ConvertTo converts this PacketClusterList to the Hub version (v1beta1).
+func (src *PacketClusterList) ConvertTo(dstRaw conversion.Hub) error {
+	dst := dstRaw.(*v1beta1.PacketClusterList)
+	return Convert_v1alpha4_PacketClusterList_To_v1beta1_PacketClusterList(src, dst, nil)
+}
+
+// ConvertFrom converts from the Hub version (v1beta1) to this version.
+func (dst *PacketClusterList) ConvertFrom(srcRaw conversion.Hub) error {
+	src := srcRaw.(*v1beta1.PacketClusterList)
+	return Convert_v1beta1_PacketClusterList_To_v1alpha4_PacketClusterList(src, dst, nil)
+}
+
+func Convert_v1beta1_PacketClusterStatus_To_v1alpha4_PacketClusterStatus(in *v1beta1.PacketClusterStatus, out *PacketClusterStatus, s apiconversion.Scope) error {
+	// v1alpha4 is missing Status.Conditions, but this is restored in PacketCluster.ConvertTo
+	return autoConvert_v1beta1_PacketClusterStatus_To_v1alpha4_PacketClusterStatus(in, out, s)
+}
