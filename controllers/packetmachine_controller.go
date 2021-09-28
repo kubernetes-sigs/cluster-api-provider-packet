@@ -18,18 +18,16 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 	"github.com/packethost/packngo"
-	"github.com/pkg/errors"
-
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -65,6 +63,7 @@ type PacketMachineReconciler struct {
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=packetmachines,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=packetmachines/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;machines/status,verbs=get;list;watch
+// +kubebuilder:rbac:groups=bootstrap.cluster.x-k8s.io,resources=kubeadmconfigs;kubeadmconfigs/status,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets;,verbs=get;list;watch
 
 func (r *PacketMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
@@ -132,7 +131,7 @@ func (r *PacketMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, re
 	}
 
 	// Create the machine scope
-	machineScope, err := scope.NewMachineScope(scope.MachineScopeParams{
+	machineScope, err := scope.NewMachineScope(ctx, scope.MachineScopeParams{
 		Logger:        logger,
 		Client:        r.Client,
 		Cluster:       cluster,
@@ -141,7 +140,7 @@ func (r *PacketMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, re
 		PacketMachine: packetmachine,
 	})
 	if err != nil {
-		return ctrl.Result{}, errors.Errorf("failed to create scope: %+v", err)
+		return ctrl.Result{}, fmt.Errorf("failed to create scope: %w", err)
 	}
 
 	// Always close the scope when exiting this function so we can persist any PacketMachine changes.
@@ -298,7 +297,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		result = ctrl.Result{}
 	default:
 		machineScope.SetErrorReason(capierrors.UpdateMachineError)
-		machineScope.SetErrorMessage(errors.Errorf("Instance status %q is unexpected", dev.State))
+		machineScope.SetErrorMessage(fmt.Errorf("Instance status %q is unexpected", dev.State))
 		result = ctrl.Result{}
 	}
 
