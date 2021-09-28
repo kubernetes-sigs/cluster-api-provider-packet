@@ -18,24 +18,42 @@ package scope
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/go-logr/logr"
-	"github.com/pkg/errors"
-
-	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
-
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
 	"k8s.io/utils/pointer"
-
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/controllers/noderefutil"
+	"sigs.k8s.io/cluster-api/controllers/remote"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
+)
+
+const (
+	providerIDPrefix           = "equinixmetal"
+	deprecatedProviderIDPrefix = "packet"
+)
+
+var (
+	ErrMissingClient        = errors.New("Client is required when creating a MachineScope")
+	ErrMissingCluster       = errors.New("Cluster is required when creating a MachineScope")
+	ErrMissingMachine       = errors.New("Machine is required when creating a MachineScope")
+	ErrMissingPacketCluster = errors.New("PacketCluster is required when creating a MachineScope")
+	ErrMissingPacketMachine = errors.New("PacketMachine is required when creating a MachineScope")
 )
 
 // MachineScopeParams defines the input parameters used to create a new MachineScope.
@@ -46,52 +64,63 @@ type MachineScopeParams struct {
 	Machine       *clusterv1.Machine
 	PacketCluster *infrav1.PacketCluster
 	PacketMachine *infrav1.PacketMachine
+
+	workloadClientGetter remote.ClusterClientGetter
 }
 
 // NewMachineScope creates a new MachineScope from the supplied parameters.
 // This is meant to be called for each reconcile iteration
 // both PacketClusterReconciler and PacketMachineReconciler.
-func NewMachineScope(params MachineScopeParams) (*MachineScope, error) {
+func NewMachineScope(ctx context.Context, params MachineScopeParams) (*MachineScope, error) {
 	if params.Client == nil {
-		return nil, errors.New("Client is required when creating a MachineScope")
+		return nil, ErrMissingClient
 	}
 	if params.Machine == nil {
-		return nil, errors.New("Machine is required when creating a MachineScope")
+		return nil, ErrMissingMachine
 	}
 	if params.Cluster == nil {
-		return nil, errors.New("Cluster is required when creating a MachineScope")
+		return nil, ErrMissingCluster
 	}
 	if params.PacketCluster == nil {
-		return nil, errors.New("PacketCluster is required when creating a MachineScope")
+		return nil, ErrMissingPacketCluster
 	}
 	if params.PacketMachine == nil {
-		return nil, errors.New("PacketMachine is required when creating a MachineScope")
+		return nil, ErrMissingPacketMachine
 	}
 
 	if params.Logger == nil {
 		params.Logger = klogr.New()
 	}
 
+	providerIDPrefix, err := getProviderIDPrefix(ctx, params.Client, params.workloadClientGetter,
+		params.Cluster, params.Machine, params.PacketMachine)
+	if err != nil {
+		return nil, err
+	}
+
 	helper, err := patch.NewHelper(params.PacketMachine, params.Client)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to init patch helper")
+		return nil, fmt.Errorf("failed to init patch helper: %w", err)
 	}
 	return &MachineScope{
-		client:        params.Client,
+		Logger:           params.Logger,
+		client:           params.Client,
+		patchHelper:      helper,
+		providerIDPrefix: providerIDPrefix,
+
 		Cluster:       params.Cluster,
 		Machine:       params.Machine,
 		PacketCluster: params.PacketCluster,
 		PacketMachine: params.PacketMachine,
-		Logger:        params.Logger,
-		patchHelper:   helper,
 	}, nil
 }
 
 // MachineScope defines a scope defined around a machine and its cluster.
 type MachineScope struct {
 	logr.Logger
-	client      client.Client
-	patchHelper *patch.Helper
+	client           client.Client
+	patchHelper      *patch.Helper
+	providerIDPrefix string
 
 	Cluster       *clusterv1.Cluster
 	Machine       *clusterv1.Machine
@@ -137,7 +166,7 @@ func (m *MachineScope) GetProviderID() string {
 
 // SetProviderID sets the DOMachine providerID in spec from device id.
 func (m *MachineScope) SetProviderID(deviceID string) {
-	pid := fmt.Sprintf("packet://%s", deviceID)
+	pid := fmt.Sprintf("%s://%s", m.providerIDPrefix, deviceID)
 	m.PacketMachine.Spec.ProviderID = pointer.StringPtr(pid)
 }
 
@@ -198,7 +227,7 @@ func (m *MachineScope) GetRawBootstrapData() ([]byte, error) {
 	secret := &corev1.Secret{}
 	key := types.NamespacedName{Namespace: m.Namespace(), Name: *m.Machine.Spec.Bootstrap.DataSecretName}
 	if err := m.client.Get(context.TODO(), key, secret); err != nil {
-		return nil, errors.Wrapf(err, "failed to retrieve bootstrap data secret for PacketMachine %s/%s", m.Namespace(), m.Name())
+		return nil, fmt.Errorf("failed to retrieve bootstrap data secret for PacketMachine %s/%s: %w", m.Namespace(), m.Name(), err)
 	}
 
 	value, ok := secret.Data["value"]
@@ -207,4 +236,161 @@ func (m *MachineScope) GetRawBootstrapData() ([]byte, error) {
 	}
 
 	return value, nil
+}
+
+func getProviderIDPrefix(ctx context.Context, mgmtClient client.Client, workloadClientGetter remote.ClusterClientGetter, cluster *clusterv1.Cluster, machine *clusterv1.Machine, packetMachine *infrav1.PacketMachine) (string, error) {
+	// Use existing prefix if already defined
+	if existingPrefix := providerIDPrefixFromPacketMachine(packetMachine); existingPrefix != "" {
+		return existingPrefix, nil
+	}
+
+	// Try to determine the appropriate prefix from any known cloud-provider deployments
+	fromDeployments, err := providerIDFromCloudProviderDeployments(ctx, mgmtClient, workloadClientGetter, cluster)
+	if err != nil {
+		return "", err
+	}
+	if fromDeployments != "" {
+		return fromDeployments, nil
+	}
+
+	// TODO: maybe switch to unstructured?
+	// TODO: add note that this only works for kubeadm bootstrapping, might need
+	// similar support for alternative bootstrappers
+	if machine.Spec.Bootstrap.ConfigRef != nil && machine.Spec.Bootstrap.ConfigRef.Kind == "KubeadmConfig" {
+		kubeadmConfig := new(bootstrapv1.KubeadmConfig)
+		key := client.ObjectKey{
+			Name:      machine.Spec.Bootstrap.ConfigRef.Name,
+			Namespace: packetMachine.Namespace,
+		}
+		// TODO: does this need to take into account notfound?
+		if err := mgmtClient.Get(ctx, key, kubeadmConfig); err != nil {
+			return "", fmt.Errorf("failed to get bootstrap resource: %w", err)
+		}
+
+		// providerid being set explicitly in the InitConfiguration
+		if kubeadmConfig.Spec.InitConfiguration != nil && kubeadmConfig.Spec.InitConfiguration.NodeRegistration.KubeletExtraArgs != nil {
+			if value, ok := kubeadmConfig.Spec.InitConfiguration.NodeRegistration.KubeletExtraArgs["provider-id"]; ok {
+				if parsed, err := noderefutil.NewProviderID(value); err == nil {
+					return parsed.CloudProvider(), nil
+				}
+			}
+		}
+
+		// providerid being set explicitly in the JoinConfiguration
+		if kubeadmConfig.Spec.JoinConfiguration != nil && kubeadmConfig.Spec.JoinConfiguration.NodeRegistration.KubeletExtraArgs != nil {
+			if value, ok := kubeadmConfig.Spec.JoinConfiguration.NodeRegistration.KubeletExtraArgs["provider-id"]; ok {
+				if parsed, err := noderefutil.NewProviderID(value); err == nil {
+					return parsed.CloudProvider(), nil
+				}
+			}
+		}
+
+		// inspect postkubeadmcommands
+		for i := range kubeadmConfig.Spec.PostKubeadmCommands {
+			if strings.Contains(kubeadmConfig.Spec.PostKubeadmCommands[i], "github.com/packethost/packet-ccm") {
+				return deprecatedProviderIDPrefix, nil
+			}
+
+			if strings.Contains(kubeadmConfig.Spec.PostKubeadmCommands[i], "github.com/equinix/cloud-provider-equinix-metal") {
+				return providerIDPrefix, nil
+			}
+		}
+	}
+
+	return providerIDPrefix, nil
+}
+
+func providerIDFromCloudProviderDeployments(ctx context.Context, mgmtClient client.Client, workloadClientGetter remote.ClusterClientGetter, cluster *clusterv1.Cluster) (string, error) {
+	if workloadClientGetter == nil {
+		workloadClientGetter = remote.NewClusterClient
+	}
+
+	key, err := client.ObjectKeyFromObject(cluster)
+	if err != nil {
+		return "", fmt.Errorf("failed to get key from cluster: %w", err)
+	}
+
+	workloadClient, err := workloadClientGetter(ctx, mgmtClient, key, nil)
+	if err != nil {
+		// Generating the workload client can throw a URL error if the
+		// apiserver is not yet responding
+		var urlError *url.Error
+		switch {
+		case errors.As(err, &urlError):
+			if urlError.Timeout() {
+				klogr.New().Error(urlError, "unwrapped error")
+				klogr.New().Error(err, "wrapped error")
+				return "", nil
+			}
+
+			return "", fmt.Errorf("failed to get workload cluster client: %w", err)
+		default:
+			return "", fmt.Errorf("failed to get workload cluster client: %w", err)
+		}
+	}
+
+	err = hasWorkloadDeployment(ctx, workloadClient, metav1.NamespaceSystem, "cloud-provider-equinix-metal")
+	switch {
+	case err == nil:
+		// CPEM is deployed, use equinixmetal
+		return providerIDPrefix, nil
+	case err != nil:
+		// This is needed because apierrors doesn't handle wrapped errors
+		// in the v0.17.17, can use client.IgnoreNotFound with later versions
+		// of kubernetes dependencies.
+		var apiError *apierrors.StatusError
+		if errors.As(err, &apiError) {
+			if !apierrors.IsNotFound(apiError) {
+				return "", err
+			}
+		} else {
+			return "", err
+		}
+	}
+
+	err = hasWorkloadDeployment(ctx, workloadClient, metav1.NamespaceSystem, "packet-cloud-controller-manager")
+	switch {
+	case err == nil:
+		// packet-ccm is deployed, use packet
+		return deprecatedProviderIDPrefix, nil
+	case err != nil:
+		// This is needed because apierrors doesn't handle wrapped errors
+		// in the v0.17.17, can use client.IgnoreNotFound with later versions
+		// of kubernetes dependencies.
+		var apiError *apierrors.StatusError
+		if errors.As(err, &apiError) {
+			if !apierrors.IsNotFound(apiError) {
+				return "", err
+			}
+		} else {
+			return "", err
+		}
+	}
+
+	return "", nil
+}
+
+func hasWorkloadDeployment(ctx context.Context, workloadClient client.Client, namespace, name string) error {
+	deployment := new(appsv1.Deployment)
+	key := client.ObjectKey{
+		Namespace: namespace,
+		Name:      name,
+	}
+
+	if err := workloadClient.Get(ctx, key, deployment); err != nil {
+		return fmt.Errorf("failed to query workload cluster for %s: %w", key.String(), err)
+	}
+
+	return nil
+}
+
+func providerIDPrefixFromPacketMachine(packetMachine *infrav1.PacketMachine) string {
+	preexistingProviderID := pointer.StringPtrDerefOr(packetMachine.Spec.ProviderID, "")
+	if preexistingProviderID != "" {
+		if parsed, err := noderefutil.NewProviderID(preexistingProviderID); err == nil {
+			return parsed.CloudProvider()
+		}
+	}
+
+	return ""
 }
