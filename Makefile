@@ -206,11 +206,11 @@ test-e2e-quickstart:
 
 .PHONY: test-e2e-local
 test-e2e-local:
-	$(MAKE) run-e2e-tests GINKGO_SKIP="'\[QuickStart\]|\[Conformance\]|\[Needs Published Image\]|[Management Upgrade\]|[Workload Upgrade\]'"
+	$(MAKE) run-e2e-tests GINKGO_SKIP="'\[QuickStart\]|\[Conformance\]|\[Needs Published Image\]|\[Management Upgrade\]|\[Workload Upgrade\]'"
 
 .PHONY: test-e2e-ci
 test-e2e-ci:
-	$(MAKE) run-e2e-tests GINKGO_SKIP="'\[QuickStart\]|\[Conformance\]|[Management Upgrade\]|[Workload Upgrade\]'"
+	$(MAKE) run-e2e-tests GINKGO_SKIP="'\[QuickStart\]|\[Conformance\]|\[Management Upgrade\]|\[Workload Upgrade\]'"
 
 ## --------------------------------------
 ## E2E Test Templates
