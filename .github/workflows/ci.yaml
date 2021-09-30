@@ -154,7 +154,7 @@ jobs:
         E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
         SKIP_IMAGE_BUILD: "1"
         MANIFEST_PATH: "../../../out/release"
-        FACILITY: sv16
+        FACILITY: ny7
         CONTROLPLANE_NODE_TYPE: c3.small.x86
         WORKER_NODE_TYPE: c3.small.x86
         GINKGO_NODES: "1"
@@ -204,7 +204,6 @@ jobs:
         CONTROLPLANE_NODE_TYPE: c3.small.x86
         WORKER_NODE_TYPE: c3.small.x86
         GINKGO_NODES: "1"
-        GINKGO_FLAKE_ATTEMPTS: "1"
       run: ./scripts/ci-e2e-capi.sh
     - name: Upload artifact
       uses: actions/upload-artifact@v2
@@ -257,4 +256,98 @@ jobs:
       if: ${{ always() }}
       with:
         name: e2e-conformance
+        path: _artifacts
+  e2e-management-upgrade:
+    name: "E2E management upgrade"
+    concurrency: ci-${{ github.ref }}-e2e-management-upgrade
+    runs-on: ubuntu-latest
+    needs:
+    - manager-image
+    - test-release
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2.3.4
+    - uses: ./.github/actions/setup-go
+    - uses: actions/cache@v2
+      with:
+        path: hack/tools/bin
+        key: ${{ runner.os }}-tools-bin-e2e-${{ hashFiles('Makefile') }}
+        restore-keys: |
+          ${{ runner.os }}-tools-bin-e2e-
+          ${{ runner.os }}-tools-bin-
+    - name: Download artifact
+      uses: actions/download-artifact@v2
+      with:
+        name: test-release
+        path: out/release
+    - name: Set TAG env variable
+      run: |
+        echo "TAG=sha-${GITHUB_SHA::7}" >> $GITHUB_ENV
+    - name: Prepull the pre-built image
+      run: docker pull ${REGISTRY}/${IMAGE_NAME}:${TAG}
+    - name: "e2e-management-upgrade"
+      env:
+        PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
+        PROJECT_ID: ${{ secrets.PROJECT_ID }}
+        E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
+        SKIP_IMAGE_BUILD: "1"
+        MANIFEST_PATH: "../../../out/release"
+        FACILITY: fr2
+        CONTROLPLANE_NODE_TYPE: c3.small.x86
+        WORKER_NODE_TYPE: c3.small.x86
+        GINKGO_NODES: "1"
+        GINKGO_FLAKE_ATTEMPTS: "1"
+      run: ./scripts/ci-e2e-capi-management-upgrade.sh
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      if: ${{ always() }}
+      with:
+        name: e2e-management-upgrade
+        path: _artifacts
+  e2e-workload-upgrade:
+    name: "E2E workload upgrade"
+    concurrency: ci-${{ github.ref }}-e2e-workload-upgrade
+    runs-on: ubuntu-latest
+    needs:
+    - manager-image
+    - test-release
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2.3.4
+    - uses: ./.github/actions/setup-go
+    - uses: actions/cache@v2
+      with:
+        path: hack/tools/bin
+        key: ${{ runner.os }}-tools-bin-e2e-${{ hashFiles('Makefile') }}
+        restore-keys: |
+          ${{ runner.os }}-tools-bin-e2e-
+          ${{ runner.os }}-tools-bin-
+    - name: Download artifact
+      uses: actions/download-artifact@v2
+      with:
+        name: test-release
+        path: out/release
+    - name: Set TAG env variable
+      run: |
+        echo "TAG=sha-${GITHUB_SHA::7}" >> $GITHUB_ENV
+    - name: Prepull the pre-built image
+      run: docker pull ${REGISTRY}/${IMAGE_NAME}:${TAG}
+    - name: "e2e-conformance"
+      env:
+        PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
+        PROJECT_ID: ${{ secrets.PROJECT_ID }}
+        E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
+        SKIP_IMAGE_BUILD: "1"
+        MANIFEST_PATH: "../../../out/release"
+        FACILITY: sv16
+        CONTROLPLANE_NODE_TYPE: c3.small.x86
+        WORKER_NODE_TYPE: c3.small.x86
+        GINKGO_NODES: "1"
+        GINKGO_FLAKE_ATTEMPTS: "1"
+      run: ./scripts/ci-e2e-capi-workload-upgrade.sh
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      if: ${{ always() }}
+      with:
+        name: e2e-workload-upgrade
         path: _artifacts

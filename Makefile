@@ -192,17 +192,25 @@ run-e2e-tests: $(KUBECTL) $(KUSTOMIZE) $(KIND) $(GINKGO) $(E2E_CONF_FILE) e2e-te
 test-e2e-conformance:
 	$(MAKE) run-e2e-tests GINKGO_FOCUS="'\[Conformance\]'"
 
+.PHONY: test-e2e-management-upgrade
+test-e2e-management-upgrade:
+	$(MAKE) run-e2e-tests GINKGO_FOCUS="'\[Management Upgrade\]'"
+
+.PHONY: test-e2e-workload-upgrade
+test-e2e-workload-upgrade:
+	$(MAKE) run-e2e-tests GINKGO_FOCUS="'\[Workload Upgrade\]'"
+
 .PHONY: test-e2e-quickstart
 test-e2e-quickstart:
 	$(MAKE) run-e2e-tests GINKGO_FOCUS="'\[QuickStart\]'"
 
 .PHONY: test-e2e-local
 test-e2e-local:
-	$(MAKE) run-e2e-tests GINKGO_SKIP="'\[QuickStart\]|\[Conformance\]|\[Needs Published Image\]'"
+	$(MAKE) run-e2e-tests GINKGO_SKIP="'\[QuickStart\]|\[Conformance\]|\[Needs Published Image\]|[Management Upgrade\]|[Workload Upgrade\]'"
 
 .PHONY: test-e2e-ci
 test-e2e-ci:
-	$(MAKE) run-e2e-tests GINKGO_SKIP="'\[QuickStart\]|\[Conformance\]'"
+	$(MAKE) run-e2e-tests GINKGO_SKIP="'\[QuickStart\]|\[Conformance\]|[Management Upgrade\]|[Workload Upgrade\]'"
 
 ## --------------------------------------
 ## E2E Test Templates
