@@ -36,4 +36,4 @@ source "${REPO_ROOT}/hack/ensure-go.sh"
 : "${PACKET_API_KEY:?Environment variable empty or not defined.}"
 : "${PROJECT_ID:?Environment variable empty or not defined.}"
 
-make test-e2e-quickstart-workload-upgrade
+make test-e2e-workload-upgrade
