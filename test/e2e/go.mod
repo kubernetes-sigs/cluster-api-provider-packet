@@ -13,14 +13,14 @@ require (
 	k8s.io/apimachinery v0.21.5
 	k8s.io/client-go v0.21.5
 	k8s.io/utils v0.0.0-20210802155522-efc7438f0176
-	sigs.k8s.io/cluster-api v0.4.3
+	sigs.k8s.io/cluster-api v0.4.4
 	sigs.k8s.io/cluster-api-provider-packet v0.0.0-00010101000000-000000000000
-	sigs.k8s.io/cluster-api/test v0.4.3
+	sigs.k8s.io/cluster-api/test v0.4.4-0.20210929180122-6299442b0444
 	sigs.k8s.io/controller-runtime v0.9.7
 )
 
 replace (
 	github.com/osrg/gobgp v2.0.0+incompatible => github.com/osrg/gobgp v0.0.0-20191101114856-a42a1a5f6bf0
-	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v0.4.3
+	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v0.4.4-0.20210929180122-6299442b0444
 	sigs.k8s.io/cluster-api-provider-packet => ../../
 )
