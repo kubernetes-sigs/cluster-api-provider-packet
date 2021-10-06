@@ -22,18 +22,19 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2/klogr"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
-	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
-
 	infrastructurev1alpha3 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-packet/controllers"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -43,9 +44,11 @@ var (
 )
 
 func init() {
-	_ = clientgoscheme.AddToScheme(scheme)
-	_ = infrastructurev1alpha3.AddToScheme(scheme)
-	_ = clusterv1.AddToScheme(scheme)
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(infrastructurev1alpha3.AddToScheme(scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme))
+	utilruntime.Must(bootstrapv1.AddToScheme(scheme))
+
 	// +kubebuilder:scaffold:scheme
 }
 
