@@ -174,7 +174,7 @@ jobs:
     - test-release
     steps:
     - name: checkout
-      uses: actions/checkout@v2.3.4
+      uses: actions/checkout@v2.3.5
     - uses: ./.github/actions/setup-go
     - uses: actions/cache@v2
       with:
@@ -220,7 +220,7 @@ jobs:
     - test-release
     steps:
     - name: checkout
-      uses: actions/checkout@v2.3.4
+      uses: actions/checkout@v2.3.5
     - uses: ./.github/actions/setup-go
     - uses: actions/cache@v2
       with:
@@ -266,7 +266,7 @@ jobs:
     - test-release
     steps:
     - name: checkout
-      uses: actions/checkout@v2.3.4
+      uses: actions/checkout@v2.3.5
     - uses: ./.github/actions/setup-go
     - uses: actions/cache@v2
       with:
@@ -313,7 +313,7 @@ jobs:
     - test-release
     steps:
     - name: checkout
-      uses: actions/checkout@v2.3.4
+      uses: actions/checkout@v2.3.5
     - uses: ./.github/actions/setup-go
     - uses: actions/cache@v2
       with:
