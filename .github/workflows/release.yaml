@@ -48,6 +48,16 @@ jobs:
         id: get_version
         run: | 
           echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
+      - name: Generate Release Notes
+        run: |
+          release_notes=$(gh api repos/{owner}/{repo}/releases/generate-notes -F tag_name=${{ github.ref }} --jq .body)
+          echo 'RELEASE_NOTES<<EOF' >> $GITHUB_ENV
+          echo "${release_notes}" >> $GITHUB_ENV
+          echo 'EOF' >> $GITHUB_ENV
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1.1.4
@@ -55,6 +65,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ env.VERSION }}
+          body: ${{ env.RELEASE_NOTES }}
           release_name: ${{ env.VERSION }}
           draft: false
           prerelease: false
