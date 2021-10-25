@@ -16,8 +16,8 @@ providers:
   - name: v0.3.23 # latest published release
     value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.23/core-components.yaml"
     type: "url"
-  - name: v0.4.3
-    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.4.3/core-components.yaml"
+  - name: v0.4.4
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.4.4/core-components.yaml"
     type: "url"
     files:
     - sourcePath: "../data/shared/v1alpha4/metadata.yaml"
@@ -28,8 +28,8 @@ providers:
   - name: v0.3.23 # latest published release
     value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.23/bootstrap-components.yaml"
     type: "url"
-  - name: v0.4.3
-    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.4.3/bootstrap-components.yaml"
+  - name: v0.4.4
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.4.4/bootstrap-components.yaml"
     type: "url"
     files:
     - sourcePath: "../data/shared/v1alpha4/metadata.yaml"
@@ -40,8 +40,8 @@ providers:
   - name: v0.3.23 # latest published release
     value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.23/control-plane-components.yaml"
     type: "url"
-  - name: v0.4.3
-    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.4.3/control-plane-components.yaml"
+  - name: v0.4.4
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.4.4/control-plane-components.yaml"
     type: "url"
     files:
     - sourcePath: "../data/shared/v1alpha4/metadata.yaml"
@@ -49,8 +49,8 @@ providers:
 - name: packet
   type: InfrastructureProvider
   versions:
-  - name: v0.3.9
-    value: "https://github.com/kubernetes-sigs/cluster-api-provider-packet/releases/download/v0.3.9/infrastructure-components.yaml"
+  - name: v0.3.10
+    value: "https://github.com/kubernetes-sigs/cluster-api-provider-packet/releases/download/v0.3.10/infrastructure-components.yaml"
     type: "url"
     files:
       # Add cluster templates
