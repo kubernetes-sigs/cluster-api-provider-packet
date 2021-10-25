@@ -2,7 +2,7 @@ name: Continuous Integration
 on:
   push:
     branches:
-    - master
+    - main
     - capi-v0.4 # TODO: Used for testing my fork, remove prior to merge
   schedule:
     - cron: "0 13 * * *"
