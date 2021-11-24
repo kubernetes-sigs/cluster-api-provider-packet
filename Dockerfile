@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.1-experimental
+
 # Copyright 2020 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,10 +15,15 @@
 # limitations under the License.
 
 # Build the manager binary
-ARG GOVER=1.14
+ARG GOVER=1.17.7
 FROM golang:${GOVER} as builder
 
 WORKDIR /workspace
+
+# Run this with docker build --build_arg $(go env GOPROXY) to override the goproxy
+ARG goproxy=https://proxy.golang.org
+ENV GOPROXY=$goproxy
+
 # Copy the Go Modules manifests
 COPY go.mod go.mod
 COPY go.sum go.sum
@@ -24,11 +31,15 @@ COPY go.sum go.sum
 # and so that source changes don't invalidate our downloaded layer
 RUN go mod download
 
-# Copy the go source
-COPY . .
+# Copy the sources
+COPY ./ ./
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
+ARG ARCH
+ARG LDFLAGS
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} \
+    go build -a -ldflags "${LDFLAGS} -extldflags '-static'" \
+    -o manager .
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
@@ -36,5 +47,4 @@ FROM gcr.io/distroless/static:nonroot
 WORKDIR /
 COPY --from=builder /workspace/manager .
 USER nonroot:nonroot
-
 ENTRYPOINT ["/manager"]

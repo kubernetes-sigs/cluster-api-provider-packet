@@ -17,6 +17,8 @@ limitations under the License.
 package packet
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -25,48 +27,51 @@ import (
 	"text/template"
 
 	"github.com/packethost/packngo"
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
-	infrastructurev1alpha3 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
+
+	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
 )
 
 const (
-	apiTokenVarName = "PACKET_API_KEY"
-	clientName      = "CAPP-v1alpha3"
+	apiTokenVarName = "PACKET_API_KEY" //nolint:gosec
+	clientName      = "CAPP-v1beta1"
 	ipxeOS          = "custom_ipxe"
 )
 
 var (
 	ErrControlPlanEndpointNotFound = errors.New("control plane not found")
+	ErrElasticIPQuotaExceeded      = errors.New("could not create an Elastic IP due to quota limits on the account, please contact Equinix Metal support")
+	ErrInvalidIP                   = errors.New("invalid IP")
+	ErrMissingEnvVar               = errors.New("missing required env var")
 	ErrInvalidRequest              = errors.New("invalid request")
 )
 
-type PacketClient struct {
+type Client struct {
 	*packngo.Client
 }
 
 // NewClient creates a new Client for the given Packet credentials
-func NewClient(packetAPIKey string) *PacketClient {
+func NewClient(packetAPIKey string) *Client {
 	token := strings.TrimSpace(packetAPIKey)
 
 	if token != "" {
-		return &PacketClient{packngo.NewClientWithAuth(clientName, token, nil)}
+		return &Client{packngo.NewClientWithAuth(clientName, token, nil)}
 	}
 
 	return nil
 }
 
-func GetClient() (*PacketClient, error) {
+func GetClient() (*Client, error) {
 	token := os.Getenv(apiTokenVarName)
 	if token == "" {
-		return nil, fmt.Errorf("env var %s is required", apiTokenVarName)
+		return nil, fmt.Errorf("%w: %s", ErrMissingEnvVar, apiTokenVarName)
 	}
 	return NewClient(token), nil
 }
 
-func (p *PacketClient) GetDevice(deviceID string) (*packngo.Device, error) {
+func (p *Client) GetDevice(deviceID string) (*packngo.Device, error) {
 	dev, _, err := p.Client.Devices.Get(deviceID, nil)
 	return dev, err
 }
@@ -77,7 +82,7 @@ type CreateDeviceRequest struct {
 	ControlPlaneEndpoint string
 }
 
-func (p *PacketClient) NewDevice(req CreateDeviceRequest) (*packngo.Device, error) {
+func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packngo.Device, error) {
 	if req.MachineScope.PacketMachine.Spec.IPXEUrl != "" {
 		// Error if pxe url and OS conflict
 		if req.MachineScope.PacketMachine.Spec.OS != ipxeOS {
@@ -85,9 +90,9 @@ func (p *PacketClient) NewDevice(req CreateDeviceRequest) (*packngo.Device, erro
 		}
 	}
 
-	userDataRaw, err := req.MachineScope.GetRawBootstrapData()
+	userDataRaw, err := req.MachineScope.GetRawBootstrapData(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "impossible to retrieve bootstrap data from secret")
+		return nil, fmt.Errorf("unable to retrieve bootstrap data from secret: %w", err)
 	}
 
 	stringWriter := &strings.Builder{}
@@ -96,11 +101,13 @@ func (p *PacketClient) NewDevice(req CreateDeviceRequest) (*packngo.Device, erro
 		"kubernetesVersion": pointer.StringPtrDerefOr(req.MachineScope.Machine.Spec.Version, ""),
 	}
 
-	tags := append(req.MachineScope.PacketMachine.Spec.Tags, req.ExtraTags...)
+	tags := make([]string, 0, len(req.MachineScope.PacketMachine.Spec.Tags)+len(req.ExtraTags))
+	copy(tags, req.MachineScope.PacketMachine.Spec.Tags)
+	tags = append(tags, req.ExtraTags...)
 
 	tmpl, err := template.New("user-data").Parse(userData)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing userdata template: %v", err)
+		return nil, fmt.Errorf("error parsing userdata template: %w", err)
 	}
 
 	if req.MachineScope.IsControlPlane() {
@@ -111,13 +118,13 @@ func (p *PacketClient) NewDevice(req CreateDeviceRequest) (*packngo.Device, erro
 			userDataValues["controlPlaneEndpoint"] = req.ControlPlaneEndpoint
 		}
 
-		tags = append(tags, infrastructurev1alpha3.ControlPlaneTag)
+		tags = append(tags, infrav1.ControlPlaneTag)
 	} else {
-		tags = append(tags, infrastructurev1alpha3.WorkerTag)
+		tags = append(tags, infrav1.WorkerTag)
 	}
 
 	if err := tmpl.Execute(stringWriter, userDataValues); err != nil {
-		return nil, fmt.Errorf("error executing userdata template: %v", err)
+		return nil, fmt.Errorf("error executing userdata template: %w", err)
 	}
 
 	userData = stringWriter.String()
@@ -167,7 +174,7 @@ func (p *PacketClient) NewDevice(req CreateDeviceRequest) (*packngo.Device, erro
 	return nil, lastErr
 }
 
-func (p *PacketClient) GetDeviceAddresses(device *packngo.Device) ([]corev1.NodeAddress, error) {
+func (p *Client) GetDeviceAddresses(device *packngo.Device) []corev1.NodeAddress {
 	addrs := make([]corev1.NodeAddress, 0)
 	for _, addr := range device.Network {
 		addrType := corev1.NodeInternalIP
@@ -180,13 +187,13 @@ func (p *PacketClient) GetDeviceAddresses(device *packngo.Device) ([]corev1.Node
 		}
 		addrs = append(addrs, a)
 	}
-	return addrs, nil
+	return addrs
 }
 
-func (p *PacketClient) GetDeviceByTags(project string, tags []string) (*packngo.Device, error) {
+func (p *Client) GetDeviceByTags(project string, tags []string) (*packngo.Device, error) {
 	devices, _, err := p.Devices.List(project, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Error retrieving devices: %v", err)
+		return nil, fmt.Errorf("error retrieving devices: %w", err)
 	}
 	// returns the first one that matches all of the tags
 	for _, device := range devices {
@@ -199,7 +206,7 @@ func (p *PacketClient) GetDeviceByTags(project string, tags []string) (*packngo.
 
 // CreateIP reserves an IP via Packet API. The request fails straight if no IP are available for the specified project.
 // This prevent the cluster to become ready.
-func (p *PacketClient) CreateIP(namespace, clusterName, projectID, facility string) (net.IP, error) {
+func (p *Client) CreateIP(namespace, clusterName, projectID, facility string) (net.IP, error) {
 	req := packngo.IPReservationRequest{
 		Type:                   packngo.PublicIPv4,
 		Quantity:               1,
@@ -213,17 +220,17 @@ func (p *PacketClient) CreateIP(namespace, clusterName, projectID, facility stri
 		return nil, err
 	}
 	if resp.StatusCode == http.StatusUnprocessableEntity {
-		return nil, fmt.Errorf("Could not create an Elastic IP due to quota limits on the account. Please contact Packet support.")
+		return nil, ErrElasticIPQuotaExceeded
 	}
 
 	ip := net.ParseIP(r.Address)
 	if ip == nil {
-		return nil, fmt.Errorf("impossible to parse IP: %s. IP not valid.", r.Address)
+		return nil, fmt.Errorf("failed to parse IP: %s, %w", r.Address, ErrInvalidIP)
 	}
 	return ip, nil
 }
 
-func (p *PacketClient) GetIPByClusterIdentifier(namespace, name, projectID string) (packngo.IPAddressReservation, error) {
+func (p *Client) GetIPByClusterIdentifier(namespace, name, projectID string) (packngo.IPAddressReservation, error) {
 	var err error
 	var reservedIP packngo.IPAddressReservation
 

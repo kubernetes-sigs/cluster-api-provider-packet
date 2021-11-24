@@ -36,9 +36,14 @@ config/default/manager_image_patch.yaml-e
 
 # test results
 _artifacts
+test/e2e/config/packet-ci-envsubst.yaml
 
 # Goreleaser
 dist
 
 # Tilt
 .tiltbuild/
+
+# E2E test templates
+test/e2e/data/v1alpha3/cluster-template*.yaml
+test/e2e/data/v1beta1/cluster-template*.yaml

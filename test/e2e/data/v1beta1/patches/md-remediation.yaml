@@ -1,0 +1,9 @@
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineDeployment
+metadata:
+  name: not-used
+spec:
+  template:
+    metadata:
+      labels:
+        "e2e.remediation.label": ""

@@ -1,0 +1,10 @@
+resources:
+- ../../../../../templates/experimental-crs-cni
+
+patches:
+- path: ../patches/kcp-node-drain-timeout.yaml
+  target:
+    kind: KubeadmControlPlane
+- path: ../patches/md-node-drain-timeout.yaml
+  target:
+    kind: MachineDeployment

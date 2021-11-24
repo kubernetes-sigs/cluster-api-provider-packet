@@ -15,24 +15,29 @@ limitations under the License.
 */
 package main
 
+//nolint:gci
 import (
-	"errors"
 	"flag"
+	"fmt"
+	"net/http"
 	"os"
 	"time"
 
+	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	"k8s.io/client-go/tools/record"
+	cgrecord "k8s.io/client-go/tools/record"
+	"k8s.io/component-base/version"
 	"k8s.io/klog/v2/klogr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
-	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
+	"sigs.k8s.io/cluster-api/util/record"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 
-	infrastructurev1alpha3 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
+	infrav1alpha3 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
+	infrav1beta1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-packet/controllers"
 	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 	// +kubebuilder:scaffold:imports
@@ -45,88 +50,71 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(infrastructurev1alpha3.AddToScheme(scheme))
+	utilruntime.Must(infrav1alpha3.AddToScheme(scheme))
+	utilruntime.Must(infrav1beta1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 	utilruntime.Must(bootstrapv1.AddToScheme(scheme))
 
 	// +kubebuilder:scaffold:scheme
 }
 
+var (
+	enableLeaderElection        bool
+	metricsAddr                 string
+	leaderElectionNamespace     string
+	watchNamespace              string
+	profilerAddress             string
+	healthAddr                  string
+	watchFilterValue            string
+	webhookCertDir              string
+	packetClusterConcurrency    int
+	packetMachineConcurrency    int
+	webhookPort                 int
+	syncPeriod                  time.Duration
+	leaderElectionLeaseDuration time.Duration
+	leaderElectionRenewDeadline time.Duration
+	leaderElectionRetryPeriod   time.Duration
+)
+
 func main() {
-
-	var (
-		enableLeaderElection    bool
-		leaderElectionNamespace string
-		healthAddr              string
-		metricsAddr             string
-		webhookPort             int
-		syncPeriod              time.Duration
-		watchNamespace          string
-	)
-
-	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
-
-	flag.StringVar(
-		&leaderElectionNamespace,
-		"leader-election-namespace",
-		"",
-		"Namespace that the controller performs leader election in. If unspecified, the controller will discover which namespace it is running in.",
-	)
-
-	flag.StringVar(&healthAddr,
-		"health-addr",
-		":9440",
-		"The address the health endpoint binds to.",
-	)
-
-	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
-
-	flag.DurationVar(&syncPeriod,
-		"sync-period",
-		10*time.Minute,
-		"The minimum interval at which watched resources are reconciled (e.g. 15m)",
-	)
-
-	flag.StringVar(
-		&watchNamespace,
-		"namespace",
-		"",
-		"Namespace that the controller watches to reconcile cluster-api objects. If unspecified, the controller watches for cluster-api objects across all namespaces.",
-	)
-
-	flag.IntVar(&webhookPort,
-		"webhook-port",
-		0,
-		"Webhook Server port, disabled by default. When enabled, the manager will only work as webhook server, no reconcilers are installed.",
-	)
-
-	flag.Parse()
-
-	ctrl.SetLogger(klogr.New())
+	initFlags(pflag.CommandLine)
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	pflag.Parse()
 
 	if watchNamespace != "" {
 		setupLog.Info("Watching cluster-api objects only in namespace for reconciliation", "namespace", watchNamespace)
 	}
 
+	if profilerAddress != "" {
+		setupLog.Info("Profiler listening for requests", "profiler-address", profilerAddress)
+		go func() {
+			setupLog.Error(http.ListenAndServe(profilerAddress, nil), "listen and serve error")
+		}()
+	}
+
+	ctrl.SetLogger(klogr.New())
+
 	// Machine and cluster operations can create enough events to trigger the event recorder spam filter
 	// Setting the burst size higher ensures all events will be recorded and submitted to the API
-	broadcaster := record.NewBroadcasterWithCorrelatorOptions(record.CorrelatorOptions{
+	broadcaster := cgrecord.NewBroadcasterWithCorrelatorOptions(cgrecord.CorrelatorOptions{
 		BurstSize: 100,
 	})
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                  scheme,
 		MetricsBindAddress:      metricsAddr,
-		Port:                    webhookPort,
-		EventBroadcaster:        broadcaster,
 		LeaderElection:          enableLeaderElection,
 		LeaderElectionID:        "controller-leader-election-capp",
 		LeaderElectionNamespace: leaderElectionNamespace,
-		Namespace:               watchNamespace,
+		LeaseDuration:           &leaderElectionLeaseDuration,
+		RenewDeadline:           &leaderElectionRenewDeadline,
+		RetryPeriod:             &leaderElectionRetryPeriod,
 		SyncPeriod:              &syncPeriod,
+		Namespace:               watchNamespace,
+		Port:                    webhookPort,
+		CertDir:                 webhookCertDir,
 		HealthProbeBindAddress:  healthAddr,
+		EventBroadcaster:        broadcaster,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -140,47 +128,157 @@ func main() {
 		os.Exit(1)
 	}
 
-	if webhookPort == 0 {
-		if err = (&controllers.PacketClusterReconciler{
-			Client:       mgr.GetClient(),
-			Log:          ctrl.Log.WithName("controllers").WithName("PacketCluster"),
-			Recorder:     mgr.GetEventRecorderFor("packetcluster-controller"),
-			PacketClient: client,
-			Scheme:       mgr.GetScheme(),
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "PacketCluster")
-			os.Exit(1)
-		}
-		if err = (&controllers.PacketMachineReconciler{
-			Client:       mgr.GetClient(),
-			Log:          ctrl.Log.WithName("controllers").WithName("PacketMachine"),
-			Scheme:       mgr.GetScheme(),
-			Recorder:     mgr.GetEventRecorderFor("packetmachine-controller"),
-			PacketClient: client,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "PacketMachine")
-			os.Exit(1)
-		}
-	} else {
-		// TODO: add the webhook configuration
-		setupLog.Error(errors.New("webhook not implemented"), "webhook", "not available")
+	// Initialize event recorder.
+	record.InitFromRecorder(mgr.GetEventRecorderFor("packet-controller"))
+
+	// Setup the context that's going to be used in controllers and for the manager.
+	ctx := ctrl.SetupSignalHandler()
+
+	if err = (&controllers.PacketClusterReconciler{
+		Client:           mgr.GetClient(),
+		WatchFilterValue: watchFilterValue,
+		PacketClient:     client,
+	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: packetClusterConcurrency}); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PacketCluster")
 		os.Exit(1)
 	}
-	// +kubebuilder:scaffold:builder
+	if err = (&controllers.PacketMachineReconciler{
+		Client:           mgr.GetClient(),
+		WatchFilterValue: watchFilterValue,
+		PacketClient:     client,
+	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: packetMachineConcurrency}); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PacketMachine")
+		os.Exit(1)
+	}
 
-	if err := mgr.AddReadyzCheck("ping", healthz.Ping); err != nil {
+	if err = (&infrav1beta1.PacketCluster{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "PacketCluster")
+		os.Exit(1)
+	}
+	if err = (&infrav1beta1.PacketMachine{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "PacketMachine")
+		os.Exit(1)
+	}
+	if err = (&infrav1beta1.PacketMachineTemplate{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "PacketMachineTemplate")
+		os.Exit(1)
+	}
+
+	if err := mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
 		setupLog.Error(err, "unable to create ready check")
 		os.Exit(1)
 	}
 
-	if err := mgr.AddHealthzCheck("ping", healthz.Ping); err != nil {
+	if err := mgr.AddHealthzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
 		setupLog.Error(err, "unable to create health check")
 		os.Exit(1)
 	}
 
-	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	// +kubebuilder:scaffold:builder
+	setupLog.Info("starting manager", "version", version.Get().String())
+	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+func initFlags(fs *pflag.FlagSet) {
+	fs.StringVar(
+		&metricsAddr,
+		"metrics-bind-addr",
+		"localhost:8080",
+		"The address the metric endpoint binds to.",
+	)
+
+	fs.BoolVar(
+		&enableLeaderElection,
+		"leader-elect",
+		false,
+		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.",
+	)
+
+	fs.DurationVar(
+		&leaderElectionLeaseDuration,
+		"leader-elect-lease-duration",
+		15*time.Second,
+		"Interval at which non-leader candidates will wait to force acquire leadership (duration string)",
+	)
+
+	fs.DurationVar(
+		&leaderElectionRenewDeadline,
+		"leader-elect-renew-deadline",
+		10*time.Second,
+		"Duration that the leading controller manager will retry refreshing leadership before giving up (duration string)",
+	)
+
+	fs.DurationVar(
+		&leaderElectionRetryPeriod,
+		"leader-elect-retry-period",
+		2*time.Second,
+		"Duration the LeaderElector clients should wait between tries of actions (duration string)",
+	)
+
+	fs.StringVar(
+		&watchNamespace,
+		"namespace",
+		"",
+		"Namespace that the controller watches to reconcile cluster-api objects. If unspecified, the controller watches for cluster-api objects across all namespaces.",
+	)
+
+	fs.StringVar(
+		&leaderElectionNamespace,
+		"leader-election-namespace",
+		"",
+		"Namespace that the controller performs leader election in. If unspecified, the controller will discover which namespace it is running in.",
+	)
+
+	fs.StringVar(
+		&profilerAddress,
+		"profiler-address",
+		"",
+		"Bind address to expose the pprof profiler (e.g. localhost:6060)",
+	)
+
+	fs.StringVar(
+		&watchFilterValue,
+		"watch-filter",
+		"",
+		fmt.Sprintf("Label value that the controller watches to reconcile cluster-api objects. Label key is always %s. If unspecified, the controller watches for all cluster-api objects.", clusterv1.WatchLabel),
+	)
+
+	fs.IntVar(&packetClusterConcurrency,
+		"packetcluster-concurrency",
+		10,
+		"Number of PacketClusters to process simultaneously",
+	)
+
+	fs.IntVar(&packetMachineConcurrency,
+		"packetmachine-concurrency",
+		10,
+		"Number of PacketMachines to process simultaneously",
+	)
+
+	fs.DurationVar(&syncPeriod,
+		"sync-period",
+		10*time.Minute,
+		"The minimum interval at which watched resources are reconciled (e.g. 15m)",
+	)
+
+	fs.IntVar(&webhookPort,
+		"webhook-port",
+		9443,
+		"Webhook Server port",
+	)
+
+	fs.StringVar(&webhookCertDir,
+		"webhook-cert-dir",
+		"/tmp/k8s-webhook-server/serving-certs",
+		"Webhook Server Certificate Directory, is the directory that contains the server key and certificate",
+	)
+
+	fs.StringVar(&healthAddr,
+		"health-addr",
+		":9440",
+		"The address the health endpoint binds to.",
+	)
 }

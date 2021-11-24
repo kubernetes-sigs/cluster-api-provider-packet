@@ -1,40 +1,34 @@
 kind: KubeadmControlPlane
-apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 metadata:
   name: "${CLUSTER_NAME}-control-plane"
 spec:
   version: ${KUBERNETES_VERSION}
   replicas: ${CONTROL_PLANE_MACHINE_COUNT}
-  infrastructureTemplate:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
-    kind: PacketMachineTemplate
-    name: "${CLUSTER_NAME}-control-plane"
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: PacketMachineTemplate
+      name: "${CLUSTER_NAME}-control-plane"
   kubeadmConfigSpec:
+    clusterConfiguration:
+      apiServer:
+          extraArgs:
+              cloud-provider: external
+      controllerManager:
+          extraArgs:
+              cloud-provider: external
     initConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
           cloud-provider: external
-    clusterConfiguration:
-      apiServer:
-        extraArgs:
-          cloud-provider: external
-      controllerManager:
-        extraArgs:
-          cloud-provider: external
+          provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
     joinConfiguration:
       nodeRegistration:
+        ignorePreflightErrors: []
         kubeletExtraArgs:
           cloud-provider: external
-    postKubeadmCommands:
-      - |
-        cat <<EOF >> /etc/network/interfaces
-        auto lo:0
-        iface lo:0 inet static
-          address {{ .controlPlaneEndpoint }}
-          netmask 255.255.255.255
-        EOF
-      - systemctl restart networking
-      - 'if [ -f "/run/kubeadm/kubeadm.yaml" ]; then kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system metal-cloud-config --from-literal=cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "eipTag": "cluster-api-provider-packet:cluster-id:${CLUSTER_NAME}"}''; kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.2.2/deployment.yaml; fi'
+          provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
     preKubeadmCommands:
       - sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
       - swapoff -a
@@ -65,22 +59,39 @@ spec:
       - systemctl enable containerd
       - systemctl start containerd
       - ping -c 3 -q {{ .controlPlaneEndpoint }} && echo OK || ip addr add {{ .controlPlaneEndpoint }} dev lo
+    postKubeadmCommands:
+      - |
+        cat <<EOF >> /etc/network/interfaces
+        auto lo:0
+        iface lo:0 inet static
+          address {{ .controlPlaneEndpoint }}
+          netmask 255.255.255.255
+        EOF
+      - systemctl restart networking
+      - |
+        if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
+          export KUBECONFIG=/etc/kubernetes/admin.conf
+          export CPEM_YAML=https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.4.0/deployment.yaml
+          export SECRET_DATA='cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "eipTag": "cluster-api-provider-packet:cluster-id:${CLUSTER_NAME}", "eipHealthCheckUseHostIP": true}'''
+          kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}" || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}") || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}")
+          kubectl apply -f $${CPEM_YAML} || (sleep 1 && kubectl apply -f $${CPEM_YAML}) || (sleep 1 && kubectl apply -f $${CPEM_YAML})
+        fi
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: PacketMachineTemplate
 metadata:
   name: "${CLUSTER_NAME}-control-plane"
 spec:
   template:
     spec:
-      OS: "${NODE_OS:=ubuntu_18_04}"
+      os: "${NODE_OS:=ubuntu_18_04}"
       billingCycle: hourly
       machineType: "${CONTROLPLANE_NODE_TYPE}"
       sshKeys:
         - "${SSH_KEY}"
       tags: []
 ---
-apiVersion: cluster.x-k8s.io/v1alpha3
+apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
   name: "${CLUSTER_NAME}"
@@ -93,15 +104,15 @@ spec:
       cidrBlocks:
         - ${SERVICE_CIDR:=172.26.0.0/16}
   infrastructureRef:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
     kind: PacketCluster
     name: "${CLUSTER_NAME}"
   controlPlaneRef:
-    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
     kind: KubeadmControlPlane
     name: "${CLUSTER_NAME}-control-plane"
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: PacketCluster
 metadata:
   name: "${CLUSTER_NAME}"
@@ -109,7 +120,7 @@ spec:
   projectID: "${PROJECT_ID}"
   facility: "${FACILITY}"
 ---
-apiVersion: cluster.x-k8s.io/v1alpha3
+apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineDeployment
 metadata:
   name: ${CLUSTER_NAME}-worker-a
@@ -134,21 +145,21 @@ spec:
       bootstrap:
         configRef:
           name: ${CLUSTER_NAME}-worker-a
-          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
           kind: KubeadmConfigTemplate
       infrastructureRef:
         name: ${CLUSTER_NAME}-worker-a
-        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
         kind: PacketMachineTemplate
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: PacketMachineTemplate
 metadata:
   name: ${CLUSTER_NAME}-worker-a
 spec:
   template:
     spec:
-      OS: "${NODE_OS:=ubuntu_18_04}"
+      os: "${NODE_OS:=ubuntu_18_04}"
       billingCycle: hourly
       machineType: "${WORKER_NODE_TYPE}"
       sshKeys:
@@ -156,12 +167,17 @@ spec:
       tags: []
 ---
 kind: KubeadmConfigTemplate
-apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 metadata:
   name: "${CLUSTER_NAME}-worker-a"
 spec:
   template:
     spec:
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            cloud-provider: external
+            provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
       preKubeadmCommands:
         - sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
         - swapoff -a
@@ -191,7 +207,3 @@ spec:
         - systemctl daemon-reload
         - systemctl enable containerd
         - systemctl start containerd
-      joinConfiguration:
-        nodeRegistration:
-          kubeletExtraArgs:
-            cloud-provider: external

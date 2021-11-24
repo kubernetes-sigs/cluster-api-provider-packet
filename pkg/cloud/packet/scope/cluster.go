@@ -19,22 +19,17 @@ package scope
 import (
 	"context"
 
-	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-
-	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
-
-	"k8s.io/klog/v2/klogr"
-
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 )
 
 // ClusterScopeParams defines the input parameters used to create a new Scope.
 type ClusterScopeParams struct {
 	Client        client.Client
-	Logger        logr.Logger
 	Cluster       *clusterv1.Cluster
 	PacketCluster *infrav1.PacketCluster
 }
@@ -48,9 +43,6 @@ func NewClusterScope(params ClusterScopeParams) (*ClusterScope, error) {
 	if params.PacketCluster == nil {
 		return nil, errors.New("PacketCluster is required when creating a ClusterScope")
 	}
-	if params.Logger == nil {
-		params.Logger = klogr.New()
-	}
 
 	helper, err := patch.NewHelper(params.PacketCluster, params.Client)
 	if err != nil {
@@ -58,7 +50,6 @@ func NewClusterScope(params ClusterScopeParams) (*ClusterScope, error) {
 	}
 
 	return &ClusterScope{
-		Logger:        params.Logger,
 		client:        params.Client,
 		Cluster:       params.Cluster,
 		PacketCluster: params.PacketCluster,
@@ -68,7 +59,6 @@ func NewClusterScope(params ClusterScopeParams) (*ClusterScope, error) {
 
 // ClusterScope defines the basic context for an actuator to operate upon.
 type ClusterScope struct {
-	logr.Logger
 	client      client.Client
 	patchHelper *patch.Helper
 

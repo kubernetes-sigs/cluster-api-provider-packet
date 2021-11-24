@@ -1,3 +1,5 @@
+# PacketCluster CRD
+
 The PacketCluster is the CRD that contains information about where to place the
 Kubernetes cluster: facility and project.
 
@@ -6,13 +8,13 @@ suggestion is to look for what it is called [federation](k8s-federation).
 
 ## Topology
 
-Each cluster we create leverages at least two Packet features: Device and ElasticIP.
+Each cluster we create leverages at least two Equinix Metal features: Device and ElasticIP.
 
 Kubernetes node is a Device and each cluster has an
 [ElasticIP](elastic-ip-packet) that is tagged with the name of the cluster.
 
 The ElasticIP guarantees a stable endpoint even when the control plane(s) are
-recycling during a Kubernetes version update or an outages.
+recycled during a Kubernetes version update or an outages.
 
 ## ElasticIP lifecycle
 
@@ -30,9 +32,7 @@ Currently the cluster-template only supports Ubuntu because it uses `apt` and it
 does a couple of assumptions around networking. This does not mean that you
 can't use `cluster-api-provier-packet` with other templates, but you will have
 to make your own cluster specification in order to make the installation process
-to work as you want. We have an open issue about this: ["Figure out where we
-stand about operating systems"](os-issue).
+to work as you want.
 
 [k8s-federation]: https://kubernetes.io/blog/2018/12/12/kubernetes-federation-evolution/
-[elastic-ip-packet]: https://www.packet.com/developers/docs/network/basic/elastic-ips/
-[os-issue]: https://github.com/kubernetes-sigs/cluster-api-provider-packet/issues/118
+[elastic-ip-packet]: https://metal.equinix.com/developers/docs/networking/elastic-ips/

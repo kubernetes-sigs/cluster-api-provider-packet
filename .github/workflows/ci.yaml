@@ -1,57 +1,336 @@
 name: Continuous Integration
 on:
- pull_request:
-   types: [opened, synchronize, reopened]
- push:
-   branches:
-   - main
-
+  push:
+    branches:
+    - main
+    - capi-v1 # TODO: Used for testing my fork, remove prior to merge
+  schedule:
+    - cron: "0 */4 * * *" # TODO: Run every 4 hours to soak test, should be less frequent before merge (weekly/daily/???)
 env:
-  KUBEBUILDER_DIR: /tmp/kubebuilder_install
-
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 jobs:
-  report:
-    name: Report
+  validate:
+    name: "Validate ${{ matrix.target }}"
     runs-on: ubuntu-latest
-    steps:
-    - name: ref
-      run: echo ${{ github.ref }}
-    - name: event_name
-      run: echo ${{ github.event_name }}
-  build-test-deploy-release:
-    name: Build
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ["verify", "lint", "test"]
     steps:
     - name: checkout
-      uses: actions/checkout@v2.4.0
-    - uses: actions/setup-go@v2
+      uses: actions/checkout@v3
+    - uses: ./.github/actions/setup-go
+    - uses: actions/cache@v3
       with:
-        go-version: '1.15' # The Go version to download (if necessary) and use.
-    - name: kubebuilder
-      run: make kubebuilder KUBEBUILDER_DIR=${KUBEBUILDER_DIR} # we use this dir because /usr/local/kubebuilder is protected
-    - name: test
-      run: make test KUBEBUILDER_DIR=${KUBEBUILDER_DIR}
+        path: hack/tools/bin
+        key: ${{ runner.os }}-tools-bin-${{ matrix.target }}-${{ hashFiles('Makefile') }}
+        restore-keys: |
+          ${{ runner.os }}-tools-bin-${{ matrix.target }}-
+          ${{ runner.os }}-tools-bin-
+    - uses: actions/cache@v3
+      if: ${{ matrix.target == 'test' }}
+      with:
+        path: /tmp/kubebuilder-tools-*.tar.gz
+        key: ${{ runner.os }}-tmp-${{ matrix.target }}-${{ hashFiles('scripts/fetch_ext_bins.sh') }}
+        restore-keys: |
+          ${{ runner.os }}-tmp-${{ matrix.target }}-
+          ${{ runner.os }}-tmp-
+    - name: ${{ matrix.target }}
+      run: make ${{ matrix.target }}
+  manager-image:
+    name: Build and push manager image
+    runs-on: ubuntu-latest
+    needs: [validate]
+    steps:
+    - name: checkout
+      uses: actions/checkout@v3
+    - uses: ./.github/actions/setup-go
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v1
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+    - name: Docker manager metadata
+      id: meta
+      uses: docker/metadata-action@v3
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=sha
+    - name: Log in to the Container registry
+      uses: docker/login-action@v1
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Build and push manager image
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        platforms: linux/amd64,linux/arm64
+        cache-from: type=gha, scope=${{ github.workflow }}
+        cache-to: type=gha, mode=max, scope=${{ github.workflow }}
+  test-release:
+    name: Test Release
+    runs-on: ubuntu-latest
+    needs: [validate]
+    steps:
+    - name: checkout
+      uses: actions/checkout@v3
+    - uses: ./.github/actions/setup-go
+    - uses: actions/cache@v3
+      with:
+        path: hack/tools/bin
+        key: ${{ runner.os }}-tools-bin-release-${{ hashFiles('Makefile') }}
+        restore-keys: |
+          ${{ runner.os }}-tools-bin-release-
+          ${{ runner.os }}-tools-bin-
+    - name: Docker manager metadata
+      id: meta
+      uses: docker/metadata-action@v3
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=sha
+    - name: Test Release
       env:
-        KUBEBUILDER_ASSETS: ${{ env.KUBEBUILDER_DIR }}/bin
-    - name: Register binfmt_misc entries for qemu-user-static
-      run: make register
-    - name: set buildx cross-builder
+        TAG: ${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+      run: make release
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: test-release
+        path: out/release
+  e2e-quickstart:
+    name: "E2E quickstart"
+    concurrency: ci-${{ github.ref }}-e2e-quickstart
+    runs-on: ubuntu-latest
+    needs:
+    - manager-image
+    - test-release
+    steps:
+    - name: checkout
+      uses: actions/checkout@v3
+    - uses: ./.github/actions/setup-go
+    - uses: actions/cache@v3
+      with:
+        path: hack/tools/bin
+        key: ${{ runner.os }}-tools-bin-e2e-${{ hashFiles('Makefile') }}
+        restore-keys: |
+          ${{ runner.os }}-tools-bin-e2e-
+          ${{ runner.os }}-tools-bin-
+    - name: Download artifact
+      uses: actions/download-artifact@v2
+      with:
+        name: test-release
+        path: out/release
+    - name: Set TAG env variable
       run: |
-        docker buildx create --name cross-builder
-        docker buildx use cross-builder
-        docker buildx inspect --bootstrap
-    - name: check buildx
-      run: docker buildx ls
-    - name: image
-      run: make image-all KUBEBUILDER_DIR=${KUBEBUILDER_DIR}
+        echo "TAG=sha-${GITHUB_SHA::7}" >> $GITHUB_ENV
+    - name: Prepull the pre-built image
+      run: docker pull ${REGISTRY}/${IMAGE_NAME}:${TAG}
+    - name: "e2e-quickstart"
       env:
-        KUBEBUILDER_ASSETS: ${{ env.KUBEBUILDER_DIR }}/bin
-
-    # these next steps are used for merge to main (push the images)
-    # they really should be separate workflows or jobs, but github actions is awful about sharing between them, so it must be one job
-    - name: docker login
-      if: github.event_name == 'push' && endsWith(github.ref,'/main')
-      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-    - name: deploy   # when merged into main, tag main and push - ideally, this would be a separate job, but you cannot share docker build cache between jobs
-      if: github.event_name == 'push' && endsWith(github.ref,'/main')
-      run: make cd CONFIRM=true BRANCH_NAME=main
+        PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
+        PROJECT_ID: ${{ secrets.PROJECT_ID }}
+        E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
+        SKIP_IMAGE_BUILD: "1"
+        MANIFEST_PATH: "../../../out/release"
+        FACILITY: ny7
+        CONTROLPLANE_NODE_TYPE: c3.small.x86
+        WORKER_NODE_TYPE: c3.small.x86
+        GINKGO_NODES: "1"
+      run: ./scripts/ci-e2e-capi-quickstart.sh
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      if: ${{ always() }}
+      with:
+        name: e2e-quickstart
+        path: _artifacts
+  e2e:
+    name: "E2E"
+    concurrency: ci-${{ github.ref }}-e2e
+    runs-on: ubuntu-latest
+    needs:
+    - manager-image
+    - test-release
+    steps:
+    - name: checkout
+      uses: actions/checkout@v3
+    - uses: ./.github/actions/setup-go
+    - uses: actions/cache@v3
+      with:
+        path: hack/tools/bin
+        key: ${{ runner.os }}-tools-bin-e2e-${{ hashFiles('Makefile') }}
+        restore-keys: |
+          ${{ runner.os }}-tools-bin-e2e-
+          ${{ runner.os }}-tools-bin-
+    - name: Download artifact
+      uses: actions/download-artifact@v2
+      with:
+        name: test-release
+        path: out/release
+    - name: Set TAG env variable
+      run: |
+        echo "TAG=sha-${GITHUB_SHA::7}" >> $GITHUB_ENV
+    - name: Prepull the pre-built image
+      run: docker pull ${REGISTRY}/${IMAGE_NAME}:${TAG}
+    - name: "e2e"
+      env:
+        PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
+        PROJECT_ID: ${{ secrets.PROJECT_ID }}
+        E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
+        SKIP_IMAGE_BUILD: "1"
+        MANIFEST_PATH: "../../../out/release"
+        FACILITY: am6
+        CONTROLPLANE_NODE_TYPE: c3.small.x86
+        WORKER_NODE_TYPE: c3.small.x86
+        GINKGO_NODES: "1"
+      run: ./scripts/ci-e2e-capi.sh
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      if: ${{ always() }}
+      with:
+        name: e2e
+        path: _artifacts
+  e2e-conformance:
+    name: "E2E conformance"
+    concurrency: ci-${{ github.ref }}-e2e-conformance
+    runs-on: ubuntu-latest
+    needs:
+    - manager-image
+    - test-release
+    steps:
+    - name: checkout
+      uses: actions/checkout@v3
+    - uses: ./.github/actions/setup-go
+    - uses: actions/cache@v3
+      with:
+        path: hack/tools/bin
+        key: ${{ runner.os }}-tools-bin-e2e-${{ hashFiles('Makefile') }}
+        restore-keys: |
+          ${{ runner.os }}-tools-bin-e2e-
+          ${{ runner.os }}-tools-bin-
+    - name: Download artifact
+      uses: actions/download-artifact@v2
+      with:
+        name: test-release
+        path: out/release
+    - name: Set TAG env variable
+      run: |
+        echo "TAG=sha-${GITHUB_SHA::7}" >> $GITHUB_ENV
+    - name: Prepull the pre-built image
+      run: docker pull ${REGISTRY}/${IMAGE_NAME}:${TAG}
+    - name: "e2e-conformance"
+      env:
+        PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
+        PROJECT_ID: ${{ secrets.PROJECT_ID }}
+        E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
+        SKIP_IMAGE_BUILD: "1"
+        MANIFEST_PATH: "../../../out/release"
+        FACILITY: da11
+        CONTROLPLANE_NODE_TYPE: c3.small.x86
+        WORKER_NODE_TYPE: c3.small.x86
+        GINKGO_NODES: "1"
+      run: ./scripts/ci-e2e-capi-conformance.sh
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      if: ${{ always() }}
+      with:
+        name: e2e-conformance
+        path: _artifacts
+  e2e-management-upgrade:
+    name: "E2E management upgrade"
+    concurrency: ci-${{ github.ref }}-e2e-management-upgrade
+    runs-on: ubuntu-latest
+    needs:
+    - manager-image
+    - test-release
+    steps:
+    - name: checkout
+      uses: actions/checkout@v3
+    - uses: ./.github/actions/setup-go
+    - uses: actions/cache@v3
+      with:
+        path: hack/tools/bin
+        key: ${{ runner.os }}-tools-bin-e2e-${{ hashFiles('Makefile') }}
+        restore-keys: |
+          ${{ runner.os }}-tools-bin-e2e-
+          ${{ runner.os }}-tools-bin-
+    - name: Download artifact
+      uses: actions/download-artifact@v2
+      with:
+        name: test-release
+        path: out/release
+    - name: Set TAG env variable
+      run: |
+        echo "TAG=sha-${GITHUB_SHA::7}" >> $GITHUB_ENV
+    - name: Prepull the pre-built image
+      run: docker pull ${REGISTRY}/${IMAGE_NAME}:${TAG}
+    - name: "e2e-management-upgrade"
+      env:
+        PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
+        PROJECT_ID: ${{ secrets.PROJECT_ID }}
+        E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
+        SKIP_IMAGE_BUILD: "1"
+        MANIFEST_PATH: "../../../out/release"
+        FACILITY: dc13
+        CONTROLPLANE_NODE_TYPE: c3.small.x86
+        WORKER_NODE_TYPE: c3.small.x86
+        GINKGO_NODES: "1"
+      run: ./scripts/ci-e2e-capi-management-upgrade.sh
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      if: ${{ always() }}
+      with:
+        name: e2e-management-upgrade
+        path: _artifacts
+  e2e-workload-upgrade:
+    name: "E2E workload upgrade"
+    concurrency: ci-${{ github.ref }}-e2e-workload-upgrade
+    runs-on: ubuntu-latest
+    needs:
+    - manager-image
+    - test-release
+    steps:
+    - name: checkout
+      uses: actions/checkout@v3
+    - uses: ./.github/actions/setup-go
+    - uses: actions/cache@v3
+      with:
+        path: hack/tools/bin
+        key: ${{ runner.os }}-tools-bin-e2e-${{ hashFiles('Makefile') }}
+        restore-keys: |
+          ${{ runner.os }}-tools-bin-e2e-
+          ${{ runner.os }}-tools-bin-
+    - name: Download artifact
+      uses: actions/download-artifact@v2
+      with:
+        name: test-release
+        path: out/release
+    - name: Set TAG env variable
+      run: |
+        echo "TAG=sha-${GITHUB_SHA::7}" >> $GITHUB_ENV
+    - name: Prepull the pre-built image
+      run: docker pull ${REGISTRY}/${IMAGE_NAME}:${TAG}
+    - name: "e2e-workload-upgrade"
+      env:
+        PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
+        PROJECT_ID: ${{ secrets.PROJECT_ID }}
+        E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
+        SKIP_IMAGE_BUILD: "1"
+        MANIFEST_PATH: "../../../out/release"
+        FACILITY: dc13
+        CONTROLPLANE_NODE_TYPE: c3.small.x86
+        WORKER_NODE_TYPE: c3.small.x86
+        GINKGO_NODES: "1"
+      run: ./scripts/ci-e2e-capi-workload-upgrade.sh
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      if: ${{ always() }}
+      with:
+        name: e2e-workload-upgrade
+        path: _artifacts
