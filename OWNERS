@@ -8,6 +8,3 @@ approvers:
 
 reviewers:
   - cluster-api-packet-maintainers
-
-labels:
-  - sig/cluster-lifecycle
