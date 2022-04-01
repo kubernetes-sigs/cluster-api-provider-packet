@@ -24,40 +24,41 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-logr/logr"
-	"github.com/google/uuid"
 	"github.com/packethost/packngo"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/annotations"
+	"sigs.k8s.io/cluster-api/util/collections"
+	"sigs.k8s.io/cluster-api/util/conditions"
+	"sigs.k8s.io/cluster-api/util/predicates"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
-
-	infrastructurev1alpha3 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
 )
 
 const (
 	force = true
 )
 
+var ErrMissingDevice = errors.New("machine does not exist")
+
 // PacketMachineReconciler reconciles a PacketMachine object
 type PacketMachineReconciler struct {
 	client.Client
-	Log          logr.Logger
-	Recorder     record.EventRecorder
-	Scheme       *runtime.Scheme
-	PacketClient *packet.PacketClient
+	WatchFilterValue string
+	PacketClient     *packet.Client
 }
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=packetmachines,verbs=get;list;watch;create;update;patch;delete
@@ -66,73 +67,59 @@ type PacketMachineReconciler struct {
 // +kubebuilder:rbac:groups=bootstrap.cluster.x-k8s.io,resources=kubeadmconfigs;kubeadmconfigs/status,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets;,verbs=get;list;watch
 
-func (r *PacketMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
-	ctx := context.Background()
-	logger := r.Log.WithValues("packetmachine", req.NamespacedName)
+func (r *PacketMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
+	log := ctrl.LoggerFrom(ctx)
 
-	// your logic here
-	packetmachine := &infrastructurev1alpha3.PacketMachine{}
+	packetmachine := &infrav1.PacketMachine{}
 	if err := r.Get(ctx, req.NamespacedName, packetmachine); err != nil {
 		if apierrors.IsNotFound(err) {
+			log.Info("PacketMachine resource not found or already deleted")
 			return ctrl.Result{}, nil
 		}
+
+		log.Error(err, "Unable to fetch PacketMachine resource")
 		return ctrl.Result{}, err
 	}
-
-	logger = logger.WithName(packetmachine.APIVersion)
 
 	// Fetch the Machine.
 	machine, err := util.GetOwnerMachine(ctx, r.Client, packetmachine.ObjectMeta)
 	if err != nil {
+		log.Error(err, "Failed to get owner machine")
 		return ctrl.Result{}, err
 	}
 	if machine == nil {
-		logger.Info("Machine Controller has not yet set OwnerRef")
+		log.Info("Machine Controller has not yet set OwnerRef")
 		return ctrl.Result{}, nil
 	}
 
-	logger = logger.WithValues("machine", machine.Name)
+	log = log.WithValues("machine", machine.Name)
 
 	// Fetch the Cluster.
 	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
 	if err != nil {
-		logger.Info("Machine is missing cluster label or cluster does not exist")
+		log.Info("Machine is missing cluster label or cluster does not exist")
 		return ctrl.Result{}, nil
 	}
 
-	logger = logger.WithValues("cluster", cluster.Name)
+	log = log.WithValues("cluster", cluster.Name)
 
-	if util.IsPaused(cluster, machine) {
-		logger.Info("PacketMachine or linked Cluster is marked as paused. Won't reconcile")
+	if annotations.IsPaused(cluster, machine) {
+		log.Info("PacketMachine or linked Cluster is marked as paused. Won't reconcile")
 		return ctrl.Result{}, nil
 	}
 
-	packetcluster := &infrastructurev1alpha3.PacketCluster{}
+	packetcluster := &infrav1.PacketCluster{}
 	packetclusterNamespacedName := client.ObjectKey{
 		Namespace: packetmachine.Namespace,
 		Name:      cluster.Spec.InfrastructureRef.Name,
 	}
 	if err := r.Get(ctx, packetclusterNamespacedName, packetcluster); err != nil {
-		logger.Info("PacketCluster is not available yet")
+		log.Info("PacketCluster is not available yet")
 		return ctrl.Result{}, nil
-	}
-
-	logger = logger.WithValues("packetcluster", packetcluster.Name)
-
-	// Create the cluster scope
-	clusterScope, err := scope.NewClusterScope(scope.ClusterScopeParams{
-		Client:        r.Client,
-		Logger:        logger,
-		Cluster:       cluster,
-		PacketCluster: packetcluster,
-	})
-	if err != nil {
-		return ctrl.Result{}, err
 	}
 
 	// Create the machine scope
 	machineScope, err := scope.NewMachineScope(ctx, scope.MachineScopeParams{
-		Logger:        logger,
 		Client:        r.Client,
 		Cluster:       cluster,
 		Machine:       machine,
@@ -152,44 +139,116 @@ func (r *PacketMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, re
 
 	// Handle deleted machines
 	if !packetmachine.ObjectMeta.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, machineScope, clusterScope, logger)
+		return r.reconcileDelete(ctx, machineScope)
 	}
 
-	return r.reconcile(ctx, machineScope, clusterScope, logger)
+	return r.reconcile(ctx, machineScope)
 }
 
-func (r *PacketMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *PacketMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, options controller.Options) error {
+	log := ctrl.LoggerFrom(ctx)
+
+	clusterToObjectFunc, err := util.ClusterToObjectsMapper(r.Client, &infrav1.PacketMachineList{}, mgr.GetScheme())
+	if err != nil {
+		return fmt.Errorf("failed to create mapper for Cluster to PacketMachines: %w", err)
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&infrastructurev1alpha3.PacketMachine{}).
+		WithOptions(options).
+		For(&infrav1.PacketMachine{}).
+		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(log, r.WatchFilterValue)).
 		Watches(
 			&source.Kind{Type: &clusterv1.Machine{}},
-			&handler.EnqueueRequestsFromMapFunc{
-				ToRequests: util.MachineToInfrastructureMapFunc(infrastructurev1alpha3.GroupVersion.WithKind("PacketMachine")),
-			},
+			handler.EnqueueRequestsFromMapFunc(util.MachineToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("PacketMachine"))),
+		).
+		Watches(
+			&source.Kind{Type: &infrav1.PacketCluster{}},
+			handler.EnqueueRequestsFromMapFunc(r.PacketClusterToPacketMachines(ctx)),
+		).
+		Watches(
+			&source.Kind{Type: &clusterv1.Cluster{}},
+			handler.EnqueueRequestsFromMapFunc(clusterToObjectFunc),
+			builder.WithPredicates(predicates.ClusterUnpausedAndInfrastructureReady(log)),
 		).
 		Complete(r)
 }
 
-func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *scope.MachineScope, clusterScope *scope.ClusterScope, logger logr.Logger) (ctrl.Result, error) {
-	logger.Info("Reconciling PacketMachine")
+// PacketClusterToPacketMachines is a handler.ToRequestsFunc to be used to enqeue requests for reconciliation
+// of PacketMachines.
+func (r *PacketMachineReconciler) PacketClusterToPacketMachines(ctx context.Context) handler.MapFunc {
+	log := ctrl.LoggerFrom(ctx)
+	return func(o client.Object) []ctrl.Request {
+		c, ok := o.(*infrav1.PacketCluster)
+		if !ok {
+			log.Error(fmt.Errorf("expected a PacketCluster but got a %T", o), "failed to get PacketMachine for PacketCluster") //nolint:goerr113
+			return nil
+		}
+
+		log = log.WithValues("PacketCluster", c.Name, "Namespace", c.Namespace)
+
+		// Don't handle deleted PacketClusters
+		if !c.ObjectMeta.DeletionTimestamp.IsZero() {
+			log.V(4).Info("PacketCluster has a deletion timestamp, skipping mapping.")
+			return nil
+		}
+
+		cluster, err := util.GetOwnerCluster(ctx, r.Client, c.ObjectMeta)
+		switch {
+		case apierrors.IsNotFound(err) || cluster == nil:
+			log.Error(err, "owning cluster is not found, skipping mapping.")
+			return nil
+		case err != nil:
+			log.Error(err, "failed to get owning cluster")
+			return nil
+		}
+
+		machines, err := collections.GetFilteredMachinesForCluster(ctx, r.Client, cluster)
+		if err != nil {
+			log.Error(err, "failed to get Machines for Cluster")
+			return nil
+		}
+
+		var result []ctrl.Request
+
+		for _, m := range machines.UnsortedList() {
+			if m.Spec.InfrastructureRef.Name == "" {
+				continue
+			}
+			name := client.ObjectKey{Namespace: m.Namespace, Name: m.Spec.InfrastructureRef.Name}
+			result = append(result, ctrl.Request{NamespacedName: name})
+		}
+
+		return result
+	}
+}
+
+func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *scope.MachineScope) (ctrl.Result, error) { //nolint:gocyclo
+	log := ctrl.LoggerFrom(ctx, "machine", machineScope.Machine.Name, "cluster", machineScope.Cluster.Name)
+	log.Info("Reconciling PacketMachine")
+
 	packetmachine := machineScope.PacketMachine
 	// If the PacketMachine is in an error state, return early.
-	if packetmachine.Status.ErrorReason != nil || packetmachine.Status.ErrorMessage != nil {
-		machineScope.Info("Error state detected, skipping reconciliation")
+	if packetmachine.Status.FailureReason != nil || packetmachine.Status.FailureMessage != nil {
+		log.Info("Error state detected, skipping reconciliation")
 		return ctrl.Result{}, nil
 	}
 
 	// If the PacketMachine doesn't have our finalizer, add it.
-	controllerutil.AddFinalizer(packetmachine, infrastructurev1alpha3.MachineFinalizer)
+	controllerutil.AddFinalizer(packetmachine, infrav1.MachineFinalizer)
+	if err := machineScope.PatchObject(ctx); err != nil {
+		log.Error(err, "unable to patch object")
+	}
 
 	if !machineScope.Cluster.Status.InfrastructureReady {
-		machineScope.Info("Cluster infrastructure is not ready yet")
+		log.Info("Cluster infrastructure is not ready yet")
+		conditions.MarkFalse(machineScope.PacketMachine, infrav1.DeviceReadyCondition, infrav1.WaitingForClusterInfrastructureReason, clusterv1.ConditionSeverityInfo, "")
 		return ctrl.Result{}, nil
 	}
 
 	// Make sure bootstrap data secret is available and populated.
 	if machineScope.Machine.Spec.Bootstrap.DataSecretName == nil {
-		machineScope.Info("Bootstrap data secret is not yet available")
+		log.Info("Bootstrap data secret is not yet available")
+		conditions.MarkFalse(machineScope.PacketMachine, infrav1.DeviceReadyCondition, infrav1.WaitingForBootstrapDataReason, clusterv1.ConditionSeverityInfo, "")
 		return ctrl.Result{}, nil
 	}
 
@@ -200,31 +259,72 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		err                  error
 		controlPlaneEndpoint packngo.IPAddressReservation
 	)
-	// if we have no provider ID, then we are creating
+
 	if providerID != "" {
+		// If we already have a providerID, then retrieve the device using the
+		// providerID. This means that the Machine has already been created
+		// and we successfully recorded the providerID.
 		dev, err = r.PacketClient.GetDevice(providerID)
+		if err != nil {
+			var perr *packngo.ErrorResponse
+			if errors.As(err, &perr) && perr.Response != nil {
+				if perr.Response.StatusCode == http.StatusNotFound {
+					machineScope.SetFailureReason(capierrors.UpdateMachineError)
+					machineScope.SetFailureMessage(fmt.Errorf("failed to find device: %w", err))
+					log.Error(err, "unable to find device")
+					conditions.MarkFalse(machineScope.PacketMachine, infrav1.DeviceReadyCondition, infrav1.InstanceNotFoundReason, clusterv1.ConditionSeverityError, err.Error())
+				} else if perr.Response.StatusCode == http.StatusForbidden {
+					machineScope.SetFailureReason(capierrors.UpdateMachineError)
+					log.Error(err, "device failed to provision")
+					machineScope.SetFailureMessage(fmt.Errorf("device failed to provision: %w", err))
+					conditions.MarkFalse(machineScope.PacketMachine, infrav1.DeviceReadyCondition, infrav1.InstanceProvisionFailedReason, clusterv1.ConditionSeverityError, err.Error())
+				}
+			}
+
+			return ctrl.Result{}, err
+		}
+	}
+
+	if dev == nil {
+		// We don't yet have a providerID, check to see if we've already
+		// created a device by using the tags that we assign to devices
+		// on creation.
+		dev, err = r.PacketClient.GetDeviceByTags(
+			machineScope.PacketCluster.Spec.ProjectID,
+			packet.DefaultCreateTags(machineScope.Namespace(), machineScope.Machine.Name, machineScope.Cluster.Name),
+		)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 	}
+
 	if dev == nil {
-		createDeviceReq := packet.CreateDeviceRequest{
-			MachineScope: machineScope,
-		}
-		mUID := uuid.New().String()
-		tags := []string{
-			packet.GenerateMachineTag(mUID),
-			packet.GenerateClusterTag(clusterScope.Name()),
+		// We weren't able to find a device by either providerID or by tags,
+		// so we need to create a new device.
+
+		// Avoid a flickering condition between InstanceProvisionStarted and InstanceProvisionFailed if there's a persistent failure with createInstance
+		if conditions.GetReason(machineScope.PacketMachine, infrav1.DeviceReadyCondition) != infrav1.InstanceProvisionFailedReason {
+			conditions.MarkFalse(machineScope.PacketMachine, infrav1.DeviceReadyCondition, infrav1.InstanceProvisionStartedReason, clusterv1.ConditionSeverityInfo, "")
+			if patchErr := machineScope.PatchObject(ctx); err != nil {
+				log.Error(patchErr, "failed to patch conditions")
+				return ctrl.Result{}, patchErr
+			}
 		}
 
+		createDeviceReq := packet.CreateDeviceRequest{
+			MachineScope: machineScope,
+			ExtraTags:    packet.DefaultCreateTags(machineScope.Namespace(), machineScope.Machine.Name, machineScope.Cluster.Name),
+		}
+
+		// TODO: see if this can be removed with kube-vip in place
 		// when the node is a control plan we should check if the elastic ip
 		// for this cluster is not assigned. If it is free we can prepare the
 		// current node to use it.
 		if machineScope.IsControlPlane() {
 			controlPlaneEndpoint, _ = r.PacketClient.GetIPByClusterIdentifier(
-				clusterScope.Namespace(),
-				clusterScope.Name(),
-				clusterScope.PacketCluster.Spec.ProjectID)
+				machineScope.Cluster.Namespace,
+				machineScope.Cluster.Name,
+				machineScope.PacketCluster.Spec.ProjectID)
 			if len(controlPlaneEndpoint.Assignments) == 0 {
 				a := corev1.NodeAddress{
 					Type:    corev1.NodeExternalIP,
@@ -235,9 +335,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 			createDeviceReq.ControlPlaneEndpoint = controlPlaneEndpoint.Address
 		}
 
-		createDeviceReq.ExtraTags = tags
-
-		dev, err = r.PacketClient.NewDevice(createDeviceReq)
+		dev, err = r.PacketClient.NewDevice(ctx, createDeviceReq)
 
 		switch {
 		// TODO: find a better way than parsing the error messages for this.
@@ -248,95 +346,134 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 			// Do not treat an error indicating that reserved hardware is not provisionable as fatal
 			// This occurs when reserved hardware is in the process of being deprovisioned
 			return ctrl.Result{}, fmt.Errorf("failed to create machine %s: %w", machineScope.Name(), err)
+		case err != nil && strings.Contains(err.Error(), " unexpected EOF"):
+			// Do not treat unexpected EOF as fatal, provisioning likely is proceeding
 		case err != nil:
 			errs := fmt.Errorf("failed to create machine %s: %w", machineScope.Name(), err)
-			machineScope.SetErrorReason(capierrors.CreateMachineError)
-			machineScope.SetErrorMessage(errs)
+			machineScope.SetFailureReason(capierrors.CreateMachineError)
+			machineScope.SetFailureMessage(errs)
+			conditions.MarkFalse(machineScope.PacketMachine, infrav1.DeviceReadyCondition, infrav1.InstanceProvisionFailedReason, clusterv1.ConditionSeverityError, err.Error())
+
 			return ctrl.Result{}, errs
 		}
 	}
 
-	// we do not need to set this as packet://<id> because SetProviderID() does the formatting for us
+	// we do not need to set this as equinixmetal://<id> because SetProviderID() does the formatting for us
 	machineScope.SetProviderID(dev.ID)
-	machineScope.SetInstanceStatus(infrastructurev1alpha3.PacketResourceStatus(dev.State))
+	machineScope.SetInstanceStatus(infrav1.PacketResourceStatus(dev.State))
 
-	deviceAddr, err := r.PacketClient.GetDeviceAddresses(dev)
-	if err != nil {
-		machineScope.SetErrorMessage(errors.New("failed to getting device addresses"))
-		return ctrl.Result{}, err
-	}
-
+	deviceAddr := r.PacketClient.GetDeviceAddresses(dev)
 	machineScope.SetAddresses(append(addrs, deviceAddr...))
 
 	// Proceed to reconcile the PacketMachine state.
 	var result reconcile.Result
 
-	switch infrastructurev1alpha3.PacketResourceStatus(dev.State) {
-	case infrastructurev1alpha3.PacketResourceStatusNew, infrastructurev1alpha3.PacketResourceStatusQueued, infrastructurev1alpha3.PacketResourceStatusProvisioning:
-		machineScope.Info("Machine instance is pending", "instance-id", machineScope.GetInstanceID())
+	switch infrav1.PacketResourceStatus(dev.State) {
+	case infrav1.PacketResourceStatusNew, infrav1.PacketResourceStatusQueued, infrav1.PacketResourceStatusProvisioning:
+		log.Info("Machine instance is pending", "instance-id", machineScope.GetInstanceID())
+		machineScope.SetNotReady()
 		result = ctrl.Result{RequeueAfter: 10 * time.Second}
-	case infrastructurev1alpha3.PacketResourceStatusRunning:
-		machineScope.Info("Machine instance is active", "instance-id", machineScope.GetInstanceID())
+	case infrav1.PacketResourceStatusRunning:
+		log.Info("Machine instance is active", "instance-id", machineScope.GetInstanceID())
 
+		// TODO: see if this can be removed with kube-vip in place
 		// This logic is here because an elastic ip can be assigned only an
 		// active node. It needs to be a control plane and the IP should not be
 		// assigned to anything at this point.
 		controlPlaneEndpoint, _ = r.PacketClient.GetIPByClusterIdentifier(
-			clusterScope.Namespace(),
-			clusterScope.Name(),
-			clusterScope.PacketCluster.Spec.ProjectID)
+			machineScope.Cluster.Namespace,
+			machineScope.Cluster.Name,
+			machineScope.PacketCluster.Spec.ProjectID)
 		if len(controlPlaneEndpoint.Assignments) == 0 && machineScope.IsControlPlane() {
 			if _, _, err := r.PacketClient.DeviceIPs.Assign(dev.ID, &packngo.AddressStruct{
 				Address: controlPlaneEndpoint.Address,
 			}); err != nil {
-				r.Log.Error(err, "err assigining elastic ip to control plane. retrying...")
+				log.Error(err, "err assigining elastic ip to control plane. retrying...")
 				return ctrl.Result{RequeueAfter: time.Second * 20}, nil
 			}
 		}
 		machineScope.SetReady()
+		conditions.MarkTrue(machineScope.PacketMachine, infrav1.DeviceReadyCondition)
+
 		result = ctrl.Result{}
 	default:
-		machineScope.SetErrorReason(capierrors.UpdateMachineError)
-		machineScope.SetErrorMessage(fmt.Errorf("Instance status %q is unexpected", dev.State))
+		machineScope.SetNotReady()
+		log.Info("Equinix Metal device state is undefined", "state", dev.State, "device-id", machineScope.GetInstanceID())
+		machineScope.SetFailureReason(capierrors.UpdateMachineError)
+		machineScope.SetFailureMessage(fmt.Errorf("instance status %q is unexpected", dev.State)) //nolint:goerr113
+		conditions.MarkUnknown(machineScope.PacketMachine, infrav1.DeviceReadyCondition, "", "")
+
 		result = ctrl.Result{}
 	}
 
 	return result, nil
 }
 
-func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineScope *scope.MachineScope, clusterScope *scope.ClusterScope, logger logr.Logger) (ctrl.Result, error) {
-	logger.Info("Deleting machine")
+func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineScope *scope.MachineScope) (ctrl.Result, error) {
+	log := ctrl.LoggerFrom(ctx, "machine", machineScope.Machine.Name, "cluster", machineScope.Cluster.Name)
+	log.Info("Reconciling Delete PacketMachine")
+
 	packetmachine := machineScope.PacketMachine
 	providerID := machineScope.GetInstanceID()
-	if providerID == "" {
-		logger.Info("no provider ID provided, nothing to delete")
-		controllerutil.RemoveFinalizer(packetmachine, infrastructurev1alpha3.MachineFinalizer)
-		return ctrl.Result{}, nil
-	}
 
-	device, err := r.PacketClient.GetDevice(providerID)
-	if err != nil {
-		if err.(*packngo.ErrorResponse).Response != nil && err.(*packngo.ErrorResponse).Response.StatusCode == http.StatusNotFound {
-			// When the server does not exist we do not have anything left to do.
-			// Probably somebody manually deleted the server from the UI or via API.
-			logger.Info("Server not found, nothing left to do")
-			controllerutil.RemoveFinalizer(packetmachine, infrastructurev1alpha3.MachineFinalizer)
+	var device *packngo.Device
+
+	if providerID == "" {
+		// If no providerID was recorded, check to see if there are any instances
+		// that match by tags
+		dev, err := r.PacketClient.GetDeviceByTags(
+			machineScope.PacketCluster.Spec.ProjectID,
+			packet.DefaultCreateTags(machineScope.Namespace(), machineScope.Machine.Name, machineScope.Cluster.Name),
+		)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if dev == nil {
+			log.Info("Server not found by tags, nothing left to do")
+			controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
 			return ctrl.Result{}, nil
 		}
-		return ctrl.Result{}, fmt.Errorf("error retrieving machine status %s: %v", packetmachine.Name, err)
+
+		device = dev
+	} else {
+		// Otherwise, try to retrieve the device by the providerID
+		dev, err := r.PacketClient.GetDevice(providerID)
+		if err != nil {
+			var errResp *packngo.ErrorResponse
+			if errors.As(err, &errResp) && errResp.Response != nil {
+				if errResp.Response.StatusCode == http.StatusNotFound {
+					// When the server does not exist we do not have anything left to do.
+					// Probably somebody manually deleted the server from the UI or via API.
+					log.Info("Server not found by id, nothing left to do")
+					controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
+					return ctrl.Result{}, nil
+				}
+
+				if errResp.Response.StatusCode == http.StatusForbidden {
+					// When a server fails to provision it will return a 403
+					log.Info("Server appears to have failed provisioning, nothing left to do")
+					controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
+					return ctrl.Result{}, nil
+				}
+			}
+
+			return ctrl.Result{}, fmt.Errorf("error retrieving machine status %s: %w", packetmachine.Name, err)
+		}
+
+		device = dev
 	}
 
 	// We should never get there but this is a safetly check
 	if device == nil {
-		controllerutil.RemoveFinalizer(packetmachine, infrastructurev1alpha3.MachineFinalizer)
-		return ctrl.Result{}, fmt.Errorf("machine does not exist: %s", packetmachine.Name)
+		controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
+		return ctrl.Result{}, fmt.Errorf("%w: %s", ErrMissingDevice, packetmachine.Name)
 	}
 
-	_, err = r.PacketClient.Devices.Delete(device.ID, force)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to delete the machine: %v", err)
+	if _, err := r.PacketClient.Devices.Delete(device.ID, force); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to delete the machine: %w", err)
 	}
 
-	controllerutil.RemoveFinalizer(packetmachine, infrastructurev1alpha3.MachineFinalizer)
+	controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
 	return ctrl.Result{}, nil
 }

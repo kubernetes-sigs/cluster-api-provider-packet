@@ -18,22 +18,22 @@ package controllers
 
 import (
 	"context"
-	"time"
+	"errors"
 
-	"github.com/go-logr/logr"
-	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/annotations"
+	"sigs.k8s.io/cluster-api/util/conditions"
+	"sigs.k8s.io/cluster-api/util/predicates"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
-	infrastructurev1alpha3 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
 )
@@ -41,59 +41,56 @@ import (
 // PacketClusterReconciler reconciles a PacketCluster object
 type PacketClusterReconciler struct {
 	client.Client
-	Log          logr.Logger
-	Recorder     record.EventRecorder
-	Scheme       *runtime.Scheme
-	PacketClient *packet.PacketClient
+	WatchFilterValue string
+	PacketClient     *packet.Client
 }
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=packetclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=packetclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
 
-func (r *PacketClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
-	ctx := context.Background()
-	logger := r.Log.WithValues("packetcluster", req.NamespacedName)
+func (r *PacketClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
+	log := ctrl.LoggerFrom(ctx)
 
-	// your logic here
-	packetcluster := &infrastructurev1alpha3.PacketCluster{}
+	packetcluster := &infrav1.PacketCluster{}
 	if err := r.Get(ctx, req.NamespacedName, packetcluster); err != nil {
 		if apierrors.IsNotFound(err) {
+			log.Info("PacketCluster resource not found or already deleted")
 			return ctrl.Result{}, nil
 		}
+
+		log.Error(err, "unable to fetch PacketCluster resource")
 		return ctrl.Result{}, err
 	}
 
-	logger = logger.WithName(packetcluster.APIVersion)
-
-	// Fetch the Machine.
+	// Fetch the Cluster.
 	cluster, err := util.GetOwnerCluster(ctx, r.Client, packetcluster.ObjectMeta)
 	if err != nil {
+		log.Error(err, "Failed to get owner cluster")
 		return ctrl.Result{}, err
 	}
 
 	if cluster == nil {
-		logger.Info("OwnerCluster is not set yet. Requeuing...")
-		return ctrl.Result{
-			Requeue:      true,
-			RequeueAfter: 2 * time.Second,
-		}, nil
+		log.Info("Cluster Controller has not yet set OwnerRef")
+		return ctrl.Result{}, nil
 	}
 
-	if util.IsPaused(cluster, packetcluster) {
-		logger.Info("PacketCluster or linked Cluster is marked as paused. Won't reconcile")
+	log = log.WithValues("cluster", cluster.Name)
+
+	if annotations.IsPaused(cluster, packetcluster) {
+		log.Info("PacketCluster or linked Cluster is marked as paused. Won't reconcile")
 		return ctrl.Result{}, nil
 	}
 
 	// Create the cluster scope
 	clusterScope, err := scope.NewClusterScope(scope.ClusterScopeParams{
-		Logger:        logger,
 		Client:        r.Client,
 		Cluster:       cluster,
 		PacketCluster: packetcluster,
 	})
 	if err != nil {
-		return ctrl.Result{}, errors.Errorf("failed to create scope: %+v", err)
+		log.Error(err, "failed to create scope")
+		return ctrl.Result{}, err
 	}
 	// Always close the scope when exiting this function so we can persist any PacketCluster changes.
 	defer func() {
@@ -104,36 +101,49 @@ func (r *PacketClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, re
 
 	// Handle deleted clusters
 	if !cluster.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(clusterScope)
+		return r.reconcileDelete(ctx, clusterScope)
 	}
 
-	return r.reconcileNormal(packetcluster, clusterScope)
+	return r.reconcileNormal(ctx, clusterScope)
 }
 
-func (r *PacketClusterReconciler) reconcileNormal(packetcluster *v1alpha3.PacketCluster, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
-	if ipReserv, err := r.PacketClient.GetIPByClusterIdentifier(clusterScope.Namespace(), clusterScope.Name(), packetcluster.Spec.ProjectID); err == packet.ErrControlPlanEndpointNotFound {
+func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
+	log := ctrl.LoggerFrom(ctx).WithValues("cluster", clusterScope.Cluster.Name)
+	log.Info("Reconciling PacketCluster")
+
+	packetCluster := clusterScope.PacketCluster
+
+	ipReserv, err := r.PacketClient.GetIPByClusterIdentifier(clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID)
+	switch {
+	case errors.Is(err, packet.ErrControlPlanEndpointNotFound):
 		// There is not an ElasticIP with the right tags, at this point we can create one
-		ip, err := r.PacketClient.CreateIP(clusterScope.Namespace(), clusterScope.Name(), packetcluster.Spec.ProjectID, packetcluster.Spec.Facility)
+		ip, err := r.PacketClient.CreateIP(clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID, packetCluster.Spec.Facility)
 		if err != nil {
-			r.Log.Error(err, "error reserving an ip")
+			log.Error(err, "error reserving an ip")
 			return ctrl.Result{}, err
 		}
 		clusterScope.PacketCluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
 			Host: ip.To4().String(),
 			Port: 6443,
 		}
-	} else {
+	case err != nil:
+		log.Error(err, "error getting cluster IP")
+		return ctrl.Result{}, err
+	default:
 		// If there is an ElasticIP with the right tag just use it again
 		clusterScope.PacketCluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
 			Host: ipReserv.Address,
 			Port: 6443,
 		}
 	}
+
 	clusterScope.PacketCluster.Status.Ready = true
+	conditions.MarkTrue(packetCluster, infrav1.NetworkInfrastructureReadyCondition)
+
 	return ctrl.Result{}, nil
 }
 
-func (r *PacketClusterReconciler) reconcileDelete(clusterScope *scope.ClusterScope) (ctrl.Result, error) {
+func (r *PacketClusterReconciler) reconcileDelete(ctx context.Context, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
 	// Initially I created this handler to remove an elastic IP when a cluster
 	// gets delete, but it does not sound like a good idea.  It is better to
 	// leave to the users the ability to decide if they want to keep and resign
@@ -141,14 +151,18 @@ func (r *PacketClusterReconciler) reconcileDelete(clusterScope *scope.ClusterSco
 	return ctrl.Result{}, nil
 }
 
-func (r *PacketClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *PacketClusterReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, options controller.Options) error {
+	log := ctrl.LoggerFrom(ctx)
+
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&infrastructurev1alpha3.PacketCluster{}).
+		WithOptions(options).
+		For(&infrav1.PacketCluster{}).
+		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(log, r.WatchFilterValue)).
+		WithEventFilter(predicates.ResourceIsNotExternallyManaged(log)).
 		Watches(
 			&source.Kind{Type: &clusterv1.Cluster{}},
-			&handler.EnqueueRequestsFromMapFunc{
-				ToRequests: util.ClusterToInfrastructureMapFunc(infrastructurev1alpha3.GroupVersion.WithKind("PacketCluster")),
-			},
+			handler.EnqueueRequestsFromMapFunc(util.ClusterToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("PacketCluster"))),
+			builder.WithPredicates(predicates.ClusterUpdateUnpaused(log)),
 		).
 		Complete(r)
 }

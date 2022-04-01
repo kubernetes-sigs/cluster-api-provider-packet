@@ -20,6 +20,8 @@ package e2e
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"flag"
 	"fmt"
 	"os"
@@ -31,12 +33,21 @@ import (
 	"github.com/onsi/ginkgo/config"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-
+	"github.com/packethost/packngo"
+	"golang.org/x/crypto/ssh"
 	"k8s.io/apimachinery/pkg/runtime"
 	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/test/framework/bootstrap"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
+	"sigs.k8s.io/cluster-api/util"
+
+	"sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
+)
+
+const (
+	AuthTokenEnvVar = "PACKET_API_KEY"
+	ProjectIDEnvVar = "PROJECT_ID"
 )
 
 // Test suite flags
@@ -70,8 +81,9 @@ var (
 	// bootstrapClusterProxy allows to interact with the bootstrap cluster to be used for the e2e tests.
 	bootstrapClusterProxy framework.ClusterProxy
 
-	// kubetestConfigFilePath is the path to the kubetest configuration file
-	kubetestConfigFilePath string
+	// sshKeyID is the id for the generated ssh key, this is used
+	// to cleanup the ssh key in SynchronizedAfterSuite
+	sshKeyID string
 )
 
 func init() {
@@ -79,15 +91,9 @@ func init() {
 	flag.StringVar(&artifactFolder, "e2e.artifacts-folder", "", "folder where e2e test artifact should be stored")
 	flag.BoolVar(&skipCleanup, "e2e.skip-resource-cleanup", false, "if true, the resource cleanup after tests will be skipped")
 	flag.BoolVar(&useExistingCluster, "e2e.use-existing-cluster", false, "if true, the test uses the current cluster instead of creating a new one (default discovery rules apply)")
-	flag.StringVar(&kubetestConfigFilePath, "kubetest.config-file", "", "path to the kubetest configuration file")
 }
 
 func TestE2E(t *testing.T) {
-	// If running in prow, make sure to use the artifacts folder that will be reported in test grid (ignoring the value provided by flag).
-	if prowArtifactFolder, exists := os.LookupEnv("ARTIFACTS"); exists {
-		artifactFolder = prowArtifactFolder
-	}
-
 	RegisterFailHandler(Fail)
 	junitPath := filepath.Join(artifactFolder, fmt.Sprintf("junit.e2e_suite.%d.xml", config.GinkgoConfig.ParallelNode))
 	junitReporter := reporters.NewJUnitReporter(junitPath)
@@ -98,6 +104,11 @@ func TestE2E(t *testing.T) {
 // The local clusterctl repository & the bootstrap cluster are created once and shared across all the tests.
 var _ = SynchronizedBeforeSuite(func() []byte {
 	// Before all ParallelNodes.
+	Expect(os.Getenv(AuthTokenEnvVar)).NotTo(BeEmpty())
+	Expect(os.Getenv(ProjectIDEnvVar)).NotTo(BeEmpty())
+	Expect(os.Getenv("FACILITY")).NotTo(BeEmpty())
+	Expect(os.Getenv("CONTROLPLANE_NODE_TYPE")).NotTo(BeEmpty())
+	Expect(os.Getenv("WORKER_NODE_TYPE")).NotTo(BeEmpty())
 
 	Expect(configPath).To(BeAnExistingFile(), "Invalid test suite argument. e2e.config should be an existing file.")
 	Expect(os.MkdirAll(artifactFolder, 0755)).To(Succeed(), "Invalid test suite argument. Can't create e2e.artifacts-folder %q", artifactFolder)
@@ -105,13 +116,17 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	By("Initializing a runtime.Scheme with all the GVK relevant for this test")
 	scheme := initScheme()
 
-	Byf("Loading the e2e test configuration from %q", configPath)
-	e2eConfig = loadE2EConfig(configPath)
+	capi_e2e.Byf("Loading the e2e test configuration from %q", configPath)
+	e2eConfig := loadE2EConfig(configPath)
 
-	Byf("Creating a clusterctl local repository into %q", artifactFolder)
-	clusterctlConfigPath = createClusterctlLocalRepository(e2eConfig, filepath.Join(artifactFolder, "repository"))
+	var sshKeyName string
+	sshKeyID, sshKeyName = generateSSHKeyIfNeeded()
+
+	capi_e2e.Byf("Creating a clusterctl local repository into %q", artifactFolder)
+	clusterctlConfigPath := createClusterctlLocalRepository(e2eConfig, filepath.Join(artifactFolder, "repository"))
 
 	By("Setting up the bootstrap cluster")
+	var bootstrapClusterProxy framework.ClusterProxy
 	bootstrapClusterProvider, bootstrapClusterProxy = setupBootstrapCluster(e2eConfig, scheme, useExistingCluster)
 
 	By("Initializing the bootstrap cluster")
@@ -119,25 +134,28 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	return []byte(
 		strings.Join([]string{
-			artifactFolder,
-			configPath,
 			clusterctlConfigPath,
 			bootstrapClusterProxy.GetKubeconfigPath(),
+			sshKeyName,
 		}, ","),
 	)
 }, func(data []byte) {
 	// Before each ParallelNode.
 
 	parts := strings.Split(string(data), ",")
-	Expect(parts).To(HaveLen(4))
+	Expect(parts).To(HaveLen(3))
 
-	artifactFolder = parts[0]
-	configPath = parts[1]
-	clusterctlConfigPath = parts[2]
-	kubeconfigPath := parts[3]
+	clusterctlConfigPath = parts[0]
+	kubeconfigPath := parts[1]
+	sshKeyName := parts[2]
 
-	e2eConfig = loadE2EConfig(configPath)
-	bootstrapClusterProxy = framework.NewClusterProxy("bootstrap", kubeconfigPath, initScheme())
+	if e2eConfig == nil {
+		e2eConfig = loadE2EConfig(configPath)
+	}
+
+	ensureSSHKeyName(sshKeyName)
+
+	bootstrapClusterProxy = NewWrappedClusterProxy("bootstrap", kubeconfigPath, initScheme())
 })
 
 // Using a SynchronizedAfterSuite for controlling how to delete resources shared across ParallelNodes (~ginkgo threads).
@@ -145,18 +163,32 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 // The local clusterctl repository is preserved like everything else created into the artifact folder.
 var _ = SynchronizedAfterSuite(func() {
 	// After each ParallelNode.
+	if !skipCleanup {
+		By("Cleaning up the cluster proxy")
+		tearDown(nil, bootstrapClusterProxy)
+	}
 }, func() {
 	// After all ParallelNodes.
 
-	By("Tearing down the management cluster")
 	if !skipCleanup {
-		tearDown(bootstrapClusterProvider, bootstrapClusterProxy)
+		By("Tearing down the management cluster")
+		tearDown(bootstrapClusterProvider, nil)
+
+		metalAuthToken := os.Getenv(AuthTokenEnvVar)
+		if metalAuthToken != "" && sshKeyID != "" {
+			By("Cleaning up the generated SSH Key")
+			metalClient := packngo.NewClientWithAuth("capp-e2e", metalAuthToken, nil)
+			_, err := metalClient.SSHKeys.Delete(sshKeyID)
+			Expect(err).NotTo(HaveOccurred())
+		}
 	}
 })
 
 func initScheme() *runtime.Scheme {
 	sc := runtime.NewScheme()
 	framework.TryAddDefaultSchemes(sc)
+	Expect(v1beta1.AddToScheme(sc)).To(Succeed())
+
 	return sc
 }
 
@@ -200,7 +232,7 @@ func setupBootstrapCluster(config *clusterctl.E2EConfig, scheme *runtime.Scheme,
 		Expect(kubeconfigPath).To(BeAnExistingFile(), "Failed to get the kubeconfig file for the bootstrap cluster")
 	}
 
-	clusterProxy := framework.NewClusterProxy("bootstrap", kubeconfigPath, scheme)
+	clusterProxy := NewWrappedClusterProxy("bootstrap", kubeconfigPath, scheme)
 	Expect(clusterProxy).ToNot(BeNil(), "Failed to get a bootstrap cluster proxy")
 
 	return clusterProvider, clusterProxy
@@ -222,4 +254,47 @@ func tearDown(bootstrapClusterProvider bootstrap.ClusterProvider, bootstrapClust
 	if bootstrapClusterProvider != nil {
 		bootstrapClusterProvider.Dispose(context.TODO())
 	}
+}
+
+func ensureSSHKeyName(sshKeyName string) {
+	sshKey, ok := os.LookupEnv("SSH_KEY")
+	if !ok || sshKey == "" {
+		sshKey = sshKeyName
+		Expect(os.Setenv("SSH_KEY", sshKey)).To(Succeed())
+	}
+
+	logf("Using ssh key: %s", sshKey)
+}
+
+func generateSSHKeyIfNeeded() (string, string) {
+	if sshKey, ok := os.LookupEnv("SSH_KEY"); ok && sshKey != "" {
+		return "", sshKey
+	}
+
+	By("Generating an SSH Key for use in tests")
+	return generateSSHKey()
+}
+
+func generateSSHKey() (string, string) {
+	metalAuthToken := os.Getenv(AuthTokenEnvVar)
+	Expect(metalAuthToken).NotTo(BeEmpty(), "%s not set in environment", AuthTokenEnvVar)
+
+	// TODO: do we need to write these keys out to disk at all?
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	Expect(err).NotTo(HaveOccurred())
+	pub, err := ssh.NewPublicKey(&privateKey.PublicKey)
+	Expect(err).NotTo(HaveOccurred())
+
+	metalClient := packngo.NewClientWithAuth("capp-e2e", metalAuthToken, nil)
+	res, _, err := metalClient.SSHKeys.Create(
+		&packngo.SSHKeyCreateRequest{
+			Label: fmt.Sprintf("capp-e2e-%s", util.RandomString(6)),
+			Key:   string(ssh.MarshalAuthorizedKey(pub)),
+		},
+	)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(res.ID).NotTo(BeEmpty())
+	Expect(res.Label).NotTo(BeEmpty())
+
+	return res.ID, res.Label
 }

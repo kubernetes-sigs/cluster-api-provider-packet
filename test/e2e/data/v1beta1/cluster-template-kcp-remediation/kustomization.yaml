@@ -1,0 +1,3 @@
+resources:
+- ../../../../../templates/experimental-crs-cni
+- ../bases/kcp-mhc.yaml

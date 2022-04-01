@@ -1,3 +1,5 @@
+# KubeadmControlPlane CRD
+
 [KubeadmControlPlane](kubeadmcontrolplane-book) is a CRD provided by the cluster-api kubeadm bootstrapped.
 It manages the control planes lifecycle.
 

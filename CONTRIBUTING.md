@@ -1,3 +1,4 @@
+# Contributing guidelines
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
@@ -6,16 +7,12 @@
   - [Sign the CLA](#sign-the-cla)
   - [Contributing A Patch](#contributing-a-patch)
   - [Issue and Pull Request Management](#issue-and-pull-request-management)
-  - [Pre-check before submitting a PR](#pre-check-before-submitting-a-pr)
-  - [Build and push images](#build-and-push-images)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-# Contributing guidelines
-
 ## Sign the CLA
 
-Kubernetes projects require that you sign a Contributor License Agreement (CLA) before we can accept your pull requests.  Please see https://git.k8s.io/community/CLA.md for more info
+Kubernetes projects require that you sign a Contributor License Agreement (CLA) before we can accept your pull requests. More information about the CLA and instructions for signing it [can be found here](https://git.k8s.io/community/CLA.md)
 
 ## Contributing A Patch
 

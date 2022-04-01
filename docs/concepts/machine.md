@@ -1,5 +1,7 @@
+# PacketMachine CRD
+
 PacketMachine is the name of the resource that identifies a
-[Device](packetDeviceAPI) on Packet.
+[Device](equinixMetalDeviceAPI) on Packet.
 
 This is an example of it:
 
@@ -17,12 +19,12 @@ spec:
   tags: []
 ```
 
-It is a [Kubernetes Custom Resource Definition (CRD)](crd-docs) as everything
+It is a [Kubernetes Custom Resource Definition (CRD)](openapi-types) as everything
 else in the cluster-api land.
 
 The reported fields in the example are the most common one but you can see the
 full list of supported parameters as part of the OpenAPI definition available
-[here](config/resources/crd/bases/infrastructure.cluster.x-k8s.io_packetmachines.yaml)
+[here](../../config/crd/bases/infrastructure.cluster.x-k8s.io_packetclusters.yaml)
 searching for `kind: PacketMachine`.
 
 The `PacketMachine`, `PacketCluster`, and `PacketMachineTemplate` CRD specs are also documented at [docs.crds.dev](https://doc.crds.dev/github.com/kubernetes-sigs/cluster-api-provider-packet).
@@ -30,7 +32,7 @@ The `PacketMachine`, `PacketCluster`, and `PacketMachineTemplate` CRD specs are 
 ## Reserved instances
 
 Packet provides the possibility to [reserve
-hardware](packet-docs-reserved-hardware) in order to have to power you need
+hardware](equinix-metal-docs-reserved-hardware) in order to have to power you need
 always available.
 
 > Reserved hardware gives you the ability to reserve specific servers for a
@@ -40,7 +42,7 @@ always available.
 
 You can specify the reservation ID using the field `hardwareReservationID`:
 
-```
+```yaml
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
 kind: PacketMachine
 metadata:
@@ -69,8 +71,7 @@ where the pool of PacketMachine is dynamically managed by the cluster-api
 controllers. You can track progress on this scenario subscribing to the issue
 ["Add support for reservation IDs with MachineDeployment #136"](github-issue-resid-dynamic) on GitHub.
 
-[packetDeviceAPI]: https://www.packet.com/developers/api/devices/#devices-createDevice
-[crd-docs]: https://github.com/packethost/cluster-api-provider-packet/blob/master/config/resources/crd/bases/infrastructure.cluster.x-k8s.io_packetmachines.yaml
+[equinixMetalDeviceAPI]: https://metal.equinix.com/developers/api/devices/#devices-createdevice
 [openapi-types]: https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/
-[packet-docs-reserved-hardware]: https://www.packet.com/developers/docs/getting-started/deployment-options/reserved-hardware/
+[equinix-metal-docs-reserved-hardware]: https://metal.equinix.com/developers/docs/deploy/reserved/
 [github-issue-resid-dynamic]: https://github.com/packethost/cluster-api-provider-packet/issues/136

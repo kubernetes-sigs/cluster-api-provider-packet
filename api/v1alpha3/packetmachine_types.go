@@ -28,15 +28,12 @@ const (
 	MachineFinalizer = "packetmachine.infrastructure.cluster.x-k8s.io"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // PacketMachineSpec defines the desired state of PacketMachine
 type PacketMachineSpec struct {
-	OS           string   `json:"OS"`
+	OS           string   `json:"OS"` //nolint: tagliatelle
 	BillingCycle string   `json:"billingCycle"`
 	MachineType  string   `json:"machineType"`
-	SshKeys      []string `json:"sshKeys,omitempty"`
+	SshKeys      []string `json:"sshKeys,omitempty"` //nolint: revive,stylecheck
 
 	// Facility represents the Packet facility for this cluster.
 	// Override from the PacketCluster spec.
@@ -49,8 +46,7 @@ type PacketMachineSpec struct {
 	IPXEUrl string `json:"ipxeURL,omitempty"`
 
 	// HardwareReservationID is the unique device hardware reservation ID, a comma separated list of
-	// hardware reservation IDs, or `next-available` to
-	// automatically let the Packet api determine one.
+	// hardware reservation IDs, or `next-available` to automatically let the Packet api determine one.
 	// +optional
 	HardwareReservationID string `json:"hardwareReservationID,omitempty"`
 
@@ -65,9 +61,6 @@ type PacketMachineSpec struct {
 
 // PacketMachineStatus defines the observed state of PacketMachine
 type PacketMachineStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// Ready is true when the provider resource is ready.
 	// +optional
 	Ready bool `json:"ready"`
@@ -108,7 +101,6 @@ type PacketMachineStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:path=packetmachines,scope=Namespaced,categories=cluster-api
-// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="Cluster",type="string",JSONPath=".metadata.labels.cluster\\.x-k8s\\.io/cluster-name",description="Cluster to which this PacketMachine belongs"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.instanceState",description="Packet instance state"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="Machine ready status"
