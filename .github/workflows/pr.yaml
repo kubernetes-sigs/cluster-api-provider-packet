@@ -2,9 +2,6 @@ name: Pull Request Validation
 on:
  pull_request:
    types: [opened, synchronize, reopened]
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 jobs:
   validate:
     name: "Validate ${{ matrix.target }}"
