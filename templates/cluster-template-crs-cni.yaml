@@ -142,9 +142,9 @@ spec:
     postKubeadmCommands:
     - |
       if [ -f "/run/kubeadm/kubeadm-join-config.yaml" ]; then
-        KVVERSION="v0.4.2"
+        KVVERSION="${KUBE_VIP_VERSION:=v0.4.2}"
         ctr image pull ghcr.io/kube-vip/kube-vip:$${KVVERSION}
-        ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$${KVVERSION} vip /kube-vip manifest pod --interface "lo" --vip "{{ .controlPlaneEndpoint }}" --controlplane --bgp --metal --metalKey "{{ .apiKey }}" --metalProjectID "b264ba74-f3bd-49f0-ae24-b0953765b7aa" | tee  /etc/kubernetes/manifests/kube-vip.yaml
+        ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$${KVVERSION} vip /kube-vip manifest pod --interface "lo" --vip "{{ .controlPlaneEndpoint }}" --controlplane --bgp --metal --metalKey "{{ .apiKey }}" --metalProjectID "${PROJECT_ID}" | tee  /etc/kubernetes/manifests/kube-vip.yaml
       fi
     - |
       if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
@@ -186,10 +186,10 @@ spec:
     - systemctl start containerd
     - |
       if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
-        KVVERSION="v0.4.2"
+        KVVERSION="${KUBE_VIP_VERSION:=v0.4.2}"
         ctr image pull ghcr.io/kube-vip/kube-vip:$${KVVERSION}
         mkdir -p /etc/kubernetes/manifests/
-        ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$${KVVERSION} vip /kube-vip manifest pod --interface "lo" --vip "{{ .controlPlaneEndpoint }}" --controlplane --bgp --metal --metalKey "{{ .apiKey }}" --metalProjectID "b264ba74-f3bd-49f0-ae24-b0953765b7aa" | tee  /etc/kubernetes/manifests/kube-vip.yaml
+        ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$${KVVERSION} vip /kube-vip manifest pod --interface "lo" --vip "{{ .controlPlaneEndpoint }}" --controlplane --bgp --metal --metalKey "{{ .apiKey }}" --metalProjectID  "${PROJECT_ID}" | tee  /etc/kubernetes/manifests/kube-vip.yaml
       fi
   machineTemplate:
     infrastructureRef:
