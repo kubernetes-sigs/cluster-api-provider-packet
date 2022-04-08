@@ -66,16 +66,7 @@ spec:
           mkdir -p /etc/kubernetes/manifests/
           ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$${KVVERSION} vip /kube-vip manifest pod --interface "lo" --vip "{{ .controlPlaneEndpoint }}" --controlplane --bgp --metal --metalKey "{{ .apiKey }}" --metalProjectID "b264ba74-f3bd-49f0-ae24-b0953765b7aa" | tee  /etc/kubernetes/manifests/kube-vip.yaml
         fi
-      # - ping -c 3 -q {{ .controlPlaneEndpoint }} && echo OK || ip addr add {{ .controlPlaneEndpoint }} dev lo
     postKubeadmCommands:
-      # - |
-      #   cat <<EOF >> /etc/network/interfaces
-      #   auto lo:0
-      #   iface lo:0 inet static
-      #     address {{ .controlPlaneEndpoint }}
-      #     netmask 255.255.255.255
-      #   EOF
-      # - systemctl restart networking
       - |
         if [ -f "/run/kubeadm/kubeadm-join-config.yaml" ]; then
           KVVERSION=$(curl -sL https://api.github.com/repos/kube-vip/kube-vip/releases | jq -r ".[0].name")
