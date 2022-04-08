@@ -176,6 +176,11 @@ spec:
       TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\\\./g' | sed 's/^v//')
       RESOLVED_KUBERNETES_VERSION=$(apt-cache madison kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$3~ VERSION { print $3 }' | head -n1)
       DEBIAN_FRONTEND=noninteractive apt-get install -y containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
+      curl -o /run/metadata.json -fsSL https://metadata.platformequinix.com/metadata
+      for i in $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[]'); do
+        ip route add $i via $(cat /run/metadata.json | jq -r '.network.addresses[] | select(.public == false and .address_family == 4) | .gateway')
+      done
+      rm /run/metadata.json
       ping -c 3 -q {{ .controlPlaneEndpoint }} && echo OK || ip addr add {{ .controlPlaneEndpoint }} dev lo
   machineTemplate:
     infrastructureRef:
