@@ -40,7 +40,7 @@ const (
 	clientName      = "CAPP-v1beta1"
 	ipxeOS          = "custom_ipxe"
 	envVarLocalASN  = "METAL_LOCAL_ASN"
-	envVarBGPPass   = "METAL_BGP_PASS"
+	envVarBGPPass   = "METAL_BGP_PASS" //nolint:gosec
 	DefaultLocalASN = 65000
 )
 

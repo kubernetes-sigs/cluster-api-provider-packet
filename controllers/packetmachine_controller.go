@@ -222,7 +222,7 @@ func (r *PacketMachineReconciler) PacketClusterToPacketMachines(ctx context.Cont
 	}
 }
 
-func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *scope.MachineScope) (ctrl.Result, error) { //nolint:gocyclo
+func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *scope.MachineScope) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx, "machine", machineScope.Machine.Name, "cluster", machineScope.Cluster.Name)
 	log.Info("Reconciling PacketMachine")
 
@@ -371,13 +371,6 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		result = ctrl.Result{RequeueAfter: 10 * time.Second}
 	case infrav1.PacketResourceStatusRunning:
 		log.Info("Machine instance is active", "instance-id", machineScope.GetInstanceID())
-
-		// This logic is here because an elastic ip is neede to create
-		// the kube-vip template
-		controlPlaneEndpoint, _ = r.PacketClient.GetIPByClusterIdentifier(
-			machineScope.Cluster.Namespace,
-			machineScope.Cluster.Name,
-			machineScope.PacketCluster.Spec.ProjectID)
 		machineScope.SetReady()
 		conditions.MarkTrue(machineScope.PacketMachine, infrav1.DeviceReadyCondition)
 
