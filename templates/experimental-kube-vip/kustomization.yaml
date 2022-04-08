@@ -20,10 +20,6 @@ patches:
       name: "${CLUSTER_NAME}-control-plane"
     spec:
       kubeadmConfigSpec:
-        joinConfiguration:
-          nodeRegistration:
-            ignorePreflightErrors:
-            - DirAvailable--etc-kubernetes-manifests
         preKubeadmCommands:
           - |
             sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
