@@ -25,7 +25,8 @@ spec:
           provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
     joinConfiguration:
       nodeRegistration:
-        ignorePreflightErrors: []
+        ignorePreflightErrors:
+        - DirAvailable--etc-kubernetes-manifests
         kubeletExtraArgs:
           cloud-provider: external
           provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
