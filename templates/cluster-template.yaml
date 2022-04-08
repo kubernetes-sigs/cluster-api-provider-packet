@@ -74,7 +74,6 @@ spec:
         rm /run/metadata.json
     postKubeadmCommands:
       - |
-        curl -o /run/metadata.json -fsSL https://metadata.platformequinix.com/metadata
         if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
           export KUBECONFIG=/etc/kubernetes/admin.conf
           export CPEM_YAML=https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.4.0/deployment.yaml
@@ -82,7 +81,6 @@ spec:
           kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}" || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}") || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}")
           kubectl apply -f $${CPEM_YAML} || (sleep 1 && kubectl apply -f $${CPEM_YAML}) || (sleep 1 && kubectl apply -f $${CPEM_YAML})
         fi
-        rm /run/metadata.json
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: PacketMachineTemplate
