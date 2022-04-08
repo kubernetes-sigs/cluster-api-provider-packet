@@ -69,7 +69,7 @@ spec:
         --peerAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_as') \
         --peerAddress $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[0]') \
         --localAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_as') \
-        --bgpRouterID $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_ip') >/etc/kubernetes/manifests/vip.yaml
+        --bgpRouterID $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_ip') > /etc/kubernetes/manifests/vip.yaml
         rm /run/metadata.json
     postKubeadmCommands:
       - |
