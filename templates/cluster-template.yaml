@@ -60,7 +60,6 @@ spec:
         done
         KVVERSION="${KUBE_VIP_VERSION:=v0.4.2}"
         ctr image pull ghcr.io/kube-vip/kube-vip:$${KVVERSION}
-        echo "{{ .controlPlaneEndpoint }}"
         ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$KVVERSION vip /kube-vip manifest pod \
         --interface "lo" \
         --vip "{{ .controlPlaneEndpoint }}" \
