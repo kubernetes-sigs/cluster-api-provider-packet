@@ -140,20 +140,15 @@ spec:
           provider-id: equinixmetal://{{ `{{ v1.instance_id }}` }}
     postKubeadmCommands:
     - |
-      cat <<EOF >> /etc/network/interfaces
-      auto lo:0
-      iface lo:0 inet static
-        address {{ .controlPlaneEndpoint }}
-        netmask 255.255.255.255
-      EOF
-    - systemctl restart networking
-    - |
       if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
         export KUBECONFIG=/etc/kubernetes/admin.conf
         export CPEM_YAML=https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.4.0/deployment.yaml
         export SECRET_DATA='cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "eipTag": "cluster-api-provider-packet:cluster-id:${CLUSTER_NAME}", "eipHealthCheckUseHostIP": true}'''
         kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}" || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}") || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}")
         kubectl apply -f $${CPEM_YAML} || (sleep 1 && kubectl apply -f $${CPEM_YAML}) || (sleep 1 && kubectl apply -f $${CPEM_YAML})
+        curl https://gist.githubusercontent.com/DavidSpek/5fbfc8b66ccbf36b47b2ca292965e7bc/raw/a395f146a08592c4f687dd8d471c61c966c1ab7d/kube-vip-control-plane.yaml --output kube-vip-control-plane.yaml
+        sed -i 's/$${LB_ADDRESS}/"{{ .controlPlaneEndpoint }}"/g' kube-vip-control-plane.yaml
+        kubectl apply -f kube-vip-control-plane.yaml || (sleep 1 && kubectl apply -f kube-vip-control-plane.yaml) || (sleep 1 && kubectl apply -f kube-vip-control-plane.yaml)
       fi
     preKubeadmCommands:
     - sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
@@ -184,7 +179,6 @@ spec:
     - systemctl daemon-reload
     - systemctl enable containerd
     - systemctl start containerd
-    - ping -c 3 -q {{ .controlPlaneEndpoint }} && echo OK || ip addr add {{ .controlPlaneEndpoint }} dev lo
   machineTemplate:
     infrastructureRef:
       apiVersion: infrastructure.cluster.x-k8s.io/v1beta1

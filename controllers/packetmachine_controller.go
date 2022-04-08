@@ -316,22 +316,13 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 			ExtraTags:    packet.DefaultCreateTags(machineScope.Namespace(), machineScope.Machine.Name, machineScope.Cluster.Name),
 		}
 
-		// TODO: see if this can be removed with kube-vip in place
-		// when the node is a control plan we should check if the elastic ip
-		// for this cluster is not assigned. If it is free we can prepare the
-		// current node to use it.
+		// when the node is a control plan we need the elastic IP
+		// to template out the kube-vip deployment
 		if machineScope.IsControlPlane() {
 			controlPlaneEndpoint, _ = r.PacketClient.GetIPByClusterIdentifier(
 				machineScope.Cluster.Namespace,
 				machineScope.Cluster.Name,
 				machineScope.PacketCluster.Spec.ProjectID)
-			if len(controlPlaneEndpoint.Assignments) == 0 {
-				a := corev1.NodeAddress{
-					Type:    corev1.NodeExternalIP,
-					Address: controlPlaneEndpoint.Address,
-				}
-				addrs = append(addrs, a)
-			}
 			createDeviceReq.ControlPlaneEndpoint = controlPlaneEndpoint.Address
 		}
 
@@ -362,6 +353,11 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	machineScope.SetProviderID(dev.ID)
 	machineScope.SetInstanceStatus(infrav1.PacketResourceStatus(dev.State))
 
+	if err := r.PacketClient.EnsureNodeBGPEnabled(dev.ID); err != nil {
+		// Do not treat an error enabling bgp on machine as fatal
+		return ctrl.Result{RequeueAfter: time.Second * 20}, fmt.Errorf("failed to enable bpg on machine %s: %w", machineScope.Name(), err)
+	}
+
 	deviceAddr := r.PacketClient.GetDeviceAddresses(dev)
 	machineScope.SetAddresses(append(addrs, deviceAddr...))
 
@@ -376,22 +372,12 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	case infrav1.PacketResourceStatusRunning:
 		log.Info("Machine instance is active", "instance-id", machineScope.GetInstanceID())
 
-		// TODO: see if this can be removed with kube-vip in place
-		// This logic is here because an elastic ip can be assigned only an
-		// active node. It needs to be a control plane and the IP should not be
-		// assigned to anything at this point.
+		// This logic is here because an elastic ip is neede to create
+		// the kube-vip template
 		controlPlaneEndpoint, _ = r.PacketClient.GetIPByClusterIdentifier(
 			machineScope.Cluster.Namespace,
 			machineScope.Cluster.Name,
 			machineScope.PacketCluster.Spec.ProjectID)
-		if len(controlPlaneEndpoint.Assignments) == 0 && machineScope.IsControlPlane() {
-			if _, _, err := r.PacketClient.DeviceIPs.Assign(dev.ID, &packngo.AddressStruct{
-				Address: controlPlaneEndpoint.Address,
-			}); err != nil {
-				log.Error(err, "err assigining elastic ip to control plane. retrying...")
-				return ctrl.Result{RequeueAfter: time.Second * 20}, nil
-			}
-		}
 		machineScope.SetReady()
 		conditions.MarkTrue(machineScope.PacketMachine, infrav1.DeviceReadyCondition)
 

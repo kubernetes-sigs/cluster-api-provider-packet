@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -38,6 +39,9 @@ const (
 	apiTokenVarName = "PACKET_API_KEY" //nolint:gosec
 	clientName      = "CAPP-v1beta1"
 	ipxeOS          = "custom_ipxe"
+	envVarLocalASN  = "METAL_LOCAL_ASN"
+	envVarBGPPass   = "METAL_BGP_PASS"
+	DefaultLocalASN = 65000
 )
 
 var (
@@ -228,6 +232,68 @@ func (p *Client) CreateIP(namespace, clusterName, projectID, facility string) (n
 		return nil, fmt.Errorf("failed to parse IP: %s, %w", r.Address, ErrInvalidIP)
 	}
 	return ip, nil
+}
+
+// enableBGP enable bgp on the project
+func (p *Client) EnableProjectBGP(projectID string) error {
+	// first check if it is enabled before trying to create it
+	bgpConfig, _, err := p.BGPConfig.Get(projectID, &packngo.GetOptions{})
+	// if we already have a config, just return
+	// we need some extra handling logic because the API always returns 200, even if
+	// not BGP config is in place.
+	// We treat it as valid config already exists only if ALL of the above is true:
+	// - no error
+	// - bgpConfig struct exists
+	// - bgpConfig struct has non-blank ID
+	// - bgpConfig struct does not have Status=="disabled"
+	if err == nil && bgpConfig != nil && bgpConfig.ID != "" && strings.ToLower(bgpConfig.Status) != "disabled" {
+		return nil
+	}
+
+	// get the local ASN
+	localASN := os.Getenv(envVarLocalASN)
+	var outLocalASN int
+	switch {
+	case localASN != "":
+		localASNNo, err := strconv.Atoi(localASN)
+		if err != nil {
+			return fmt.Errorf("env var %s must be a number, was %s: %w", envVarLocalASN, localASN, err)
+		}
+		outLocalASN = localASNNo
+	default:
+		outLocalASN = DefaultLocalASN
+	}
+
+	var outBGPPass string
+	bgpPass := os.Getenv(envVarBGPPass)
+	if bgpPass != "" {
+		outBGPPass = bgpPass
+	}
+
+	// we did not have a valid one, so create it
+	req := packngo.CreateBGPConfigRequest{
+		Asn:            outLocalASN,
+		Md5:            outBGPPass,
+		DeploymentType: "local",
+		UseCase:        "kubernetes-load-balancer",
+	}
+	_, err = p.BGPConfig.Create(projectID, req)
+	return err
+}
+
+// ensureNodeBGPEnabled check if the node has bgp enabled, and set it if it does not
+func (p *Client) EnsureNodeBGPEnabled(id string) error {
+	// fortunately, this is idempotent, so just create
+	req := packngo.CreateBGPSessionRequest{
+		AddressFamily: "ipv4",
+	}
+	_, response, err := p.BGPSessions.Create(id, req)
+	// if we already had one, then we can ignore the error
+	// this really should be a 409, but 422 is what is returned
+	if response.StatusCode == 422 && strings.Contains(fmt.Sprintf("%s", err), "already has session") {
+		err = nil
+	}
+	return err
 }
 
 func (p *Client) GetIPByClusterIdentifier(namespace, name, projectID string) (packngo.IPAddressReservation, error) {
