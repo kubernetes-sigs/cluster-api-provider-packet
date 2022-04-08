@@ -30,50 +30,51 @@ spec:
           cloud-provider: external
           provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
     preKubeadmCommands:
-      - sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
-      - swapoff -a
-      - mount -a
       - |
+        sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
+        swapoff -a
+        mount -a
         cat <<EOF > /etc/modules-load.d/containerd.conf
         overlay
         br_netfilter
         EOF
-      - modprobe overlay
-      - modprobe br_netfilter
-      - |
+        modprobe overlay
+        modprobe br_netfilter
         cat <<EOF > /etc/sysctl.d/99-kubernetes-cri.conf
         net.bridge.bridge-nf-call-iptables  = 1
         net.ipv4.ip_forward                 = 1
         net.bridge.bridge-nf-call-ip6tables = 1
         EOF
-      - sysctl --system
-      - |
+        sysctl --system
         apt-get -y update
-        DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
+        DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
         curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
         echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
         apt-get update -y
-        TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\./g' | sed 's/^v//')
-        RESOLVED_KUBERNETES_VERSION=$(apt-cache policy kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$1~ VERSION { print $1 }' | head -n1)
-        apt-get install -y ca-certificates socat jq ebtables apt-transport-https cloud-utils prips containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
-      - systemctl daemon-reload
-      - systemctl enable containerd
-      - systemctl start containerd
-      - |
-        if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
-          KVVERSION="${KUBE_VIP_VERSION:=v0.4.2}"
-          ctr image pull ghcr.io/kube-vip/kube-vip:$${KVVERSION}
-          mkdir -p /etc/kubernetes/manifests/
-          ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$${KVVERSION} vip /kube-vip manifest pod --interface "lo" --vip "{{ .controlPlaneEndpoint }}" --controlplane --bgp --metal --metalKey "{{ .apiKey }}" --metalProjectID  "${PROJECT_ID}" | tee  /etc/kubernetes/manifests/kube-vip.yaml
-        fi
+        TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\\\./g' | sed 's/^v//')
+        RESOLVED_KUBERNETES_VERSION=$(apt-cache madison kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$3~ VERSION { print $3 }' | head -n1)
+        DEBIAN_FRONTEND=noninteractive apt-get install -y containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
+        curl -o /run/metadata.json -fsSL https://metadata.platformequinix.com/metadata
+        for i in $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[]'); do
+          ip route add $i via $(cat /run/metadata.json | jq -r '.network.addresses[] | select(.public == false and .address_family == 4) | .gateway')
+        done
+        KVVERSION="${KUBE_VIP_VERSION:=v0.4.2}"
+        ctr image pull ghcr.io/kube-vip/kube-vip:$${KVVERSION}
+        echo "{{ .controlPlaneEndpoint }}"
+        ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$KVVERSION vip /kube-vip manifest pod \
+        --interface "lo" \
+        --vip "{{ .controlPlaneEndpoint }}" \
+        --controlplane \
+        --services \
+        --bgp \
+        --peerAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_as') \
+        --peerAddress $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[0]') \
+        --localAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_as') \
+        --bgpRouterID $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_ip') >/etc/kubernetes/manifests/vip.yaml
+        rm /run/metadata.json
     postKubeadmCommands:
       - |
-        if [ -f "/run/kubeadm/kubeadm-join-config.yaml" ]; then
-          KVVERSION="${KUBE_VIP_VERSION:=v0.4.2}"
-          ctr image pull ghcr.io/kube-vip/kube-vip:$${KVVERSION}
-          ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$${KVVERSION} vip /kube-vip manifest pod --interface "lo" --vip "{{ .controlPlaneEndpoint }}" --controlplane --bgp --metal --metalKey "{{ .apiKey }}" --metalProjectID "${PROJECT_ID}" | tee  /etc/kubernetes/manifests/kube-vip.yaml
-        fi
-      - |
+        curl -o /run/metadata.json -fsSL https://metadata.platformequinix.com/metadata
         if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
           export KUBECONFIG=/etc/kubernetes/admin.conf
           export CPEM_YAML=https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.4.0/deployment.yaml
@@ -81,6 +82,7 @@ spec:
           kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}" || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}") || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}")
           kubectl apply -f $${CPEM_YAML} || (sleep 1 && kubectl apply -f $${CPEM_YAML}) || (sleep 1 && kubectl apply -f $${CPEM_YAML})
         fi
+        rm /run/metadata.json
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: PacketMachineTemplate
@@ -184,32 +186,27 @@ spec:
             cloud-provider: external
             provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
       preKubeadmCommands:
-        - sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
-        - swapoff -a
-        - mount -a
         - |
+          sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
+          swapoff -a
+          mount -a
           cat <<EOF > /etc/modules-load.d/containerd.conf
           overlay
           br_netfilter
           EOF
-        - modprobe overlay
-        - modprobe br_netfilter
-        - |
+          modprobe overlay
+          modprobe br_netfilter
           cat <<EOF > /etc/sysctl.d/99-kubernetes-cri.conf
           net.bridge.bridge-nf-call-iptables  = 1
           net.ipv4.ip_forward                 = 1
           net.bridge.bridge-nf-call-ip6tables = 1
           EOF
-        - sysctl --system
-        - |
+          sysctl --system
           apt-get -y update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https curl
+          DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
           curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
           echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
           apt-get update -y
           TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\./g' | sed 's/^v//')
           RESOLVED_KUBERNETES_VERSION=$(apt-cache policy kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$1~ VERSION { print $1 }' | head -n1)
-          apt-get install -y ca-certificates socat jq ebtables apt-transport-https cloud-utils prips containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
-        - systemctl daemon-reload
-        - systemctl enable containerd
-        - systemctl start containerd
+          DEBIAN_FRONTEND=noninteractive apt-get install -y containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
