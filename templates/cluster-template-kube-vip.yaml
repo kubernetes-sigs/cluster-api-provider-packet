@@ -1,0 +1,210 @@
+kind: KubeadmControlPlane
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+metadata:
+  name: "${CLUSTER_NAME}-control-plane"
+spec:
+  version: ${KUBERNETES_VERSION}
+  replicas: ${CONTROL_PLANE_MACHINE_COUNT}
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: PacketMachineTemplate
+      name: "${CLUSTER_NAME}-control-plane"
+  kubeadmConfigSpec:
+    clusterConfiguration:
+      apiServer:
+          extraArgs:
+              cloud-provider: external
+      controllerManager:
+          extraArgs:
+              cloud-provider: external
+    initConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          cloud-provider: external
+          provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
+    joinConfiguration:
+      nodeRegistration:
+        ignorePreflightErrors:
+        - DirAvailable--etc-kubernetes-manifests
+        kubeletExtraArgs:
+          cloud-provider: external
+          provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
+    preKubeadmCommands:
+      - |
+        sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
+        swapoff -a
+        mount -a
+        cat <<EOF > /etc/modules-load.d/containerd.conf
+        overlay
+        br_netfilter
+        EOF
+        modprobe overlay
+        modprobe br_netfilter
+        cat <<EOF > /etc/sysctl.d/99-kubernetes-cri.conf
+        net.bridge.bridge-nf-call-iptables  = 1
+        net.ipv4.ip_forward                 = 1
+        net.bridge.bridge-nf-call-ip6tables = 1
+        EOF
+        sysctl --system
+        apt-get -y update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
+        curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+        echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
+        apt-get update -y
+        TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\\\./g' | sed 's/^v//')
+        RESOLVED_KUBERNETES_VERSION=$(apt-cache madison kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$3~ VERSION { print $3 }' | head -n1)
+        DEBIAN_FRONTEND=noninteractive apt-get install -y containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
+        curl -o /run/metadata.json -fsSL https://metadata.platformequinix.com/metadata
+        for i in $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[]'); do
+          ip route add $i via $(cat /run/metadata.json | jq -r '.network.addresses[] | select(.public == false and .address_family == 4) | .gateway')
+        done
+        KVVERSION="${KUBE_VIP_VERSION:=v0.4.2}"
+        ctr image pull ghcr.io/kube-vip/kube-vip:$${KVVERSION}
+        ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$KVVERSION vip /kube-vip manifest pod \
+        --interface "lo" \
+        --vip "{{ .controlPlaneEndpoint }}" \
+        --controlplane \
+        --services \
+        --bgp \
+        --peerAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_as') \
+        --peerAddress $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[0]') \
+        --localAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_as') \
+        --bgpRouterID $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_ip') > /etc/kubernetes/manifests/vip.yaml
+        rm /run/metadata.json
+    postKubeadmCommands:
+      - |
+        if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
+          export KUBECONFIG=/etc/kubernetes/admin.conf
+          export CPEM_YAML=https://raw.githubusercontent.com/detiber/packet-ccm/test/deploy/template/deployment.yaml
+          export SECRET_DATA='cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "loadbalancer": "kube-vip://", "facility": "${FACILITY}"}'''
+          kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}" || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}") || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}")
+          kubectl apply -f $${CPEM_YAML} || (sleep 1 && kubectl apply -f $${CPEM_YAML}) || (sleep 1 && kubectl apply -f $${CPEM_YAML})
+        fi
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: PacketMachineTemplate
+metadata:
+  name: "${CLUSTER_NAME}-control-plane"
+spec:
+  template:
+    spec:
+      os: "${NODE_OS:=ubuntu_18_04}"
+      billingCycle: hourly
+      machineType: "${CONTROLPLANE_NODE_TYPE}"
+      sshKeys:
+        - "${SSH_KEY}"
+      tags: []
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: "${CLUSTER_NAME}"
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+        - ${POD_CIDR:=192.168.0.0/16}
+    services:
+      cidrBlocks:
+        - ${SERVICE_CIDR:=172.26.0.0/16}
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: PacketCluster
+    name: "${CLUSTER_NAME}"
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    kind: KubeadmControlPlane
+    name: "${CLUSTER_NAME}-control-plane"
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: PacketCluster
+metadata:
+  name: "${CLUSTER_NAME}"
+spec:
+  projectID: "${PROJECT_ID}"
+  facility: "${FACILITY}"
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineDeployment
+metadata:
+  name: ${CLUSTER_NAME}-worker-a
+  labels:
+    cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
+    pool: worker-a
+spec:
+  replicas: ${WORKER_MACHINE_COUNT}
+  clusterName: ${CLUSTER_NAME}
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
+      pool: worker-a
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
+        pool: worker-a
+    spec:
+      version: ${KUBERNETES_VERSION}
+      clusterName: ${CLUSTER_NAME}
+      bootstrap:
+        configRef:
+          name: ${CLUSTER_NAME}-worker-a
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          kind: KubeadmConfigTemplate
+      infrastructureRef:
+        name: ${CLUSTER_NAME}-worker-a
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: PacketMachineTemplate
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: PacketMachineTemplate
+metadata:
+  name: ${CLUSTER_NAME}-worker-a
+spec:
+  template:
+    spec:
+      os: "${NODE_OS:=ubuntu_18_04}"
+      billingCycle: hourly
+      machineType: "${WORKER_NODE_TYPE}"
+      sshKeys:
+        - "${SSH_KEY}"
+      tags: []
+---
+kind: KubeadmConfigTemplate
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+metadata:
+  name: "${CLUSTER_NAME}-worker-a"
+spec:
+  template:
+    spec:
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            cloud-provider: external
+            provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
+      preKubeadmCommands:
+        - |
+          sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
+          swapoff -a
+          mount -a
+          cat <<EOF > /etc/modules-load.d/containerd.conf
+          overlay
+          br_netfilter
+          EOF
+          modprobe overlay
+          modprobe br_netfilter
+          cat <<EOF > /etc/sysctl.d/99-kubernetes-cri.conf
+          net.bridge.bridge-nf-call-iptables  = 1
+          net.ipv4.ip_forward                 = 1
+          net.bridge.bridge-nf-call-ip6tables = 1
+          EOF
+          sysctl --system
+          apt-get -y update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
+          curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+          echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
+          apt-get update -y
+          TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\\\./g' | sed 's/^v//')
+          RESOLVED_KUBERNETES_VERSION=$(apt-cache madison kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$3~ VERSION { print $3 }' | head -n1)
+          DEBIAN_FRONTEND=noninteractive apt-get install -y containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
