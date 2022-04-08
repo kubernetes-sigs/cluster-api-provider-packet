@@ -150,7 +150,7 @@ spec:
       if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
         export KUBECONFIG=/etc/kubernetes/admin.conf
         export CPEM_YAML=https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.4.0/deployment.yaml
-        export SECRET_DATA='cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "loadbalancer": "kube-vip://"}'''
+        export SECRET_DATA='cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "loadbalancer": "kube-vip://", "facility": "${FACILITY}"}'''
         kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}" || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}") || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}")
         kubectl apply -f $${CPEM_YAML} || (sleep 1 && kubectl apply -f $${CPEM_YAML}) || (sleep 1 && kubectl apply -f $${CPEM_YAML})
       fi
