@@ -135,7 +135,7 @@ jobs:
         TAG: ${{ steps.meta.outputs.version }}
       run: make release
     - name: Upload artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: test-release
         path: out/release
@@ -191,7 +191,7 @@ jobs:
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi-quickstart.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ always() }}
       with:
         name: e2e-quickstart
@@ -247,7 +247,7 @@ jobs:
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ always() }}
       with:
         name: e2e
@@ -303,7 +303,7 @@ jobs:
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi-conformance.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ always() }}
       with:
         name: e2e-conformance
@@ -359,7 +359,7 @@ jobs:
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi-management-upgrade.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ always() }}
       with:
         name: e2e-management-upgrade
@@ -415,7 +415,7 @@ jobs:
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi-workload-upgrade.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ always() }}
       with:
         name: e2e-workload-upgrade
