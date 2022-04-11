@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"errors"
+	"os"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -137,9 +138,11 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 		}
 	}
 
-	if err := r.PacketClient.EnableProjectBGP(packetCluster.Spec.ProjectID); err != nil {
-		log.Error(err, "error enabling bgp for project")
-		return ctrl.Result{}, err
+	if os.Getenv("EIP_MANAGEMENT") == "KUBE_VIP" {
+		if err := r.PacketClient.EnableProjectBGP(packetCluster.Spec.ProjectID); err != nil {
+			log.Error(err, "error enabling bgp for project")
+			return ctrl.Result{}, err
+		}
 	}
 
 	clusterScope.PacketCluster.Status.Ready = true

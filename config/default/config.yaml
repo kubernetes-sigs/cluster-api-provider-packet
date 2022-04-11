@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: manager-config
+  namespace: system
+data:
+  EIP_MANAGEMENT: "${EIP_MANAGEMENT:=CPEM}"
