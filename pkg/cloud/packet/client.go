@@ -246,7 +246,9 @@ func (p *Client) EnableProjectBGP(projectID string) error {
 	// - bgpConfig struct exists
 	// - bgpConfig struct has non-blank ID
 	// - bgpConfig struct does not have Status=="disabled"
-	if err == nil && bgpConfig != nil && bgpConfig.ID != "" && strings.ToLower(bgpConfig.Status) != "disabled" {
+	if err != nil {
+		return err
+	} else if bgpConfig != nil && bgpConfig.ID != "" && strings.ToLower(bgpConfig.Status) != "disabled" {
 		return nil
 	}
 

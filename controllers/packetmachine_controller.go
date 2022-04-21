@@ -223,7 +223,7 @@ func (r *PacketMachineReconciler) PacketClusterToPacketMachines(ctx context.Cont
 	}
 }
 
-func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *scope.MachineScope) (ctrl.Result, error) {
+func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *scope.MachineScope) (ctrl.Result, error) { //nolint:gocyclo
 	log := ctrl.LoggerFrom(ctx, "machine", machineScope.Machine.Name, "cluster", machineScope.Cluster.Name)
 	log.Info("Reconciling PacketMachine")
 
@@ -317,7 +317,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 			ExtraTags:    packet.DefaultCreateTags(machineScope.Namespace(), machineScope.Machine.Name, machineScope.Cluster.Name),
 		}
 
-		// when the node is a control plan we need the elastic IP
+		// when a node is a control plane node we need the elastic IP
 		// to template out the kube-vip deployment
 		if machineScope.IsControlPlane() {
 			controlPlaneEndpoint, _ = r.PacketClient.GetIPByClusterIdentifier(
