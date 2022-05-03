@@ -223,7 +223,7 @@ func (r *PacketMachineReconciler) PacketClusterToPacketMachines(ctx context.Cont
 	}
 }
 
-func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *scope.MachineScope) (ctrl.Result, error) { //nolint:gocyclo
+func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *scope.MachineScope) (ctrl.Result, error) { //nolint:gocyclo,maintidx
 	log := ctrl.LoggerFrom(ctx, "machine", machineScope.Machine.Name, "cluster", machineScope.Cluster.Name)
 	log.Info("Reconciling PacketMachine")
 
