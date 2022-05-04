@@ -55,7 +55,6 @@ patches:
             --interface "lo" \
             --vip "{{ .controlPlaneEndpoint }}" \
             --controlplane \
-            --services \
             --bgp \
             --peerAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_as') \
             --peerAddress $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[0]') \
