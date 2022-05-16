@@ -114,6 +114,7 @@ metadata:
 spec:
   projectID: "${PROJECT_ID}"
   facility: "${FACILITY}"
+  vipManager: "CPEM"
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineDeployment

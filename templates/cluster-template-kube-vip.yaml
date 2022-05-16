@@ -181,6 +181,7 @@ metadata:
 spec:
   facility: ${FACILITY}
   projectID: ${PROJECT_ID}
+  vipManager: KUBE_VIP
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: PacketMachineTemplate

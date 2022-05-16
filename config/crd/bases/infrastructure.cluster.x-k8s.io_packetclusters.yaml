@@ -68,8 +68,17 @@ spec:
                 description: ProjectID represents the Packet Project where this cluster
                   will be placed into
                 type: string
+              vipManager:
+                default: CPEM
+                description: VIPManager represents whether this cluster uses CPEM
+                  or kube-vip to manage its vip for the api server IP
+                enum:
+                - CPEM
+                - KUBE_VIP
+                type: string
             required:
             - projectID
+            - vipManager
             type: object
           status:
             description: PacketClusterStatus defines the observed state of PacketCluster
@@ -134,8 +143,17 @@ spec:
                 description: ProjectID represents the Packet Project where this cluster
                   will be placed into
                 type: string
+              vipManager:
+                default: CPEM
+                description: VIPManager represents whether this cluster uses CPEM
+                  or kube-vip to manage its vip for the api server IP
+                enum:
+                - CPEM
+                - KUBE_VIP
+                type: string
             required:
             - projectID
+            - vipManager
             type: object
           status:
             description: PacketClusterStatus defines the observed state of PacketCluster

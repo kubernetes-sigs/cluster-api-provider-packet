@@ -12,7 +12,6 @@ commonLabels:
 
 resources:
 - namespace.yaml
-- config.yaml
 - credentials.yaml
 
 bases:

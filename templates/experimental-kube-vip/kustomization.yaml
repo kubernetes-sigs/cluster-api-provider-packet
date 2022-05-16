@@ -13,6 +13,13 @@ patches:
         cni: "${CLUSTER_NAME}-kube-vip"
   target:
     kind: Cluster
+- patch: |-
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: PacketCluster
+    metadata:
+      name: "${CLUSTER_NAME}"
+    spec:
+      vipManager: "KUBE_VIP"
 - patch: |
     kind: KubeadmControlPlane
     apiVersion: controlplane.cluster.x-k8s.io/v1beta1
