@@ -2497,7 +2497,7 @@ spec:
           value: node
         - name: DATASTORE_TYPE
           value: kubernetes
-        image: quay.io/calico/kube-controllers:v3.20.4
+        image: quay.io/calico/kube-controllers:v3.20.5
         livenessProbe:
           exec:
             command:
@@ -2603,7 +2603,7 @@ spec:
         - configMapRef:
             name: kubernetes-services-endpoint
             optional: true
-        image: quay.io/calico/node:v3.20.4
+        image: quay.io/calico/node:v3.20.5
         lifecycle:
           preStop:
             exec:
@@ -2677,7 +2677,7 @@ spec:
         - configMapRef:
             name: kubernetes-services-endpoint
             optional: true
-        image: quay.io/calico/cni:v3.20.4
+        image: quay.io/calico/cni:v3.20.5
         name: upgrade-ipam
         securityContext:
           privileged: true
@@ -2711,7 +2711,7 @@ spec:
         - configMapRef:
             name: kubernetes-services-endpoint
             optional: true
-        image: quay.io/calico/cni:v3.20.4
+        image: quay.io/calico/cni:v3.20.5
         name: install-cni
         securityContext:
           privileged: true
@@ -2720,7 +2720,7 @@ spec:
           name: cni-bin-dir
         - mountPath: /host/etc/cni/net.d
           name: cni-net-dir
-      - image: quay.io/calico/pod2daemon-flexvol:v3.20.4
+      - image: quay.io/calico/pod2daemon-flexvol:v3.20.5
         name: flexvol-driver
         securityContext:
           privileged: true

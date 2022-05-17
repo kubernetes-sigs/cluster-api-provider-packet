@@ -137,6 +137,13 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 		}
 	}
 
+	if clusterScope.PacketCluster.Spec.VIPManager == "KUBE_VIP" {
+		if err := r.PacketClient.EnableProjectBGP(packetCluster.Spec.ProjectID); err != nil {
+			log.Error(err, "error enabling bgp for project")
+			return ctrl.Result{}, err
+		}
+	}
+
 	clusterScope.PacketCluster.Status.Ready = true
 	conditions.MarkTrue(packetCluster, infrav1.NetworkInfrastructureReadyCondition)
 

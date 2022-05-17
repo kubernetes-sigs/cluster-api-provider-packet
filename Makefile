@@ -275,6 +275,7 @@ generate: ## Generate code
 
 .PHONY: generate-templates
 generate-templates: $(KUSTOMIZE) ## Generate cluster templates
+	$(KUSTOMIZE) build templates/experimental-kube-vip --load-restrictor LoadRestrictionsNone > templates/cluster-template-kube-vip.yaml
 	$(KUSTOMIZE) build templates/experimental-crs-cni --load-restrictor LoadRestrictionsNone > templates/cluster-template-crs-cni.yaml
 	$(KUSTOMIZE) build templates/addons/calico > templates/addons/calico.yaml
 
