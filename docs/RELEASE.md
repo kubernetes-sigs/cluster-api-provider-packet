@@ -10,7 +10,7 @@ This is normally performed by our CI system. However, there are important steps 
 
 In order to cut a release, you must:
 
-1. If this is a new major or minor version - but **not** just a patch change - update [metadata.yaml](./metadata.yaml) to add it, and map it to the correct cluster-api contract version
+1. If this is a new major or minor version - but **not** just a patch change - update [metadata.yaml](../metadata.yaml) to add it, and map it to the correct cluster-api contract version
 1. Commit the changes.
 1. Push out your branch, open a PR and merge the changes
 1. Wait for the Continuous Integration github action to finish running
