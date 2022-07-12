@@ -65,13 +65,12 @@ func main() {
 func cleanup(metalAuthToken, metalProjectID string) error {
 	metalClient := packngo.NewClientWithAuth("capp-e2e", metalAuthToken, nil)
 	listOpts := &packngo.ListOptions{}
+	var errs []error
 
 	devices, _, err := metalClient.Devices.List(metalProjectID, listOpts)
 	if err != nil {
 		return fmt.Errorf("failed to list devices: %w", err)
 	}
-
-	var errs []error
 
 	if err := deleteDevices(metalClient, devices); err != nil {
 		errs = append(errs, err)
@@ -83,6 +82,15 @@ func cleanup(metalAuthToken, metalProjectID string) error {
 	}
 
 	if err := deleteIPs(metalClient, ips); err != nil {
+		errs = append(errs, err)
+	}
+
+	keys, _, err := metalClient.Projects.ListSSHKeys(metalProjectID, listOpts)
+	if err != nil {
+		return fmt.Errorf("failed to list ssh keys: %w", err)
+	}
+
+	if err := deleteKeys(metalClient, keys); err != nil {
 		errs = append(errs, err)
 	}
 
@@ -131,6 +139,27 @@ func deleteIPs(metalClient *packngo.Client, ips []packngo.IPAddressReservation) 
 
 					break
 				}
+			}
+		}
+	}
+
+	return kerrors.NewAggregate(errs)
+}
+
+func deleteKeys(metalClient *packngo.Client, keys []packngo.SSHKey) error {
+	var errs []error
+
+	for _, k := range keys {
+		created, err := time.Parse(time.RFC3339, k.Created)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to parse creation time for SSH Key %q: %w", k.Label, err))
+			continue
+		}
+		if time.Since(created) > 4*time.Hour {
+			fmt.Printf("Deleting SSH Key: %s\n", k.Label)
+			_, err := metalClient.SSHKeys.Delete(k.ID)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to delete SSH Key %q: %w", k.Label, err))
 			}
 		}
 	}
