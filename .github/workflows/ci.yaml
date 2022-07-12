@@ -25,6 +25,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
     - uses: ./.github/actions/setup-go
     - uses: actions/cache@v3
       with:
