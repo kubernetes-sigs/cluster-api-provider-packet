@@ -47,3 +47,6 @@ dist
 # E2E test templates
 test/e2e/data/v1alpha3/cluster-template*.yaml
 test/e2e/data/v1beta1/cluster-template*.yaml
+
+#VS Code
+.vscode/
