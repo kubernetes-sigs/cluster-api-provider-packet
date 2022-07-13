@@ -303,6 +303,7 @@ func (p *Client) GetIPByClusterIdentifier(namespace, name, projectID string) (pa
 	var reservedIP packngo.IPAddressReservation
 
 	listOpts := &packngo.ListOptions{}
+	listOpts = listOpts.Including("assignments", "assignments.assigned_to")
 	reservedIPs, _, err := p.ProjectIPs.List(projectID, listOpts)
 	if err != nil {
 		return reservedIP, err
