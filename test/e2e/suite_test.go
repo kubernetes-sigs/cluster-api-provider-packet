@@ -1,3 +1,4 @@
+//go:build e2e
 // +build e2e
 
 /*
@@ -178,6 +179,8 @@ var _ = SynchronizedAfterSuite(func() {
 		if metalAuthToken != "" && sshKeyID != "" {
 			By("Cleaning up the generated SSH Key")
 			metalClient := packngo.NewClientWithAuth("capp-e2e", metalAuthToken, nil)
+			metalClient.UserAgent = fmt.Sprintf("capp-e2e/%s %s", version.Version, metalClient.UserAgent)
+
 			_, err := metalClient.SSHKeys.Delete(sshKeyID)
 			Expect(err).NotTo(HaveOccurred())
 		}
@@ -286,6 +289,8 @@ func generateSSHKey() (string, string) {
 	Expect(err).NotTo(HaveOccurred())
 
 	metalClient := packngo.NewClientWithAuth("capp-e2e", metalAuthToken, nil)
+	metalClient.UserAgent = fmt.Sprintf("capp-e2e/%s %s", version.Version, metalClient.UserAgent)
+
 	res, _, err := metalClient.SSHKeys.Create(
 		&packngo.SSHKeyCreateRequest{
 			Label: fmt.Sprintf("capp-e2e-%s", util.RandomString(6)),

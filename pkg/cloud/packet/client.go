@@ -33,11 +33,13 @@ import (
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
+	"sigs.k8s.io/cluster-api-provider-packet/version"
 )
 
 const (
 	apiTokenVarName = "PACKET_API_KEY" //nolint:gosec
-	clientName      = "CAPP-v1beta1"
+	clientName      = "CAPP-v1"
+	clientUAFormat  = "cluster-api-provider-packet/%s %s"
 	ipxeOS          = "custom_ipxe"
 	envVarLocalASN  = "METAL_LOCAL_ASN"
 	envVarBGPPass   = "METAL_BGP_PASS" //nolint:gosec
@@ -61,7 +63,10 @@ func NewClient(packetAPIKey string) *Client {
 	token := strings.TrimSpace(packetAPIKey)
 
 	if token != "" {
-		return &Client{packngo.NewClientWithAuth(clientName, token, nil)}
+		metalClient := &Client{packngo.NewClientWithAuth(clientName, token, nil)}
+		metalClient.UserAgent = fmt.Sprintf(clientUAFormat, version.Get(), metalClient.UserAgent)
+
+		return metalClient
 	}
 
 	return nil
@@ -134,7 +139,7 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packn
 	userData = stringWriter.String()
 
 	// Allow to override the facility for each PacketMachineTemplate
-	var facility = req.MachineScope.PacketCluster.Spec.Facility
+	facility := req.MachineScope.PacketCluster.Spec.Facility
 	if req.MachineScope.PacketMachine.Spec.Facility != "" {
 		facility = req.MachineScope.PacketMachine.Spec.Facility
 	}

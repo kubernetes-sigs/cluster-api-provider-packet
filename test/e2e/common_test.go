@@ -1,3 +1,4 @@
+//go:build e2e
 // +build e2e
 
 /*
@@ -208,7 +209,8 @@ func (w *wrappedClusterProxy) Dispose(ctx context.Context) {
 	metalAuthToken := os.Getenv(AuthTokenEnvVar)
 	metalProjectID := os.Getenv(ProjectIDEnvVar)
 	if metalAuthToken != "" && metalProjectID != "" {
-		metal := packet.NewClient(metalAuthToken)
+		metal := packet.NewClientWithAuth(clientName, metalAuthToken)
+		metal.UserAgent = fmt.Sprintf("capp-e2e/%s %s", version.Version, metalClient.UserAgent)
 
 		Eventually(func(g Gomega) {
 			clusterNames := w.clusterNames.UnsortedList()
