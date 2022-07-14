@@ -209,7 +209,7 @@ def get_regexs():
     regexs["date"] = re.compile(get_dates())
     # strip the following build constraints/tags:
     # //go:build
-    # // +build \n\n
+    # //go:build \n\n
     regexs["go_build_constraints"] = re.compile(
         r"^(//(go:build| \+build).*\n)+\n", re.MULTILINE)
     # strip #!.* from scripts
