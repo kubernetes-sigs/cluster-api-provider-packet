@@ -1,4 +1,4 @@
-//go:build e2e
+// +build e2e
 
 /*
 Copyright 2020 The Kubernetes Authors.
@@ -208,8 +208,7 @@ func (w *wrappedClusterProxy) Dispose(ctx context.Context) {
 	metalAuthToken := os.Getenv(AuthTokenEnvVar)
 	metalProjectID := os.Getenv(ProjectIDEnvVar)
 	if metalAuthToken != "" && metalProjectID != "" {
-		metal := packet.NewClientWithAuth(clientName, metalAuthToken)
-		metal.UserAgent = fmt.Sprintf("capp-e2e/%s %s", version.Version, metalClient.UserAgent)
+		metal := packet.NewClient(metalAuthToken)
 
 		Eventually(func(g Gomega) {
 			clusterNames := w.clusterNames.UnsortedList()
