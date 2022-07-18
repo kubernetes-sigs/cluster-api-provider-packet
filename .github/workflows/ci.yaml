@@ -187,9 +187,9 @@ jobs:
         E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
         SKIP_IMAGE_BUILD: "1"
         MANIFEST_PATH: "../../../out/release"
-        FACILITY: ny7
-        CONTROLPLANE_NODE_TYPE: c3.small.x86
-        WORKER_NODE_TYPE: c3.small.x86
+        FACILITY: da6
+        CONTROLPLANE_NODE_TYPE: t3.small.x86
+        WORKER_NODE_TYPE: t3.small.x86
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi-quickstart.sh
     - name: Upload artifact
@@ -243,9 +243,9 @@ jobs:
         E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
         SKIP_IMAGE_BUILD: "1"
         MANIFEST_PATH: "../../../out/release"
-        FACILITY: am6
-        CONTROLPLANE_NODE_TYPE: c3.small.x86
-        WORKER_NODE_TYPE: c3.small.x86
+        FACILITY: da6
+        CONTROLPLANE_NODE_TYPE: t3.small.x86
+        WORKER_NODE_TYPE: t3.small.x86
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi.sh
     - name: Upload artifact
@@ -299,9 +299,9 @@ jobs:
         E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
         SKIP_IMAGE_BUILD: "1"
         MANIFEST_PATH: "../../../out/release"
-        FACILITY: da11
-        CONTROLPLANE_NODE_TYPE: c3.small.x86
-        WORKER_NODE_TYPE: c3.small.x86
+        FACILITY: da6
+        CONTROLPLANE_NODE_TYPE: t3.small.x86
+        WORKER_NODE_TYPE: t3.small.x86
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi-conformance.sh
     - name: Upload artifact
@@ -355,9 +355,9 @@ jobs:
         E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
         SKIP_IMAGE_BUILD: "1"
         MANIFEST_PATH: "../../../out/release"
-        FACILITY: dc13
-        CONTROLPLANE_NODE_TYPE: c3.small.x86
-        WORKER_NODE_TYPE: c3.small.x86
+        FACILITY: da6
+        CONTROLPLANE_NODE_TYPE: t3.small.x86
+        WORKER_NODE_TYPE: t3.small.x86
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi-management-upgrade.sh
     - name: Upload artifact
@@ -411,9 +411,9 @@ jobs:
         E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
         SKIP_IMAGE_BUILD: "1"
         MANIFEST_PATH: "../../../out/release"
-        FACILITY: dc13
-        CONTROLPLANE_NODE_TYPE: c3.small.x86
-        WORKER_NODE_TYPE: c3.small.x86
+        FACILITY: da6
+        CONTROLPLANE_NODE_TYPE: t3.small.x86
+        WORKER_NODE_TYPE: t3.small.x86
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi-workload-upgrade.sh
     - name: Upload artifact
