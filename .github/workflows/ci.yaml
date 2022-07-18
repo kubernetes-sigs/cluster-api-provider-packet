@@ -188,8 +188,8 @@ jobs:
         SKIP_IMAGE_BUILD: "1"
         MANIFEST_PATH: "../../../out/release"
         FACILITY: da6
-        CONTROLPLANE_NODE_TYPE: t3.small.x86
-        WORKER_NODE_TYPE: t3.small.x86
+        CONTROLPLANE_NODE_TYPE: c3.medium.x86
+        WORKER_NODE_TYPE: c3.medium.x86
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi-quickstart.sh
     - name: Upload artifact
@@ -244,8 +244,8 @@ jobs:
         SKIP_IMAGE_BUILD: "1"
         MANIFEST_PATH: "../../../out/release"
         FACILITY: da6
-        CONTROLPLANE_NODE_TYPE: t3.small.x86
-        WORKER_NODE_TYPE: t3.small.x86
+        CONTROLPLANE_NODE_TYPE: c3.medium.x86
+        WORKER_NODE_TYPE: c3.medium.x86
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi.sh
     - name: Upload artifact
@@ -300,8 +300,8 @@ jobs:
         SKIP_IMAGE_BUILD: "1"
         MANIFEST_PATH: "../../../out/release"
         FACILITY: da6
-        CONTROLPLANE_NODE_TYPE: t3.small.x86
-        WORKER_NODE_TYPE: t3.small.x86
+        CONTROLPLANE_NODE_TYPE: c3.medium.x86
+        WORKER_NODE_TYPE: c3.medium.x86
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi-conformance.sh
     - name: Upload artifact
@@ -356,8 +356,8 @@ jobs:
         SKIP_IMAGE_BUILD: "1"
         MANIFEST_PATH: "../../../out/release"
         FACILITY: da6
-        CONTROLPLANE_NODE_TYPE: t3.small.x86
-        WORKER_NODE_TYPE: t3.small.x86
+        CONTROLPLANE_NODE_TYPE: c3.medium.x86
+        WORKER_NODE_TYPE: c3.medium.x86
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi-management-upgrade.sh
     - name: Upload artifact
@@ -412,8 +412,8 @@ jobs:
         SKIP_IMAGE_BUILD: "1"
         MANIFEST_PATH: "../../../out/release"
         FACILITY: da6
-        CONTROLPLANE_NODE_TYPE: t3.small.x86
-        WORKER_NODE_TYPE: t3.small.x86
+        CONTROLPLANE_NODE_TYPE: c3.medium.x86
+        WORKER_NODE_TYPE: c3.medium.x86
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi-workload-upgrade.sh
     - name: Upload artifact
