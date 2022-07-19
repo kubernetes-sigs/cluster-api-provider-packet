@@ -27,6 +27,7 @@ import (
 	"github.com/packethost/packngo"
 	"github.com/spf13/cobra"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
+
 	"sigs.k8s.io/cluster-api-provider-packet/version"
 )
 
