@@ -31,8 +31,8 @@ providers:
         new: --metrics-addr=:8080
     files:
     - sourcePath: "../data/shared/v1beta1/metadata.yaml"
-  - name: v1.1.2 # latest published release in the v1beta1 series
-    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.1.2/core-components.yaml"
+  - name: v1.1.3 # latest published release in the v1beta1 series
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.1.3/core-components.yaml"
     type: "url"
     contract: v1beta1
     replacements:
@@ -62,8 +62,8 @@ providers:
         new: --metrics-addr=:8080
     files:
     - sourcePath: "../data/shared/v1beta1/metadata.yaml"
-  - name: v1.1.2 # latest published release in the v1beta1 series
-    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.1.2/bootstrap-components.yaml"
+  - name: v1.1.3 # latest published release in the v1beta1 series
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.1.3/bootstrap-components.yaml"
     type: "url"
     contract: v1beta1
     replacements:
@@ -93,8 +93,8 @@ providers:
         new: --metrics-addr=:8080
     files:
     - sourcePath: "../data/shared/v1beta1/metadata.yaml"
-  - name: v1.1.2 # latest published release in the v1beta1 series; this is used for v1beta1 --> main clusterctl upgrades test only.
-    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.1.2/control-plane-components.yaml"
+  - name: v1.1.3 # latest published release in the v1beta1 series; this is used for v1beta1 --> main clusterctl upgrades test only.
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.1.3/control-plane-components.yaml"
     type: "url"
     contract: v1beta1
     replacements:
@@ -106,7 +106,7 @@ providers:
 - name: packet
   type: InfrastructureProvider
   versions:
-  - name: v0.3.11
+  - name: v0.3.11 #latest in the v1alpha1 series
     value: "https://github.com/kubernetes-sigs/cluster-api-provider-packet/releases/download/v0.3.11/infrastructure-components.yaml"
     type: "url"
     contract: v1alpha3
@@ -114,7 +114,20 @@ providers:
       # Add cluster templates
       - sourcePath: "../data/v1alpha3/cluster-template-packet-ccm.yaml"
       - sourcePath: "../data/v1alpha3/cluster-template-cpem.yaml"
-  - name: v0.5.0
+  - name: v0.5.0 #latest in the v1beta1 series
+    value: "../../../config/default"
+    replacements:
+    - old: "image: .*/cluster-api-provider-packet:.*"
+      new: "image: ${REGISTRY:=ghcr.io}/${IMAGE_NAME:=kubernetes-sigs/cluster-api-provider-packet}:${TAG:=e2e}"
+    contract: v1beta1
+    files:
+    - sourcePath: "../../../metadata.yaml"
+    - sourcePath: "../data/v1beta1/cluster-template.yaml"
+    - sourcePath: "../data/v1beta1/cluster-template-kcp-scale-in.yaml"
+    - sourcePath: "../data/v1beta1/cluster-template-node-drain.yaml"
+    - sourcePath: "../data/v1beta1/cluster-template-md-remediation.yaml"
+    - sourcePath: "../data/v1beta1/cluster-template-kcp-remediation.yaml"
+  - name: v1.1.99 # next; use manifest from source files
     value: "../../../config/default"
     replacements:
     - old: "image: .*/cluster-api-provider-packet:.*"
