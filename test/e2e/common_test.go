@@ -210,8 +210,9 @@ func (w *wrappedClusterProxy) Dispose(ctx context.Context) {
 	metalAuthToken := os.Getenv(AuthTokenEnvVar)
 	metalProjectID := os.Getenv(ProjectIDEnvVar)
 	if metalAuthToken != "" && metalProjectID != "" {
-		metal := packet.NewClientWithAuth(clientName, metalAuthToken)
-		metal.UserAgent = fmt.Sprintf("capp-e2e/%s %s", version.Version, metalClient.UserAgent)
+		metalClient := packet.NewClient(metalAuthToken)
+		metalClient.UserAgent = fmt.Sprintf("capp-e2e/%s %s", version.Get(), metalClient.UserAgent)
+		metalClient.ConsumerToken = "capp-e2e"
 
 		Eventually(func(g Gomega) {
 			clusterNames := w.clusterNames.UnsortedList()
@@ -222,7 +223,7 @@ func (w *wrappedClusterProxy) Dispose(ctx context.Context) {
 
 				g.Eventually(func(g Gomega) {
 					var err error
-					ip, err = metal.GetIPByClusterIdentifier("", clusterName, metalProjectID)
+					ip, err = metalClient.GetIPByClusterIdentifier("", clusterName, metalProjectID)
 					g.Expect(err).To(SatisfyAny(Not(HaveOccurred()), MatchError(packet.ErrControlPlanEndpointNotFound)))
 				}, "5m", "10s").Should(Succeed())
 
@@ -231,7 +232,7 @@ func (w *wrappedClusterProxy) Dispose(ctx context.Context) {
 						logf("Deleting EIP with ID: %s, for cluster: %s", ip.ID, clusterName)
 
 						g.Eventually(func(g Gomega) {
-							_, err := metal.ProjectIPs.Remove(ip.ID)
+							_, err := metalClient.ProjectIPs.Remove(ip.ID)
 							Expect(err).NotTo(HaveOccurred())
 						}, "5m", "10s").Should(Succeed())
 
