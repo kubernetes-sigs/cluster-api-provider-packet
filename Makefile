@@ -148,6 +148,7 @@ E2E_DIR ?= $(REPO_ROOT)/test/e2e
 KUBETEST_CONF_PATH ?= $(abspath $(E2E_DIR)/data/kubetest/conformance.yaml)
 E2E_CONF_FILE_SOURCE ?= $(E2E_DIR)/config/packet-ci.yaml
 E2E_CONF_FILE ?= $(E2E_DIR)/config/packet-ci-envsubst.yaml
+E2E_LD_FLAGS ?= "-X 'sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet.clientName=capp-e2e' -X 'sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet.clientUAFormat=capp-e2e/%s %s'"
 
 .PHONY: $(E2E_CONF_FILE)
 $(E2E_CONF_FILE): $(ENVSUBST) $(E2E_CONF_FILE_SOURCE)
@@ -159,6 +160,7 @@ run-e2e-tests: $(KUBECTL) $(KUSTOMIZE) $(KIND) $(GINKGO) $(E2E_CONF_FILE) e2e-te
 	$(MAKE) set-manifest-image MANIFEST_IMG=$(REGISTRY)/$(IMAGE_NAME) MANIFEST_TAG=$(TAG)
 	$(MAKE) set-manifest-pull-policy PULL_POLICY=IfNotPresent
 	cd test/e2e; time $(GINKGO) -v -trace -progress -v -tags=e2e \
+		-ldflags $(E2E_LD_FLAGS) \
 		--randomizeAllSpecs -race $(GINKGO_ADDITIONAL_ARGS) \
 		-focus=$(GINKGO_FOCUS) -skip=$(GINKGO_SKIP) \
 		-nodes=$(GINKGO_NODES) --noColor=$(GINKGO_NOCOLOR) \
