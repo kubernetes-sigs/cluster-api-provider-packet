@@ -38,8 +38,6 @@ import (
 
 const (
 	apiTokenVarName = "PACKET_API_KEY" //nolint:gosec
-	clientName      = "CAPP-v1beta1"
-	clientUAFormat  = "cluster-api-provider-packet/%s %s"
 	ipxeOS          = "custom_ipxe"
 	envVarLocalASN  = "METAL_LOCAL_ASN"
 	envVarBGPPass   = "METAL_BGP_PASS" //nolint:gosec
@@ -47,6 +45,8 @@ const (
 )
 
 var (
+	clientName                     = "CAPP-v1beta1"
+	clientUAFormat                 = "cluster-api-provider-packet/%s %s"
 	ErrControlPlanEndpointNotFound = errors.New("control plane not found")
 	ErrElasticIPQuotaExceeded      = errors.New("could not create an Elastic IP due to quota limits on the account, please contact Equinix Metal support")
 	ErrInvalidIP                   = errors.New("invalid IP")
@@ -241,6 +241,9 @@ func (p *Client) CreateIP(namespace, clusterName, projectID, facility string) (n
 
 // enableBGP enable bgp on the project
 func (p *Client) EnableProjectBGP(projectID string) error {
+	fmt.Println("DEBUG USER AGENT", p.UserAgent)
+	fmt.Println("DEBUG CONSUMER TOKEN", p.ConsumerToken)
+
 	// first check if it is enabled before trying to create it
 	bgpConfig, _, err := p.BGPConfig.Get(projectID, &packngo.GetOptions{})
 	// if we already have a config, just return
