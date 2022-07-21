@@ -241,9 +241,6 @@ func (p *Client) CreateIP(namespace, clusterName, projectID, facility string) (n
 
 // enableBGP enable bgp on the project
 func (p *Client) EnableProjectBGP(projectID string) error {
-	fmt.Println("DEBUG USER AGENT", p.UserAgent)
-	fmt.Println("DEBUG CONSUMER TOKEN", p.ConsumerToken)
-
 	// first check if it is enabled before trying to create it
 	bgpConfig, _, err := p.BGPConfig.Get(projectID, &packngo.GetOptions{})
 	// if we already have a config, just return
