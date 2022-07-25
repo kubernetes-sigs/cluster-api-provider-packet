@@ -37,6 +37,8 @@ import (
 )
 
 const (
+	clientName      = "CAPP-v1beta1"
+	clientUAFormat  = "cluster-api-provider-packet/%s %s"
 	apiTokenVarName = "PACKET_API_KEY" //nolint:gosec
 	ipxeOS          = "custom_ipxe"
 	envVarLocalASN  = "METAL_LOCAL_ASN"
@@ -45,8 +47,6 @@ const (
 )
 
 var (
-	clientName                     = "CAPP-v1beta1"
-	clientUAFormat                 = "cluster-api-provider-packet/%s %s"
 	ErrControlPlanEndpointNotFound = errors.New("control plane not found")
 	ErrElasticIPQuotaExceeded      = errors.New("could not create an Elastic IP due to quota limits on the account, please contact Equinix Metal support")
 	ErrInvalidIP                   = errors.New("invalid IP")
