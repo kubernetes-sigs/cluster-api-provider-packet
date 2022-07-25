@@ -44,7 +44,7 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 
 	"sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
-	"sigs.k8s.io/cluster-api-provider-packet/version"
+	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 )
 
 const (
@@ -179,8 +179,7 @@ var _ = SynchronizedAfterSuite(func() {
 		metalAuthToken := os.Getenv(AuthTokenEnvVar)
 		if metalAuthToken != "" && sshKeyID != "" {
 			By("Cleaning up the generated SSH Key")
-			metalClient := packngo.NewClientWithAuth("capp-e2e", metalAuthToken, nil)
-			metalClient.UserAgent = fmt.Sprintf("capp-e2e/%s %s", version.Get(), metalClient.UserAgent)
+			metalClient := packet.NewClient(metalAuthToken)
 			_, err := metalClient.SSHKeys.Delete(sshKeyID)
 			Expect(err).NotTo(HaveOccurred())
 		}
@@ -288,8 +287,7 @@ func generateSSHKey() (string, string) {
 	pub, err := ssh.NewPublicKey(&privateKey.PublicKey)
 	Expect(err).NotTo(HaveOccurred())
 
-	metalClient := packngo.NewClientWithAuth("capp-e2e", metalAuthToken, nil)
-	metalClient.UserAgent = fmt.Sprintf("capp-e2e/%s %s", version.Get(), metalClient.UserAgent)
+	metalClient := packet.NewClient(metalAuthToken)
 	res, _, err := metalClient.SSHKeys.Create(
 		&packngo.SSHKeyCreateRequest{
 			Label: fmt.Sprintf("capp-e2e-%s", util.RandomString(6)),

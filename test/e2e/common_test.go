@@ -41,7 +41,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
-	"sigs.k8s.io/cluster-api-provider-packet/version"
 	clusterv1old "sigs.k8s.io/cluster-api/api/v1alpha3"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/test/framework"
@@ -211,8 +210,6 @@ func (w *wrappedClusterProxy) Dispose(ctx context.Context) {
 	metalProjectID := os.Getenv(ProjectIDEnvVar)
 	if metalAuthToken != "" && metalProjectID != "" {
 		metalClient := packet.NewClient(metalAuthToken)
-		metalClient.UserAgent = fmt.Sprintf("capp-e2e/%s %s", version.Get(), metalClient.UserAgent)
-		metalClient.ConsumerToken = "capp-e2e"
 
 		Eventually(func(g Gomega) {
 			clusterNames := w.clusterNames.UnsortedList()
