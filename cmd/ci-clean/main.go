@@ -27,8 +27,7 @@ import (
 	"github.com/packethost/packngo"
 	"github.com/spf13/cobra"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
-
-	"sigs.k8s.io/cluster-api-provider-packet/version"
+	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 )
 
 const (
@@ -65,8 +64,7 @@ func main() {
 }
 
 func cleanup(metalAuthToken, metalProjectID string) error {
-	metalClient := packngo.NewClientWithAuth("capp-e2e", metalAuthToken, nil)
-	metalClient.UserAgent = fmt.Sprintf("capp-e2e/%s %s", version.Get(), metalClient.UserAgent)
+	metalClient := packet.NewClient(metalAuthToken)
 	listOpts := &packngo.ListOptions{}
 	var errs []error
 
