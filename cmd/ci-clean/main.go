@@ -28,7 +28,7 @@ import (
 	"github.com/spf13/cobra"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 
-	"sigs.k8s.io/cluster-api-provider-packet/version"
+	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 )
 
 const (
@@ -65,8 +65,7 @@ func main() {
 }
 
 func cleanup(metalAuthToken, metalProjectID string) error {
-	metalClient := packngo.NewClientWithAuth("capp-e2e", metalAuthToken, nil)
-	metalClient.UserAgent = fmt.Sprintf("capp-e2e/%s %s", version.Get(), metalClient.UserAgent)
+	metalClient := packet.NewClient(metalAuthToken)
 	listOpts := &packngo.ListOptions{}
 	var errs []error
 
@@ -100,7 +99,7 @@ func cleanup(metalAuthToken, metalProjectID string) error {
 	return kerrors.NewAggregate(errs)
 }
 
-func deleteDevices(metalClient *packngo.Client, devices []packngo.Device) error {
+func deleteDevices(metalClient *packet.Client, devices []packngo.Device) error {
 	var errs []error
 
 	for _, d := range devices {
@@ -121,7 +120,7 @@ func deleteDevices(metalClient *packngo.Client, devices []packngo.Device) error 
 	return kerrors.NewAggregate(errs)
 }
 
-func deleteIPs(metalClient *packngo.Client, ips []packngo.IPAddressReservation) error {
+func deleteIPs(metalClient *packet.Client, ips []packngo.IPAddressReservation) error {
 	var errs []error
 
 	for _, ip := range ips {
@@ -149,7 +148,7 @@ func deleteIPs(metalClient *packngo.Client, ips []packngo.IPAddressReservation) 
 	return kerrors.NewAggregate(errs)
 }
 
-func deleteKeys(metalClient *packngo.Client, keys []packngo.SSHKey) error {
+func deleteKeys(metalClient *packet.Client, keys []packngo.SSHKey) error {
 	var errs []error
 
 	for _, k := range keys {

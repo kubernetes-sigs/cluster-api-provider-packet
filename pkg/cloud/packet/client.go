@@ -81,7 +81,7 @@ func GetClient() (*Client, error) {
 }
 
 func (p *Client) GetDevice(deviceID string) (*packngo.Device, error) {
-	dev, _, err := p.Client.Devices.Get(deviceID, nil)
+	dev, _, err := p.Devices.Get(deviceID, nil)
 	return dev, err
 }
 
@@ -121,7 +121,7 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packn
 
 	if req.MachineScope.IsControlPlane() {
 		// control plane machines should get the API key injected
-		userDataValues["apiKey"] = p.Client.APIKey
+		userDataValues["apiKey"] = p.APIKey
 
 		if req.ControlPlaneEndpoint != "" {
 			userDataValues["controlPlaneEndpoint"] = req.ControlPlaneEndpoint
@@ -160,7 +160,7 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packn
 
 	// If there are no reservationIDs to process, go ahead and return early
 	if len(reservationIDs) == 0 {
-		dev, _, err := p.Client.Devices.Create(serverCreateOpts)
+		dev, _, err := p.Devices.Create(serverCreateOpts)
 		return dev, err
 	}
 
@@ -171,7 +171,7 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packn
 
 	for _, resID := range reservationIDs {
 		serverCreateOpts.HardwareReservationID = resID
-		dev, _, err := p.Client.Devices.Create(serverCreateOpts)
+		dev, _, err := p.Devices.Create(serverCreateOpts)
 		if err != nil {
 			lastErr = err
 			continue
