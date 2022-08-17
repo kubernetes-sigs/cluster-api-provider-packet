@@ -56,7 +56,7 @@ patches:
             for i in $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[]'); do
               ip route add $i via $(cat /run/metadata.json | jq -r '.network.addresses[] | select(.public == false and .address_family == 4) | .gateway')
             done
-            KVVERSION="${KUBE_VIP_VERSION:=v0.4.2}"
+            KVVERSION="${KUBE_VIP_VERSION:=v0.5.0}"
             ctr image pull ghcr.io/kube-vip/kube-vip:$${KVVERSION}
             ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$KVVERSION vip /kube-vip manifest pod \
             --interface "lo" \
