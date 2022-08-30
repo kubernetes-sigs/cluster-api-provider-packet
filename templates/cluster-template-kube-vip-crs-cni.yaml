@@ -59,7 +59,7 @@ apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
   labels:
-    cni: ${CLUSTER_NAME}-kube-vip
+    cni: ${CLUSTER_NAME}-crs-cni
   name: ${CLUSTER_NAME}
 spec:
   clusterNetwork:
