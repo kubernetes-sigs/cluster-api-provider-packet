@@ -1,3 +1,4 @@
+//go:build e2e
 // +build e2e
 
 /*
@@ -22,13 +23,14 @@ import (
 	"context"
 
 	. "github.com/onsi/ginkgo"
+	"k8s.io/utils/pointer"
 	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
 )
 
 var _ = Describe("[QuickStart] Running the Cluster API E2E QuickStart tests", func() {
 	ctx := context.TODO()
 
-	Context("Running the quickstart spec", func() {
+	Context("Running the [CPEM] quickstart spec", func() {
 		capi_e2e.QuickStartSpec(ctx, func() capi_e2e.QuickStartSpecInput {
 			return capi_e2e.QuickStartSpecInput{
 				E2EConfig:             e2eConfig,
@@ -36,6 +38,20 @@ var _ = Describe("[QuickStart] Running the Cluster API E2E QuickStart tests", fu
 				BootstrapClusterProxy: bootstrapClusterProxy,
 				ArtifactFolder:        artifactFolder,
 				SkipCleanup:           skipCleanup,
+				//Flavor:                pointer.String("kube-vip"),
+			}
+		})
+	})
+
+	Context("Running the [kube-vip] quickstart spec", func() {
+		capi_e2e.QuickStartSpec(ctx, func() capi_e2e.QuickStartSpecInput {
+			return capi_e2e.QuickStartSpecInput{
+				E2EConfig:             e2eConfig,
+				ClusterctlConfigPath:  clusterctlConfigPath,
+				BootstrapClusterProxy: bootstrapClusterProxy,
+				ArtifactFolder:        artifactFolder,
+				SkipCleanup:           skipCleanup,
+				Flavor:                pointer.String("kube-vip"),
 			}
 		})
 	})
