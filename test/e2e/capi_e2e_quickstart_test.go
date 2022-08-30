@@ -38,7 +38,6 @@ var _ = Describe("[QuickStart] Running the Cluster API E2E QuickStart tests", fu
 				BootstrapClusterProxy: bootstrapClusterProxy,
 				ArtifactFolder:        artifactFolder,
 				SkipCleanup:           skipCleanup,
-				//Flavor:                pointer.String("kube-vip"),
 			}
 		})
 	})
