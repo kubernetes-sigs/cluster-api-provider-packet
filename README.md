@@ -86,9 +86,26 @@ You can follow the [Cluster API Quick Start Guide](https://cluster-api.sigs.k8s.
 
 If you do not change the generated `yaml` files, it will use defaults. You can look in the [templates/cluster-template.yaml](./templates/cluster-template.yaml) file for details.
 
-* SERVICE_CIDR: `172.26.0.0/16`
-* POD_CIDR: `192.168.0.0/16`
-* NODE_OS: `ubuntu_18_04`
+* CLUSTER_NAME                 (defaults to my-cluster)
+* CONTROL_PLANE_MACHINE_COUNT  (defaults to 1)
+* KUBE_VIP_VERSION             (defaults to "v0.4.2")
+* NODE_OS                      (defaults to "ubuntu_18_04")
+* POD_CIDR                     (defaults to "192.168.0.0/16")
+* SERVICE_CIDR                 (defaults to "172.26.0.0/16")
+* WORKER_MACHINE_COUNT         (defaults to 0)
+
+#### API Server VIP Management Choice
+As of v0.6.0 you can choose to use kube-vip to manage the api-server VIP instead of CPEM. By default CPEM will be used to manage the EIP that serves as the VIP for the api-server. To use kube-vip, when generating the template with `clusterctl`, pass in the `--flavor kube-vip` flag. For example, your `clusterctl generate` command might look like the following:
+
+```sh
+clusterctl generate cluster capi-quickstart \
+  --kubernetes-version v1.24.0 \
+  --control-plane-machine-count=3 \
+  --worker-machine-count=3 \
+  --infrastructure packet \
+  --flavor kube-vip
+  > capi-quickstart.yaml
+```
 
 ## Community, discussion, contribution, and support
 
