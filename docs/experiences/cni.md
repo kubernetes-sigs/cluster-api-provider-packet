@@ -2,13 +2,13 @@
 
 ## Calico
 
-### Install
+### Installing Calico
 
 When using the CAPI quickstart, follow the [Calico install instructions from Tigera](https://projectcalico.docs.tigera.io/getting-started/kubernetes/quickstart).
 
 ## Flannel
 
-### Install
+### Installing Flannel
 
 Follow the instructions at <https://github.com/flannel-io/flannel#deploying-flannel-manually> (ignoring the instruction to create a `flanneld` binary on each node).
 
