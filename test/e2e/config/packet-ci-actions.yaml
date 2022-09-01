@@ -132,6 +132,7 @@ providers:
     files:
     - sourcePath: "${MANIFEST_PATH:=..}/metadata.yaml"
     - sourcePath: "../data/v1beta1/cluster-template.yaml"
+    - sourcePath: "../data/v1beta1/cluster-template-kube-vip.yaml"
     - sourcePath: "../data/v1beta1/cluster-template-kcp-scale-in.yaml"
     - sourcePath: "../data/v1beta1/cluster-template-node-drain.yaml"
     - sourcePath: "../data/v1beta1/cluster-template-md-remediation.yaml"
