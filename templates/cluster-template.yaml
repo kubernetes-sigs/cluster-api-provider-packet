@@ -47,14 +47,31 @@ spec:
         net.bridge.bridge-nf-call-ip6tables = 1
         EOF
         sysctl --system
-        apt-get -y update
-        DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
-        curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
-        echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -y
+        apt-get remove -y docker docker-engine docker.io containerd runc
+        apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
+        major_vers=$(lsb_release -r | awk '{ print $2 }' | cut -d. -f1)
+        if [[ "$major_vers" -ge 20 ]]; then
+          apt-get install -y kubetail
+        fi
+        mkdir -p /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+        echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
         apt-get update -y
         TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\\\./g' | sed 's/^v//')
         RESOLVED_KUBERNETES_VERSION=$(apt-cache madison kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$3~ VERSION { print $3 }' | head -n1)
-        DEBIAN_FRONTEND=noninteractive apt-get install -y containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
+        apt-get install -y containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
+        containerd config default > /etc/containerd/config.toml
+        cat  <<EOF > /etc/crictl.yaml
+        runtime-endpoint: unix:///run/containerd/containerd.sock
+        image-endpoint: unix:///run/containerd/containerd.sock
+        EOF
+        sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+        sed -i "s,sandbox_image.*$,sandbox_image = $(kubeadm config images list | grep pause | sort -r | head -n1)," /etc/containerd/config.toml
+        systemctl restart containerd
         ping -c 3 -q {{ .controlPlaneEndpoint }} && echo OK || ip addr add {{ .controlPlaneEndpoint }} dev lo
     postKubeadmCommands:
       - |
@@ -67,6 +84,11 @@ spec:
         systemctl restart networking
         if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
           export KUBECONFIG=/etc/kubernetes/admin.conf
+          mkdir -p /root/.kube && cp -f $${KUBECONFIG} /root/.kube/config
+          echo "export KUBECONFIG=/etc/kubernetes/admin.conf" >> /root/.bashrc
+          echo "source <(kubectl completion bash)" >> /root/.bashrc
+          echo "alias k=kubectl" >> /root/.bashrc
+          echo "complete -o default -F __start_kubectl k" >> /root/.bashrc
           export CPEM_YAML=https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.5.0/deployment.yaml
           export SECRET_DATA='cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "eipTag": "cluster-api-provider-packet:cluster-id:${CLUSTER_NAME}", "eipHealthCheckUseHostIP": true}'''
           kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}" || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}") || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}")
@@ -192,11 +214,24 @@ spec:
           net.bridge.bridge-nf-call-ip6tables = 1
           EOF
           sysctl --system
-          apt-get -y update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
-          curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
-          echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -y
+          apt-get remove -y docker docker-engine docker.io containerd runc
+          apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
+          mkdir -p /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+          curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+          echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
           apt-get update -y
           TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\\\./g' | sed 's/^v//')
-          RESOLVED_KUBERNETES_VERSION=$(apt-cache policy kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$1~ VERSION { print $1 }' | head -n1)
-          DEBIAN_FRONTEND=noninteractive apt-get install -y containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
+          RESOLVED_KUBERNETES_VERSION=$(apt-cache madison kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$3~ VERSION { print $3 }' | head -n1)
+          apt-get install -y containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
+          cat  <<EOF > /etc/crictl.yaml
+          runtime-endpoint: unix:///run/containerd/containerd.sock
+          image-endpoint: unix:///run/containerd/containerd.sock
+          EOF
+          containerd config default > /etc/containerd/config.toml
+          sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+          sed -i "s,sandbox_image.*$,sandbox_image = $(kubeadm config images list | grep pause | sort -r | head -n1)," /etc/containerd/config.toml
+          systemctl restart containerd
