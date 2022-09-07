@@ -160,7 +160,6 @@ spec:
       if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
         export KUBECONFIG=/etc/kubernetes/admin.conf
         mkdir -p /root/.kube && cp -f $${KUBECONFIG} /root/.kube/config
-        echo "export KUBECONFIG=/etc/kubernetes/admin.conf" >> /root/.bashrc
         echo "source <(kubectl completion bash)" >> /root/.bashrc
         echo "alias k=kubectl" >> /root/.bashrc
         echo "complete -o default -F __start_kubectl k" >> /root/.bashrc
