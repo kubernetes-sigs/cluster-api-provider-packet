@@ -160,6 +160,7 @@ variables:
 
   # NOTE: INIT_WITH_BINARY and INIT_WITH_KUBERNETES_VERSION are only used by the clusterctl upgrade test to initialize
   # the management cluster to be upgraded.
+  # NOTE: We test the latest release with a previous contract.
   INIT_WITH_BINARY: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.25/clusterctl-{OS}-{ARCH}"
   # CAPI v0.3.x cannot be deployed on Kubernetes >= v1.22.
   INIT_WITH_PROVIDERS_CONTRACT: "v1alpha3"
