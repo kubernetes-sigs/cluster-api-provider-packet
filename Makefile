@@ -88,15 +88,6 @@ GINKGO_VER := v1.16.5
 GINKGO_BIN := ginkgo
 GINKGO := $(TOOLS_BIN_DIR)/$(GINKGO_BIN)-$(GINKGO_VER)
 
-# Sync to version that matches k8s.io/* verisons in https://github.com/kubernetes-sigs/cluster-api/blob/v{VERSION}/go.mod
-#KUBECTL_VER := v1.21.2
-#KUBECTL_BIN := kubectl
-#KUBECTL := $(TOOLS_BIN_DIR)/$(KUBECTL_BIN)-$(KUBECTL_VER)
-
-#KIND_VER := v0.11.1
-#KIND_BIN := kind
-#KIND := $(TOOLS_BIN_DIR)/$(KIND_BIN)-$(KIND_VER)
-
 TIMEOUT := $(shell command -v timeout || command -v gtimeout)
 
 # Define Docker related variables. Releases should modify and double check these vars.
@@ -244,20 +235,6 @@ $(CONVERSION_GEN): ## Build conversion-gen.
 
 $(GINKGO): ## Build ginkgo.
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) github.com/onsi/ginkgo/ginkgo $(GINKGO_BIN) $(GINKGO_VER)
-
-#$(KUBECTL): ## Build kubectl
-#	mkdir -p $(TOOLS_BIN_DIR)
-#	rm -f "$(KUBECTL)*"
-#	curl --retry $(CURL_RETRIES) -fsL https://dl.k8s.io/release/$(KUBECTL_VER)/bin/$(GOOS)/$(GOARCH)/kubectl -o $(KUBECTL)
-#	ln -sf "$(KUBECTL)" "$(TOOLS_BIN_DIR)/$(KUBECTL_BIN)"
-#	chmod +x "$(TOOLS_BIN_DIR)/$(KUBECTL_BIN)" "$(KUBECTL)"
-
-#$(KIND): ## Build kind
-#	mkdir -p $(TOOLS_BIN_DIR)
-#	rm -f "$(KIND)*"
-#	curl --retry $(CURL_RETRIES) -fsL https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VER}/kind-${GOOS}-${GOARCH} -o ${KIND}
-#	ln -sf "$(KIND)" "$(TOOLS_BIN_DIR)/$(KIND_BIN)"
-#	chmod +x "$(TOOLS_BIN_DIR)/$(KIND_BIN)" "$(KIND)"
 
 ## --------------------------------------
 ## Linting
