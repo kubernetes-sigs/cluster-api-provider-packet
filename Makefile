@@ -56,38 +56,46 @@ else
 	export GOPATH := $(shell go env GOPATH)
 endif
 
-# Binaries.
+## Binaries.
+
+# Sync to controller-tools version in https://github.com/kubernetes-sigs/cluster-api/blob/v{VERSION}/hack/tools/go.mod
 CONTROLLER_GEN_VER := v0.8.0
 CONTROLLER_GEN_BIN := controller-gen
 CONTROLLER_GEN := $(TOOLS_BIN_DIR)/$(CONTROLLER_GEN_BIN)-$(CONTROLLER_GEN_VER)
 
-CONVERSION_GEN_VER := v0.23.3
+# Sync to k8s.io/* verisons in https://github.com/kubernetes-sigs/cluster-api/blob/v{VERSION}/go.mod
+CONVERSION_GEN_VER := v0.23.5
 CONVERSION_GEN_BIN := conversion-gen
 CONVERSION_GEN := $(TOOLS_BIN_DIR)/$(CONVERSION_GEN_BIN)-$(CONVERSION_GEN_VER)
 
+# Sync to github.com/drone/envsubst/v2 in https://github.com/kubernetes-sigs/cluster-api/blob/v{VERSION}/go.mod
 ENVSUBST_VER := v2.0.0-20210730161058-179042472c46
 ENVSUBST_BIN := envsubst
 ENVSUBST := $(TOOLS_BIN_DIR)/$(ENVSUBST_BIN)
 
-GOLANGCI_LINT_VER := v1.46.2
+# Bump as necessary/desired to latest that supports our version of go at https://github.com/golangci/golangci-lint/releases
+GOLANGCI_LINT_VER := v1.47.3
 GOLANGCI_LINT_BIN := golangci-lint
 GOLANGCI_LINT := $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER)
 
+# Keep at 4.0.4 until we figure out how to get later verisons to not mangle the calico yamls
 KUSTOMIZE_VER := v4.0.4
 KUSTOMIZE_BIN := kustomize
 KUSTOMIZE := $(TOOLS_BIN_DIR)/$(KUSTOMIZE_BIN)-$(KUSTOMIZE_VER)
 
+# Sync to github.com/onsi/ginkgo verison in https://github.com/kubernetes-sigs/cluster-api/blob/v{VERSION}/go.mod
 GINKGO_VER := v1.16.5
 GINKGO_BIN := ginkgo
 GINKGO := $(TOOLS_BIN_DIR)/$(GINKGO_BIN)-$(GINKGO_VER)
 
-KUBECTL_VER := v1.21.2
-KUBECTL_BIN := kubectl
-KUBECTL := $(TOOLS_BIN_DIR)/$(KUBECTL_BIN)-$(KUBECTL_VER)
+# Sync to version that matches k8s.io/* verisons in https://github.com/kubernetes-sigs/cluster-api/blob/v{VERSION}/go.mod
+#KUBECTL_VER := v1.21.2
+#KUBECTL_BIN := kubectl
+#KUBECTL := $(TOOLS_BIN_DIR)/$(KUBECTL_BIN)-$(KUBECTL_VER)
 
-KIND_VER := v0.11.1
-KIND_BIN := kind
-KIND := $(TOOLS_BIN_DIR)/$(KIND_BIN)-$(KIND_VER)
+#KIND_VER := v0.11.1
+#KIND_BIN := kind
+#KIND := $(TOOLS_BIN_DIR)/$(KIND_BIN)-$(KIND_VER)
 
 TIMEOUT := $(shell command -v timeout || command -v gtimeout)
 
@@ -155,7 +163,7 @@ $(E2E_CONF_FILE): $(ENVSUBST) $(E2E_CONF_FILE_SOURCE)
 	$(ENVSUBST) < $(E2E_CONF_FILE_SOURCE) > $(E2E_CONF_FILE)
 
 .PHONY: run-e2e-tests
-run-e2e-tests: $(KUBECTL) $(KUSTOMIZE) $(KIND) $(GINKGO) $(E2E_CONF_FILE) e2e-test-templates $(if $(SKIP_IMAGE_BUILD),,e2e-image) ## Run the e2e tests
+run-e2e-tests: $(KUSTOMIZE) $(GINKGO) $(E2E_CONF_FILE) e2e-test-templates $(if $(SKIP_IMAGE_BUILD),,e2e-image) ## Run the e2e tests
 	$(MAKE) set-manifest-image MANIFEST_IMG=$(REGISTRY)/$(IMAGE_NAME) MANIFEST_TAG=$(TAG)
 	$(MAKE) set-manifest-pull-policy PULL_POLICY=IfNotPresent
 	cd test/e2e; time $(GINKGO) -v -trace -progress -v -tags=e2e \
@@ -237,19 +245,19 @@ $(CONVERSION_GEN): ## Build conversion-gen.
 $(GINKGO): ## Build ginkgo.
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) github.com/onsi/ginkgo/ginkgo $(GINKGO_BIN) $(GINKGO_VER)
 
-$(KUBECTL): ## Build kubectl
-	mkdir -p $(TOOLS_BIN_DIR)
-	rm -f "$(KUBECTL)*"
-	curl --retry $(CURL_RETRIES) -fsL https://dl.k8s.io/release/$(KUBECTL_VER)/bin/$(GOOS)/$(GOARCH)/kubectl -o $(KUBECTL)
-	ln -sf "$(KUBECTL)" "$(TOOLS_BIN_DIR)/$(KUBECTL_BIN)"
-	chmod +x "$(TOOLS_BIN_DIR)/$(KUBECTL_BIN)" "$(KUBECTL)"
+#$(KUBECTL): ## Build kubectl
+#	mkdir -p $(TOOLS_BIN_DIR)
+#	rm -f "$(KUBECTL)*"
+#	curl --retry $(CURL_RETRIES) -fsL https://dl.k8s.io/release/$(KUBECTL_VER)/bin/$(GOOS)/$(GOARCH)/kubectl -o $(KUBECTL)
+#	ln -sf "$(KUBECTL)" "$(TOOLS_BIN_DIR)/$(KUBECTL_BIN)"
+#	chmod +x "$(TOOLS_BIN_DIR)/$(KUBECTL_BIN)" "$(KUBECTL)"
 
-$(KIND): ## Build kind
-	mkdir -p $(TOOLS_BIN_DIR)
-	rm -f "$(KIND)*"
-	curl --retry $(CURL_RETRIES) -fsL https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VER}/kind-${GOOS}-${GOARCH} -o ${KIND}
-	ln -sf "$(KIND)" "$(TOOLS_BIN_DIR)/$(KIND_BIN)"
-	chmod +x "$(TOOLS_BIN_DIR)/$(KIND_BIN)" "$(KIND)"
+#$(KIND): ## Build kind
+#	mkdir -p $(TOOLS_BIN_DIR)
+#	rm -f "$(KIND)*"
+#	curl --retry $(CURL_RETRIES) -fsL https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VER}/kind-${GOOS}-${GOARCH} -o ${KIND}
+#	ln -sf "$(KIND)" "$(TOOLS_BIN_DIR)/$(KIND_BIN)"
+#	chmod +x "$(TOOLS_BIN_DIR)/$(KIND_BIN)" "$(KIND)"
 
 ## --------------------------------------
 ## Linting
