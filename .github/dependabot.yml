@@ -5,15 +5,29 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+    commit-message:
+      prefix: ":seedling:"
 
   # Maintain dependencies for Go modules.
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "daily"
-
+    commit-message:
+      prefix: ":seedling:"
+  
+  # Maintain e2e test Go modules
+  - package-ecosystem: "gomod"
+    directory: "/test/e2e"
+    schedule:
+      interval: "daily"  
+    commit-message:
+      prefix: ":seedling:"
+  
   # Maintain dependencies for Docker images.
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "daily"
+    commit-message:
+      prefix: ":seedling:"
