@@ -1,3 +1,27 @@
+# Flavors & Custom Templates
+
+## Kube-VIP
+
+### API Server VIP Management Choice
+
+By default CPEM will be used to manage the EIP that serves as the VIP for the api-server. As of v0.6.0 you can choose to use kube-vip to manage the api-server VIP instead of CPEM.
+
+### Choosing Kube-VIP
+
+ To use kube-vip, when generating the template with `clusterctl`, pass in the `--flavor kube-vip` flag. For example, your `clusterctl generate` command might look like the following:
+
+```sh
+clusterctl generate cluster capi-quickstart \
+  --kubernetes-version v1.24.0 \
+  --control-plane-machine-count=3 \
+  --worker-machine-count=3 \
+  --infrastructure packet \
+  --flavor kube-vip
+  > capi-quickstart.yaml
+```
+
+## Custom Templates
+
 When using the `clusterctl` you can generate your own cluster spec from a
 template.
 
@@ -35,17 +59,16 @@ automation. Here a few examples:
    let's suppose you want `flannel` you can add the following line to
    `postKubeadmCommands` for the `KubeadmControlPlane` resource:
 
-```sh
-kubectl --kubeconfig /etc/kubernetes/admin.conf apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
-```
+   ```sh
+   kubectl --kubeconfig /etc/kubernetes/admin.conf apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+   ```
 
-2. If you want to use an operating system that is not Ubuntu you can change the
+1. If you want to use an operating system that is not Ubuntu you can change the
    `preKubeadmCommands` for the `KubeadmControlPlane` and the
    `KubeadmConfigTemplate` to use kubernetes binaries or a different package
    manager.
 
-3. (2a) If you want to change operating system you have to change the `OS` field
-   for the `PacketMachineTemplate` resource
-
+   If you want to change operating system you have to change the `OS` field
+   for the `PacketMachineTemplate` resource.
 
 [gh-release-v030]: https://github.com/kubernetes-sigs/cluster-api-provider-packet/releases/tag/v0.3.0

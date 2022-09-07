@@ -10,57 +10,6 @@ This is the official [cluster-api](https://github.com/kubernetes-sigs/cluster-ap
 
 ![Packetbot works hard to keep Kubernetes cluster in a good shape](./docs/banner.png)
 
-## Ugrading from v0.3.X to v1.1.X
-
-* **IMPORTANT** - Before you upgrade, please note that multi-tenancy support has changed in versions after v0.3.X
-  * We no longer support running multiple instances of the provider in the same management cluster. Typically this was done to enable multiple credentials for managing devices in more than one project.
-  * If you currently have a management cluster with multiple instances of the provider, it's recommended you use clusterctl move to migrate them to another cluster before upgrading.
-  * [See more information about `clusterctl move` here](https://cluster-api.sigs.k8s.io/clusterctl/commands/move.html)
-
-* Upgrade your clusterctl to version 1.1.3 or later.
-* Backup your clusterapi objects from your management cluster by using the `clusterctl backup` comamnd.
-
-```bash
-clusterctl backup --directory /path/to/backup/directory/
-```
-
-* More details are available [here](https://cluster-api.sigs.k8s.io/clusterctl/commands/upgrade.html).
-* The next step is to run `clusterctl upgrade plan`, and you should see something like this:
-
-```bash
-Latest release available for the v1beta1 API Version of Cluster API (contract):
-
-NAME                    NAMESPACE                            TYPE                     CURRENT VERSION   NEXT VERSION
-bootstrap-kubeadm       capi-kubeadm-bootstrap-system        BootstrapProvider        v0.3.25           v1.1.2
-control-plane-kubeadm   capi-kubeadm-control-plane-system    ControlPlaneProvider     v0.3.25           v1.1.2
-cluster-api             capi-system                          CoreProvider             v0.3.25           v1.1.2
-infrastructure-packet   cluster-api-provider-packet-system   InfrastructureProvider   v0.3.11           v0.5.0
-
-You can now apply the upgrade by executing the following command:
-
-clusterctl upgrade apply --contract v1beta1
-```
-
-* Go ahead and run `clusterctl upgrade apply --contract v1beta1`
-* After this, if you'd like to co ntinue and upgrade kubernetes, it's a normal upgrade flow where you upgrade the control plane by editing the machinetemplates and kubeadmcontrolplane and the workers by editing the machinesets and machinedeployments. Full details [here](https://cluster-api.sigs.k8s.io/tasks/upgrading-clusters.html). Below is a very basic example upgrade of a small cluster:
-
-```bash
-kubectl get PacketMachineTemplate example-control-plane -o yaml > example-control-plane.yaml
-# Using a text editor, edit the spec.version field to the new kubernetes version
-kubectl apply -f example-control-plane.yaml
-kubectl get machineDeployment example-worker-a -o yaml > example-worker-a.yaml
-# Using a text editor, edit the spec.template.spec.version to the new kubernetes version
-kubectl apply -f example-worker-a.yaml
-```
-
-## Using
-
-The following section describes how to use the cluster-api provider for packet (CAPP) as a regular user.
-You do _not_ need to clone this repository, or install any special tools, other than the standard
-`kubectl` and `clusterctl`; see below.
-
-* To build CAPP and to deploy individual components, see [docs/BUILD.md](./docs/BUILD.md).
-* To build CAPP and to cut a proper release, see [docs/RELEASE.md](./docs/RELEASE.md).
 
 ### Requirements
 
@@ -80,32 +29,19 @@ Once you have your cluster, ensure your `KUBECONFIG` environment variable is set
 
 ### Getting Started
 
-You can follow the [Cluster API Quick Start Guide](https://cluster-api.sigs.k8s.io/user/quick-start.html), selecting the 'Equinix Metal' tabs.
+You should then follow the [Cluster API Quick Start Guide](https://cluster-api.sigs.k8s.io/user/quick-start.html), selecting the 'Equinix Metal' tabs where offered.
 
 #### Defaults
 
 If you do not change the generated `yaml` files, it will use defaults. You can look in the [templates/cluster-template.yaml](./templates/cluster-template.yaml) file for details.
 
-* CLUSTER_NAME                 (defaults to my-cluster)
-* CONTROL_PLANE_MACHINE_COUNT  (defaults to 1)
-* KUBE_VIP_VERSION             (defaults to "v0.4.2")
-* NODE_OS                      (defaults to "ubuntu_18_04")
-* POD_CIDR                     (defaults to "192.168.0.0/16")
-* SERVICE_CIDR                 (defaults to "172.26.0.0/16")
-* WORKER_MACHINE_COUNT         (defaults to 0)
-
-#### API Server VIP Management Choice
-As of v0.6.0 you can choose to use kube-vip to manage the api-server VIP instead of CPEM. By default CPEM will be used to manage the EIP that serves as the VIP for the api-server. To use kube-vip, when generating the template with `clusterctl`, pass in the `--flavor kube-vip` flag. For example, your `clusterctl generate` command might look like the following:
-
-```sh
-clusterctl generate cluster capi-quickstart \
-  --kubernetes-version v1.24.0 \
-  --control-plane-machine-count=3 \
-  --worker-machine-count=3 \
-  --infrastructure packet \
-  --flavor kube-vip
-  > capi-quickstart.yaml
-```
+* `CLUSTER_NAME`                 (defaults to `my-cluster`)
+* `CONTROL_PLANE_MACHINE_COUNT`  (defaults to `1`)
+* `KUBE_VIP_VERSION`             (defaults to `v0.4.2`)
+* `NODE_OS`                      (defaults to `ubuntu_18_04`)
+* `POD_CIDR`                     (defaults to `192.168.0.0/16`)
+* `SERVICE_CIDR`                 (defaults to `172.26.0.0/16`)
+* `WORKER_MACHINE_COUNT`         (defaults to `0`)
 
 ## Community, discussion, contribution, and support
 
@@ -115,6 +51,16 @@ You can reach the maintainers of this project at:
 
 * Chat with us on [Slack](http://slack.k8s.io/) in the [#cluster-api-provider-packet][#cluster-api-provider-packet slack] channel
 * Subscribe to the [SIG Cluster Lifecycle](https://groups.google.com/forum/#!forum/kubernetes-sig-cluster-lifecycle) Google Group for access to documents and calendars
+
+
+## Development and Customizations
+The following section describes how to use the cluster-api provider for packet (CAPP) as a regular user.
+You do _not_ need to clone this repository, or install any special tools, other than the standard
+`kubectl` and `clusterctl`; see below.
+
+* To build CAPP and to deploy individual components, see [docs/BUILD.md](./docs/BUILD.md).
+* To build CAPP and to cut a proper release, see [docs/RELEASE.md](./docs/RELEASE.md).
+
 
 ### Code of conduct
 
