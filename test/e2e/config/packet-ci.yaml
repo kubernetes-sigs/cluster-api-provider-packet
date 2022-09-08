@@ -127,7 +127,20 @@ providers:
     - sourcePath: "../data/v1beta1/cluster-template-node-drain.yaml"
     - sourcePath: "../data/v1beta1/cluster-template-md-remediation.yaml"
     - sourcePath: "../data/v1beta1/cluster-template-kcp-remediation.yaml"
-  - name: v1.1.99 # next; use manifest from source files
+  - name: v0.6.0 #latest in the v1beta1 series
+    value: "../../../config/default"
+    replacements:
+    - old: "image: .*/cluster-api-provider-packet:.*"
+      new: "image: ${REGISTRY:=ghcr.io}/${IMAGE_NAME:=kubernetes-sigs/cluster-api-provider-packet}:${TAG:=e2e}"
+    contract: v1beta1
+    files:
+    - sourcePath: "../../../metadata.yaml"
+    - sourcePath: "../data/v1beta1/cluster-template.yaml"
+    - sourcePath: "../data/v1beta1/cluster-template-kcp-scale-in.yaml"
+    - sourcePath: "../data/v1beta1/cluster-template-node-drain.yaml"
+    - sourcePath: "../data/v1beta1/cluster-template-md-remediation.yaml"
+    - sourcePath: "../data/v1beta1/cluster-template-kcp-remediation.yaml"
+  - name: v0.6.99 # next; use manifest from source files
     value: "../../../config/default"
     replacements:
     - old: "image: .*/cluster-api-provider-packet:.*"

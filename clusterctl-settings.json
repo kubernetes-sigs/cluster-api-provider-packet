@@ -2,7 +2,7 @@
     "name": "infrastructure-packet",
     "config": {
       "componentsFile": "infrastructure-components.yaml",
-      "nextVersion": "v1.1.99"
+      "nextVersion": "v0.6.99"
     }
   }
   
