@@ -36,7 +36,7 @@ If you do not change the generated `yaml` files, it will use defaults. You can l
 
 * `CLUSTER_NAME`                 (defaults to `my-cluster`)
 * `CONTROL_PLANE_MACHINE_COUNT`  (defaults to `1`)
-* `KUBE_VIP_VERSION`             (defaults to `v0.4.2`)
+* `KUBE_VIP_VERSION`             (defaults to `v0.5.0`)
 * `NODE_OS`                      (defaults to `ubuntu_18_04`)
 * `POD_CIDR`                     (defaults to `192.168.0.0/16`)
 * `SERVICE_CIDR`                 (defaults to `172.26.0.0/16`)
