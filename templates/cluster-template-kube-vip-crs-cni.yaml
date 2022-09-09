@@ -48,7 +48,7 @@ spec:
         sysctl --system
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -y
-        apt-get remove -y docker docker-engine docker.io containerd runc
+        apt-get remove -y docker docker-engine containerd runc
         apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
         mkdir -p /etc/apt/keyrings
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -58,14 +58,14 @@ spec:
         apt-get update -y
         TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\\\./g' | sed 's/^v//')
         RESOLVED_KUBERNETES_VERSION=$(apt-cache madison kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$3~ VERSION { print $3 }' | head -n1)
-        apt-get install -y containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
+        apt-get install -y containerd.io kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
         cat  <<EOF > /etc/crictl.yaml
         runtime-endpoint: unix:///run/containerd/containerd.sock
         image-endpoint: unix:///run/containerd/containerd.sock
         EOF
         containerd config default > /etc/containerd/config.toml
         sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-        sed -i "s,sandbox_image.*$,sandbox_image = $(kubeadm config images list | grep pause | sort -r | head -n1)," /etc/containerd/config.toml
+        sed -i "s,sandbox_image.*$,sandbox_image = \"$(kubeadm config images list | grep pause | sort -r | head -n1)\"," /etc/containerd/config.toml
         systemctl restart containerd
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
@@ -180,7 +180,7 @@ spec:
       sysctl --system
       export DEBIAN_FRONTEND=noninteractive
       apt-get update -y
-      apt-get remove -y docker docker-engine docker.io containerd runc
+      apt-get remove -y docker docker-engine containerd runc
       apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
       mkdir -p /etc/apt/keyrings
       curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -190,14 +190,14 @@ spec:
       apt-get update -y
       TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\\\./g' | sed 's/^v//')
       RESOLVED_KUBERNETES_VERSION=$(apt-cache madison kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$3~ VERSION { print $3 }' | head -n1)
-      apt-get install -y containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
+      apt-get install -y containerd.io kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
       cat  <<EOF > /etc/crictl.yaml
       runtime-endpoint: unix:///run/containerd/containerd.sock
       image-endpoint: unix:///run/containerd/containerd.sock
       EOF
       containerd config default > /etc/containerd/config.toml
       sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-      sed -i "s,sandbox_image.*$,sandbox_image = $(kubeadm config images list | grep pause | sort -r | head -n1)," /etc/containerd/config.toml
+      sed -i "s,sandbox_image.*$,sandbox_image = \"$(kubeadm config images list | grep pause | sort -r | head -n1)\"," /etc/containerd/config.toml
       systemctl restart containerd
       ping -c 3 -q {{ .controlPlaneEndpoint }} && echo OK || ip addr add {{ .controlPlaneEndpoint }} dev lo
       curl -o /run/metadata.json -fsSL https://metadata.platformequinix.com/metadata
