@@ -34,13 +34,11 @@ You should then follow the [Cluster API Quick Start Guide](https://cluster-api.s
 
 If you do not change the generated `yaml` files, it will use defaults. You can look in the [templates/cluster-template.yaml](./templates/cluster-template.yaml) file for details.
 
-* `CLUSTER_NAME`                 (defaults to `my-cluster`)
-* `CONTROL_PLANE_MACHINE_COUNT`  (defaults to `1`)
+* `CPEM_VERSION`                 (defaults to `v3.5.0`)
 * `KUBE_VIP_VERSION`             (defaults to `v0.5.0`)
 * `NODE_OS`                      (defaults to `ubuntu_18_04`)
 * `POD_CIDR`                     (defaults to `192.168.0.0/16`)
 * `SERVICE_CIDR`                 (defaults to `172.26.0.0/16`)
-* `WORKER_MACHINE_COUNT`         (defaults to `0`)
   
 ### Reserved Hardware
 
