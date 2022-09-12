@@ -57,6 +57,8 @@ patches:
             sed -i "s,sandbox_image.*$,sandbox_image = \"$(kubeadm config images list | grep pause | sort -r | head -n1)\"," /etc/containerd/config.toml
             systemctl restart containerd
             ping -c 3 -q {{ .controlPlaneEndpoint }} && echo OK || ip addr add {{ .controlPlaneEndpoint }} dev lo
+        postKubeadmCommands:
+          - |
             curl -o /run/metadata.json -fsSL https://metadata.platformequinix.com/metadata
             for i in $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[]'); do
               ip route add $i via $(cat /run/metadata.json | jq -r '.network.addresses[] | select(.public == false and .address_family == 4) | .gateway')
@@ -73,15 +75,12 @@ patches:
             --localAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_as') \
             --bgpRouterID $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_ip') > /etc/kubernetes/manifests/vip.yaml
             rm /run/metadata.json
-        postKubeadmCommands:
-          - |
+            mkdir -p /root/.kube && cp -f /etc/kubernetes/admin.conf /root/.kube/config
+            echo "source <(kubectl completion bash)" >> /root/.bashrc
+            echo "alias k=kubectl" >> /root/.bashrc
+            echo "complete -o default -F __start_kubectl k" >> /root/.bashrc
             if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
-              export KUBECONFIG=/etc/kubernetes/admin.conf
-              mkdir -p /root/.kube && cp -f $${KUBECONFIG} /root/.kube/config
-              echo "source <(kubectl completion bash)" >> /root/.bashrc
-              echo "alias k=kubectl" >> /root/.bashrc
-              echo "complete -o default -F __start_kubectl k" >> /root/.bashrc
-              export CPEM_YAML=https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.5.0/deployment.yaml
+              export CPEM_YAML=https://github.com/equinix/cloud-provider-equinix-metal/releases/download/${CPEM_VERSION:=v3.5.0}/deployment.yaml
               export SECRET_DATA='cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "loadbalancer": "kube-vip://", "facility": "${FACILITY}"}'''
               kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}" || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}") || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}")
               kubectl apply -f $${CPEM_YAML} || (sleep 1 && kubectl apply -f $${CPEM_YAML}) || (sleep 1 && kubectl apply -f $${CPEM_YAML})
