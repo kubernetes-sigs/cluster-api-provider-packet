@@ -157,13 +157,12 @@ spec:
         netmask 255.255.255.255
       EOF
       systemctl restart networking
+      mkdir -p /root/.kube && cp -f /etc/kubernetes/admin.conf /root/.kube/config
+      echo "source <(kubectl completion bash)" >> /root/.bashrc
+      echo "alias k=kubectl" >> /root/.bashrc
+      echo "complete -o default -F __start_kubectl k" >> /root/.bashrc
       if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
-        export KUBECONFIG=/etc/kubernetes/admin.conf
-        mkdir -p /root/.kube && cp -f $${KUBECONFIG} /root/.kube/config
-        echo "source <(kubectl completion bash)" >> /root/.bashrc
-        echo "alias k=kubectl" >> /root/.bashrc
-        echo "complete -o default -F __start_kubectl k" >> /root/.bashrc
-        export CPEM_YAML=https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.5.0/deployment.yaml
+        export CPEM_YAML=https://github.com/equinix/cloud-provider-equinix-metal/releases/download/${CPEM_VERSION:=v3.5.0}/deployment.yaml
         export SECRET_DATA='cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "eipTag": "cluster-api-provider-packet:cluster-id:${CLUSTER_NAME}", "eipHealthCheckUseHostIP": true}'''
         kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}" || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}") || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}")
         kubectl apply -f $${CPEM_YAML} || (sleep 1 && kubectl apply -f $${CPEM_YAML}) || (sleep 1 && kubectl apply -f $${CPEM_YAML})
