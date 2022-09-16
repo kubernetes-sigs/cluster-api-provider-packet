@@ -48,7 +48,7 @@ spec:
         sysctl --system
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -y
-        apt-get remove -y docker docker-engine docker.io containerd runc
+        apt-get remove -y docker docker-engine containerd runc
         apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
         mkdir -p /etc/apt/keyrings
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -58,14 +58,14 @@ spec:
         apt-get update -y
         TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\\\./g' | sed 's/^v//')
         RESOLVED_KUBERNETES_VERSION=$(apt-cache madison kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$3~ VERSION { print $3 }' | head -n1)
-        apt-get install -y containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
+        apt-get install -y containerd.io kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
         cat  <<EOF > /etc/crictl.yaml
         runtime-endpoint: unix:///run/containerd/containerd.sock
         image-endpoint: unix:///run/containerd/containerd.sock
         EOF
         containerd config default > /etc/containerd/config.toml
         sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-        sed -i "s,sandbox_image.*$,sandbox_image = $(kubeadm config images list | grep pause | sort -r | head -n1)," /etc/containerd/config.toml
+        sed -i "s,sandbox_image.*$,sandbox_image = \"$(kubeadm config images list | grep pause | sort -r | head -n1)\"," /etc/containerd/config.toml
         systemctl restart containerd
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
@@ -150,16 +150,32 @@ spec:
           provider-id: equinixmetal://{{ `{{ v1.instance_id }}` }}
     postKubeadmCommands:
     - |-
+      curl -o /run/metadata.json -fsSL https://metadata.platformequinix.com/metadata
+      for i in $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[]'); do
+        ip route add $i via $(cat /run/metadata.json | jq -r '.network.addresses[] | select(.public == false and .address_family == 4) | .gateway')
+      done
       if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
-        export KUBECONFIG=/etc/kubernetes/admin.conf
-        mkdir -p /root/.kube && cp -f $${KUBECONFIG} /root/.kube/config
-        echo "source <(kubectl completion bash)" >> /root/.bashrc
-        echo "alias k=kubectl" >> /root/.bashrc
-        echo "complete -o default -F __start_kubectl k" >> /root/.bashrc
-        export CPEM_YAML=https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.5.0/deployment.yaml
+        export CPEM_YAML=https://github.com/equinix/cloud-provider-equinix-metal/releases/download/${CPEM_VERSION:=v3.5.0}/deployment.yaml
         export SECRET_DATA='cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "loadbalancer": "kube-vip://", "facility": "${FACILITY}"}'''
         kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}" || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}") || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}")
         kubectl apply -f $${CPEM_YAML} || (sleep 1 && kubectl apply -f $${CPEM_YAML}) || (sleep 1 && kubectl apply -f $${CPEM_YAML})
+      else
+        KVVERSION="${KUBE_VIP_VERSION:=v0.5.0}"
+        ctr image pull ghcr.io/kube-vip/kube-vip:$${KVVERSION}
+        ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$KVVERSION vip /kube-vip manifest pod \
+        --interface "lo" \
+        --vip "{{ .controlPlaneEndpoint }}" \
+        --controlplane \
+        --bgp \
+        --peerAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_as') \
+        --peerAddress $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[0]') \
+        --localAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_as') \
+        --bgpRouterID $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_ip') > /etc/kubernetes/manifests/vip.yaml
+        rm /run/metadata.json
+        mkdir -p /root/.kube && cp -f /etc/kubernetes/admin.conf /root/.kube/config
+        echo "source <(kubectl completion bash)" >> /root/.bashrc
+        echo "alias k=kubectl" >> /root/.bashrc
+        echo "complete -o default -F __start_kubectl k" >> /root/.bashrc
       fi
     preKubeadmCommands:
     - |
@@ -180,7 +196,7 @@ spec:
       sysctl --system
       export DEBIAN_FRONTEND=noninteractive
       apt-get update -y
-      apt-get remove -y docker docker-engine docker.io containerd runc
+      apt-get remove -y docker docker-engine containerd runc
       apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
       mkdir -p /etc/apt/keyrings
       curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -190,32 +206,34 @@ spec:
       apt-get update -y
       TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\\\./g' | sed 's/^v//')
       RESOLVED_KUBERNETES_VERSION=$(apt-cache madison kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$3~ VERSION { print $3 }' | head -n1)
-      apt-get install -y containerd kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
+      apt-get install -y containerd.io kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
       cat  <<EOF > /etc/crictl.yaml
       runtime-endpoint: unix:///run/containerd/containerd.sock
       image-endpoint: unix:///run/containerd/containerd.sock
       EOF
       containerd config default > /etc/containerd/config.toml
       sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-      sed -i "s,sandbox_image.*$,sandbox_image = $(kubeadm config images list | grep pause | sort -r | head -n1)," /etc/containerd/config.toml
+      sed -i "s,sandbox_image.*$,sandbox_image = \"$(kubeadm config images list | grep pause | sort -r | head -n1)\"," /etc/containerd/config.toml
       systemctl restart containerd
-      ping -c 3 -q {{ .controlPlaneEndpoint }} && echo OK || ip addr add {{ .controlPlaneEndpoint }} dev lo
-      curl -o /run/metadata.json -fsSL https://metadata.platformequinix.com/metadata
-      for i in $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[]'); do
-        ip route add $i via $(cat /run/metadata.json | jq -r '.network.addresses[] | select(.public == false and .address_family == 4) | .gateway')
-      done
-      KVVERSION="${KUBE_VIP_VERSION:=v0.5.0}"
-      ctr image pull ghcr.io/kube-vip/kube-vip:$${KVVERSION}
-      ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$KVVERSION vip /kube-vip manifest pod \
-      --interface "lo" \
-      --vip "{{ .controlPlaneEndpoint }}" \
-      --controlplane \
-      --bgp \
-      --peerAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_as') \
-      --peerAddress $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[0]') \
-      --localAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_as') \
-      --bgpRouterID $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_ip') > /etc/kubernetes/manifests/vip.yaml
-      rm /run/metadata.json
+      if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
+        ip addr add {{ .controlPlaneEndpoint }} dev lo
+        curl -o /run/metadata.json -fsSL https://metadata.platformequinix.com/metadata
+        for i in $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[]'); do
+          ip route add $i via $(cat /run/metadata.json | jq -r '.network.addresses[] | select(.public == false and .address_family == 4) | .gateway')
+        done
+        KVVERSION="${KUBE_VIP_VERSION:=v0.5.0}"
+        ctr image pull ghcr.io/kube-vip/kube-vip:$${KVVERSION}
+        ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$KVVERSION vip /kube-vip manifest pod \
+        --interface "lo" \
+        --vip "{{ .controlPlaneEndpoint }}" \
+        --controlplane \
+        --bgp \
+        --peerAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_as') \
+        --peerAddress $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[0]') \
+        --localAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_as') \
+        --bgpRouterID $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_ip') > /etc/kubernetes/manifests/vip.yaml
+        rm /run/metadata.json
+      fi
   machineTemplate:
     infrastructureRef:
       apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
