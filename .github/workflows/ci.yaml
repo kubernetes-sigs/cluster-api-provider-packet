@@ -4,7 +4,7 @@ on:
     branches:
     - main
   schedule:
-    - cron: "0 */4 * * *" # TODO: Run every 4 hours to soak test, should be less frequent before merge (weekly/daily/???)
+  - cron: "5 0 * * *" # TODO: Run every 4 hours to soak test, should be less frequent before merge (weekly/daily/???)
   workflow_dispatch:
 env:
   IMAGE_NAME: cluster-api-provider-packet
