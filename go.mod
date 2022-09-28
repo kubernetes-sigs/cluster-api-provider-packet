@@ -1,6 +1,6 @@
 module sigs.k8s.io/cluster-api-provider-packet
 
-go 1.17
+go 1.19
 
 require (
 	github.com/onsi/gomega v1.20.2

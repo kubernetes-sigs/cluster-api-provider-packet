@@ -94,13 +94,13 @@ linters-settings:
       - pkg: sigs.k8s.io/controller-runtime
         alias: ctrl
   gosimple:
-    go: "1.17"
+    go: "1.19"
   staticcheck:
-    go: "1.17"
+    go: "1.19"
   stylecheck:
-    go: "1.17"
+    go: "1.19"
   unused:
-    go: "1.17"
+    go: "1.19"
   tagliatelle:
     case:
       # use-field-name: true
