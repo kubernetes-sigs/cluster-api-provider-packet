@@ -37,6 +37,10 @@ type PacketClusterSpec struct {
 	// Facility represents the Packet facility for this cluster
 	Facility string `json:"facility,omitempty"`
 
+	// Metro represents the Packet metro for this cluster
+	// +optional
+	Metro string `json:"metro,omitempty"`
+
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
 	// +optional
 	ControlPlaneEndpoint clusterv1.APIEndpoint `json:"controlPlaneEndpoint"`

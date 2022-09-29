@@ -144,10 +144,17 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packn
 		facility = req.MachineScope.PacketMachine.Spec.Facility
 	}
 
+	// Allow to override the metro for each PacketMachineTemplate
+	metro := req.MachineScope.PacketCluster.Spec.Metro
+	if req.MachineScope.PacketMachine.Spec.Metro != "" {
+		metro = req.MachineScope.PacketMachine.Spec.Metro
+	}
+
 	serverCreateOpts := &packngo.DeviceCreateRequest{
 		Hostname:      req.MachineScope.Name(),
 		ProjectID:     req.MachineScope.PacketCluster.Spec.ProjectID,
 		Facility:      []string{facility},
+		Metro:         metro,
 		BillingCycle:  req.MachineScope.PacketMachine.Spec.BillingCycle,
 		Plan:          req.MachineScope.PacketMachine.Spec.MachineType,
 		OS:            req.MachineScope.PacketMachine.Spec.OS,
@@ -215,11 +222,12 @@ func (p *Client) GetDeviceByTags(project string, tags []string) (*packngo.Device
 
 // CreateIP reserves an IP via Packet API. The request fails straight if no IP are available for the specified project.
 // This prevent the cluster to become ready.
-func (p *Client) CreateIP(namespace, clusterName, projectID, facility string) (net.IP, error) {
+func (p *Client) CreateIP(namespace, clusterName, projectID, facility, metro string) (net.IP, error) {
 	req := packngo.IPReservationRequest{
 		Type:                   packngo.PublicIPv4,
 		Quantity:               1,
 		Facility:               &facility,
+		Metro:                  &metro,
 		FailOnApprovalRequired: true,
 		Tags:                   []string{generateElasticIPIdentifier(clusterName)},
 	}

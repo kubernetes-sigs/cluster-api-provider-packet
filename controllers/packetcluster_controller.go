@@ -117,7 +117,7 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 	switch {
 	case errors.Is(err, packet.ErrControlPlanEndpointNotFound):
 		// There is not an ElasticIP with the right tags, at this point we can create one
-		ip, err := r.PacketClient.CreateIP(clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID, packetCluster.Spec.Facility)
+		ip, err := r.PacketClient.CreateIP(clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID, packetCluster.Spec.Facility, packetCluster.Spec.Metro)
 		if err != nil {
 			log.Error(err, "error reserving an ip")
 			return ctrl.Result{}, err
