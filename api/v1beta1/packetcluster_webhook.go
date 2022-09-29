@@ -71,6 +71,13 @@ func (c *PacketCluster) ValidateUpdate(oldRaw runtime.Object) error {
 		)
 	}
 
+	if !reflect.DeepEqual(c.Spec.Metro, old.Spec.Metro) {
+		allErrs = append(allErrs,
+			field.Invalid(field.NewPath("spec", "Metro"),
+				c.Spec.Metro, "field is immutable"),
+		)
+	}
+
 	if !reflect.DeepEqual(c.Spec.VIPManager, old.Spec.VIPManager) {
 		allErrs = append(allErrs,
 			field.Invalid(field.NewPath("spec", "VIPManager"),
