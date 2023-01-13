@@ -145,7 +145,7 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packn
 	}
 
 	ipAddressCreateRequests := []packngo.IPAddressCreateRequest{}
-	for _, machine := range req.MachineScope.PacketMachine.Spec.IpAddresses {
+	for _, machine := range req.MachineScope.PacketMachine.Spec.IPAddresses {
 		ipAddressCreateRequests = append(ipAddressCreateRequests, machine.IPAddressCreateRequest)
 	}
 

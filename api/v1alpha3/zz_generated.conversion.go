@@ -378,7 +378,7 @@ func autoConvert_v1beta1_PacketMachineSpec_To_v1alpha3_PacketMachineSpec(in *v1b
 	out.HardwareReservationID = in.HardwareReservationID
 	out.ProviderID = (*string)(unsafe.Pointer(in.ProviderID))
 	out.Tags = *(*Tags)(unsafe.Pointer(&in.Tags))
-	// WARNING: in.IpAddresses requires manual conversion: does not exist in peer-type
+	// WARNING: in.IPAddresses requires manual conversion: does not exist in peer-type
 	return nil
 }
 

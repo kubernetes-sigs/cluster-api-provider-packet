@@ -202,8 +202,8 @@ func (in *PacketMachineSpec) DeepCopyInto(out *PacketMachineSpec) {
 		*out = make(Tags, len(*in))
 		copy(*out, *in)
 	}
-	if in.IpAddresses != nil {
-		in, out := &in.IpAddresses, &out.IpAddresses
+	if in.IPAddresses != nil {
+		in, out := &in.IPAddresses, &out.IPAddresses
 		*out = make([]IPAddressCreateRequest, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])

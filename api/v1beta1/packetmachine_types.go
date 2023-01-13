@@ -108,7 +108,7 @@ type PacketMachineSpec struct {
 	// Optional IP Address list to use when default (1 private IPv4, 1 public IPv4 and 1 public IPv6)
 	// is not desired
 	// +optional
-	IpAddresses []IPAddressCreateRequest `json:"ipAddresses,omitempty"`
+	IPAddresses []IPAddressCreateRequest `json:"ipAddresses,omitempty"`
 }
 
 // PacketMachineStatus defines the observed state of PacketMachine
