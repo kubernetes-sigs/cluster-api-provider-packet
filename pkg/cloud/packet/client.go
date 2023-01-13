@@ -144,6 +144,11 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packn
 		facility = req.MachineScope.PacketMachine.Spec.Facility
 	}
 
+	ipAddressCreateRequests := []packngo.IPAddressCreateRequest{}
+	for _, machine := range req.MachineScope.PacketMachine.Spec.IpAddresses {
+		ipAddressCreateRequests = append(ipAddressCreateRequests, machine.IPAddressCreateRequest)
+	}
+
 	serverCreateOpts := &packngo.DeviceCreateRequest{
 		Hostname:      req.MachineScope.Name(),
 		ProjectID:     req.MachineScope.PacketCluster.Spec.ProjectID,
@@ -154,6 +159,7 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packn
 		IPXEScriptURL: req.MachineScope.PacketMachine.Spec.IPXEUrl,
 		Tags:          tags,
 		UserData:      userData,
+		IPAddresses:   ipAddressCreateRequests,
 	}
 
 	reservationIDs := strings.Split(req.MachineScope.PacketMachine.Spec.HardwareReservationID, ",")

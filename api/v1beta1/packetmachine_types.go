@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	"github.com/packethost/packngo"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -51,6 +52,29 @@ const (
 	WaitingForBootstrapDataReason = "WaitingForBootstrapData"
 )
 
+// +kubebuilder:object:generate=false
+type IPAddressCreateRequest struct {
+	packngo.IPAddressCreateRequest `json:"ipAddressCreateRequest"`
+}
+
+func (in *IPAddressCreateRequest) DeepCopyInto(out *IPAddressCreateRequest) {
+	*out = *in
+	if in.Reservations != nil {
+		in, out := &in.IPAddressCreateRequest.Reservations, &out.IPAddressCreateRequest.Reservations
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+}
+
+func (in *IPAddressCreateRequest) DeepCopy() *IPAddressCreateRequest {
+	if in == nil {
+		return nil
+	}
+	out := new(IPAddressCreateRequest)
+	in.DeepCopyInto(out)
+	return out
+}
+
 // PacketMachineSpec defines the desired state of PacketMachine
 type PacketMachineSpec struct {
 	OS           string   `json:"os"`
@@ -80,6 +104,11 @@ type PacketMachineSpec struct {
 	// Tags is an optional set of tags to add to Packet resources managed by the Packet provider.
 	// +optional
 	Tags Tags `json:"tags,omitempty"`
+
+	// Optional IP Address list to use when default (1 private IPv4, 1 public IPv4 and 1 public IPv6)
+	// is not desired
+	// +optional
+	IpAddresses []IPAddressCreateRequest `json:"ipAddresses,omitempty"`
 }
 
 // PacketMachineStatus defines the observed state of PacketMachine

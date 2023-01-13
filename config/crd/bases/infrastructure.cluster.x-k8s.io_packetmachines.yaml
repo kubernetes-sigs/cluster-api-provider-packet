@@ -202,6 +202,37 @@ spec:
                   ID, a comma separated list of hardware reservation IDs, or `next-available`
                   to automatically let the Packet api determine one.
                 type: string
+              ipAddresses:
+                description: Optional IP Address list to use when default (1 private
+                  IPv4, 1 public IPv4 and 1 public IPv6) is not desired
+                items:
+                  properties:
+                    ipAddressCreateRequest:
+                      properties:
+                        address_family:
+                          description: Address Family for IP Address
+                          type: integer
+                        cidr:
+                          description: CIDR Size for the IP Block created. Valid values
+                            depends on the operating system provisioned.
+                          type: integer
+                        ip_reservations:
+                          description: Reservations are UUIDs of any IP reservations
+                            to use when assigning IPs
+                          items:
+                            type: string
+                          type: array
+                        public:
+                          description: Address Type for IP Address
+                          type: boolean
+                      required:
+                      - address_family
+                      - public
+                      type: object
+                  required:
+                  - ipAddressCreateRequest
+                  type: object
+                type: array
               ipxeURL:
                 description: IPXEUrl can be used to set the pxe boot url when using
                   custom OSes with this provider. Note that OS should also be set
