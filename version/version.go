@@ -19,8 +19,9 @@ package version
 import (
 	"fmt"
 	"runtime"
+	"strings"
 
-	"github.com/packethost/packngo"
+	metal "github.com/equinix-labs/metal-go/metal/v1"
 )
 
 var (
@@ -58,11 +59,17 @@ func Get() Info {
 		GoVersion:       runtime.Version(),
 		Compiler:        runtime.Compiler,
 		Platform:        fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
-		MetalSdkVersion: packngo.Version,
+		MetalSdkVersion: getMetalVersion(),
 	}
 }
 
 // String returns version info in a human-friendly format.
 func (info Info) String() string {
 	return info.GitVersion
+}
+
+func getMetalVersion() string {
+	metalUserAgent := metal.NewConfiguration().UserAgent
+	metalVersion := metalUserAgent[strings.Index(metalUserAgent, "/")+1:]
+	return metalVersion
 }

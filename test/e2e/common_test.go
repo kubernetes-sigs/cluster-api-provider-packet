@@ -29,9 +29,9 @@ import (
 
 	"github.com/blang/semver"
 	"github.com/docker/distribution/reference"
+	metal "github.com/equinix-labs/metal-go/metal/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/packethost/packngo"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -216,26 +216,28 @@ func (w *wrappedClusterProxy) Dispose(ctx context.Context) {
 			logf("Will clean up EIPs for the following clusters: %v", clusterNames)
 
 			for _, clusterName := range clusterNames {
-				var ip packngo.IPAddressReservation
+				var ip *metal.IPReservation
 
 				g.Eventually(func(g Gomega) {
 					var err error
-					ip, err = metalClient.GetIPByClusterIdentifier("", clusterName, metalProjectID)
+					ip, err = metalClient.GetIPByClusterIdentifier(ctx, "", clusterName, metalProjectID)
 					g.Expect(err).To(SatisfyAny(Not(HaveOccurred()), MatchError(packet.ErrControlPlanEndpointNotFound)))
 				}, "5m", "10s").Should(Succeed())
 
-				if ip.ID != "" {
-					if len(ip.Assignments) == 0 {
-						logf("Deleting EIP with ID: %s, for cluster: %s", ip.ID, clusterName)
+				ipID := ip.GetId()
+
+				if ipID != "" {
+					if len(ip.GetAssignments()) == 0 {
+						logf("Deleting EIP with ID: %s, for cluster: %s", ipID, clusterName)
 
 						g.Eventually(func(g Gomega) {
-							_, err := metalClient.ProjectIPs.Remove(ip.ID)
+							_, err := metalClient.IPAddressesApi.DeleteIPAddress(ctx, ipID).Execute()
 							Expect(err).NotTo(HaveOccurred())
 						}, "5m", "10s").Should(Succeed())
 
 						w.clusterNames.Delete(clusterName)
 					} else {
-						logf("EIP for cluster: %s with ID: %s appears to still be assigned", clusterName, ip.ID)
+						logf("EIP for cluster: %s with ID: %s appears to still be assigned", clusterName, ipID)
 					}
 				} else {
 					logf("Failed to find EIP for cluster: %s", clusterName)

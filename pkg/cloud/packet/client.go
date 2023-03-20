@@ -27,7 +27,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/packethost/packngo"
+	metal "github.com/equinix-labs/metal-go/metal/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
 
@@ -42,6 +42,7 @@ const (
 	envVarLocalASN  = "METAL_LOCAL_ASN"
 	envVarBGPPass   = "METAL_BGP_PASS" //nolint:gosec
 	DefaultLocalASN = 65000
+	legacyDebugVar  = "PACKNGO_DEBUG" // For backwards compatibility with packngo
 )
 
 var (
@@ -55,7 +56,7 @@ var (
 )
 
 type Client struct {
-	*packngo.Client
+	*metal.APIClient
 }
 
 // NewClient creates a new Client for the given Packet credentials
@@ -63,9 +64,12 @@ func NewClient(packetAPIKey string) *Client {
 	token := strings.TrimSpace(packetAPIKey)
 
 	if token != "" {
-		metalClient := &Client{packngo.NewClientWithAuth(clientName, token, nil)}
-		metalClient.UserAgent = fmt.Sprintf(clientUAFormat, version.Get(), metalClient.UserAgent)
-
+		configuration := metal.NewConfiguration()
+		configuration.Debug = checkEnvForDebug()
+		configuration.AddDefaultHeader("X-Auth-Token", token)
+		configuration.AddDefaultHeader("X-Consumer-Token", clientName)
+		configuration.UserAgent = fmt.Sprintf(clientUAFormat, version.Get(), configuration.UserAgent)
+		metalClient := &Client{metal.NewAPIClient(configuration)}
 		return metalClient
 	}
 
@@ -80,9 +84,9 @@ func GetClient() (*Client, error) {
 	return NewClient(token), nil
 }
 
-func (p *Client) GetDevice(deviceID string) (*packngo.Device, error) {
-	dev, _, err := p.Devices.Get(deviceID, nil)
-	return dev, err
+func (p *Client) GetDevice(ctx context.Context, deviceID string) (*metal.Device, *http.Response, error) {
+	dev, resp, err := p.DevicesApi.FindDeviceById(ctx, deviceID).Execute()
+	return dev, resp, err
 }
 
 type CreateDeviceRequest struct {
@@ -91,7 +95,7 @@ type CreateDeviceRequest struct {
 	ControlPlaneEndpoint string
 }
 
-func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packngo.Device, error) {
+func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*metal.Device, error) {
 	packetMachineSpec := req.MachineScope.PacketMachine.Spec
 	packetClusterSpec := req.MachineScope.PacketCluster.Spec
 	if packetMachineSpec.IPXEUrl != "" {
@@ -123,7 +127,7 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packn
 
 	if req.MachineScope.IsControlPlane() {
 		// control plane machines should get the API key injected
-		userDataValues["apiKey"] = p.APIKey
+		userDataValues["apiKey"] = p.APIClient.GetConfig().DefaultHeader["X-Auth-Token"]
 
 		if req.ControlPlaneEndpoint != "" {
 			userDataValues["controlPlaneEndpoint"] = req.ControlPlaneEndpoint
@@ -150,27 +154,40 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packn
 		facility = packetMachineSpec.Facility
 	}
 
-	serverCreateOpts := &packngo.DeviceCreateRequest{
-		Hostname:      req.MachineScope.Name(),
-		ProjectID:     packetClusterSpec.ProjectID,
-		Metro:         metro,
-		BillingCycle:  packetMachineSpec.BillingCycle,
-		Plan:          packetMachineSpec.MachineType,
-		OS:            packetMachineSpec.OS,
-		IPXEScriptURL: packetMachineSpec.IPXEUrl,
-		Tags:          tags,
-		UserData:      userData,
-	}
+	hostname := req.MachineScope.Name()
+
+	serverCreateOpts := metal.CreateDeviceRequest{}
 
 	if facility != "" {
-		serverCreateOpts.Facility = []string{facility}
+		serverCreateOpts.DeviceCreateInFacilityInput = &metal.DeviceCreateInFacilityInput{
+			Hostname:        &hostname,
+			Facility:        []string{facility},
+			BillingCycle:    &req.MachineScope.PacketMachine.Spec.BillingCycle,
+			Plan:            req.MachineScope.PacketMachine.Spec.MachineType,
+			OperatingSystem: req.MachineScope.PacketMachine.Spec.OS,
+			IpxeScriptUrl:   &req.MachineScope.PacketMachine.Spec.IPXEUrl,
+			Tags:            tags,
+			Userdata:        &userData,
+		}
+	} else {
+		serverCreateOpts.DeviceCreateInMetroInput = &metal.DeviceCreateInMetroInput{
+			Hostname:        &hostname,
+			Metro:           metro,
+			BillingCycle:    &req.MachineScope.PacketMachine.Spec.BillingCycle,
+			Plan:            req.MachineScope.PacketMachine.Spec.MachineType,
+			OperatingSystem: req.MachineScope.PacketMachine.Spec.OS,
+			IpxeScriptUrl:   &req.MachineScope.PacketMachine.Spec.IPXEUrl,
+			Tags:            tags,
+			Userdata:        &userData,
+		}
 	}
 
 	reservationIDs := strings.Split(packetMachineSpec.HardwareReservationID, ",")
 
 	// If there are no reservationIDs to process, go ahead and return early
-	if len(reservationIDs) == 0 {
-		dev, _, err := p.Devices.Create(serverCreateOpts)
+	if len(reservationIDs) <= 1 {
+		apiRequest := p.DevicesApi.CreateDevice(ctx, req.MachineScope.PacketCluster.Spec.ProjectID)
+		dev, _, err := apiRequest.CreateDeviceRequest(serverCreateOpts).Execute() //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 		return dev, err
 	}
 
@@ -180,8 +197,10 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packn
 	var lastErr error
 
 	for _, resID := range reservationIDs {
-		serverCreateOpts.HardwareReservationID = resID
-		dev, _, err := p.Devices.Create(serverCreateOpts)
+		reservationID := resID
+		serverCreateOpts.DeviceCreateInFacilityInput.HardwareReservationId = &reservationID
+		apiRequest := p.DevicesApi.CreateDevice(ctx, req.MachineScope.PacketCluster.Spec.ProjectID)
+		dev, _, err := apiRequest.CreateDeviceRequest(serverCreateOpts).Execute() //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 		if err != nil {
 			lastErr = err
 			continue
@@ -193,29 +212,29 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packn
 	return nil, lastErr
 }
 
-func (p *Client) GetDeviceAddresses(device *packngo.Device) []corev1.NodeAddress {
+func (p *Client) GetDeviceAddresses(device *metal.Device) []corev1.NodeAddress {
 	addrs := make([]corev1.NodeAddress, 0)
-	for _, addr := range device.Network {
+	for _, addr := range device.IpAddresses {
 		addrType := corev1.NodeInternalIP
-		if addr.IpAddressCommon.Public {
+		if addr.GetPublic() {
 			addrType = corev1.NodeExternalIP
 		}
 		a := corev1.NodeAddress{
 			Type:    addrType,
-			Address: addr.Address,
+			Address: addr.GetAddress(),
 		}
 		addrs = append(addrs, a)
 	}
 	return addrs
 }
 
-func (p *Client) GetDeviceByTags(project string, tags []string) (*packngo.Device, error) {
-	devices, _, err := p.Devices.List(project, nil)
+func (p *Client) GetDeviceByTags(ctx context.Context, project string, tags []string) (*metal.Device, error) {
+	devices, _, err := p.DevicesApi.FindProjectDevices(ctx, project).Execute() //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving devices: %w", err)
 	}
 	// returns the first one that matches all of the tags
-	for _, device := range devices {
+	for _, device := range devices.Devices {
 		if ItemsInList(device.Tags, tags) {
 			return &device, nil
 		}
@@ -225,17 +244,21 @@ func (p *Client) GetDeviceByTags(project string, tags []string) (*packngo.Device
 
 // CreateIP reserves an IP via Packet API. The request fails straight if no IP are available for the specified project.
 // This prevent the cluster to become ready.
-func (p *Client) CreateIP(namespace, clusterName, projectID, facility, metro string) (net.IP, error) {
-	req := packngo.IPReservationRequest{
-		Type:                   packngo.PublicIPv4,
+func (p *Client) CreateIP(ctx context.Context, namespace, clusterName, projectID, facility, metro string) (net.IP, error) {
+	failOnApprovalRequired := true
+	req := metal.IPReservationRequestInput{
+		Type:                   "public_ipv4",
 		Quantity:               1,
 		Facility:               &facility,
 		Metro:                  &metro,
-		FailOnApprovalRequired: true,
+		FailOnApprovalRequired: &failOnApprovalRequired,
 		Tags:                   []string{generateElasticIPIdentifier(clusterName)},
 	}
 
-	r, resp, err := p.ProjectIPs.Request(projectID, &req)
+	apiRequest := p.IPAddressesApi.RequestIPReservation(ctx, projectID)
+	r, resp, err := apiRequest.RequestIPReservationRequest(metal.RequestIPReservationRequest{
+		IPReservationRequestInput: &req,
+	}).Execute() //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 	if err != nil {
 		return nil, err
 	}
@@ -243,17 +266,18 @@ func (p *Client) CreateIP(namespace, clusterName, projectID, facility, metro str
 		return nil, ErrElasticIPQuotaExceeded
 	}
 
-	ip := net.ParseIP(r.Address)
+	rawIP := r.IPReservation.GetAddress()
+	ip := net.ParseIP(rawIP)
 	if ip == nil {
-		return nil, fmt.Errorf("failed to parse IP: %s, %w", r.Address, ErrInvalidIP)
+		return nil, fmt.Errorf("failed to parse IP: %s, %w", rawIP, ErrInvalidIP)
 	}
 	return ip, nil
 }
 
 // enableBGP enable bgp on the project
-func (p *Client) EnableProjectBGP(projectID string) error {
+func (p *Client) EnableProjectBGP(ctx context.Context, projectID string) error {
 	// first check if it is enabled before trying to create it
-	bgpConfig, _, err := p.BGPConfig.Get(projectID, &packngo.GetOptions{})
+	bgpConfig, _, err := p.BGPApi.FindBgpConfigByProject(ctx, projectID).Execute() //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 	// if we already have a config, just return
 	// we need some extra handling logic because the API always returns 200, even if
 	// not BGP config is in place.
@@ -264,7 +288,7 @@ func (p *Client) EnableProjectBGP(projectID string) error {
 	// - bgpConfig struct does not have Status=="disabled"
 	if err != nil {
 		return err
-	} else if bgpConfig != nil && bgpConfig.ID != "" && strings.ToLower(bgpConfig.Status) != "disabled" {
+	} else if bgpConfig != nil && bgpConfig.GetId() != "" && strings.ToLower(bgpConfig.GetStatus()) != "disabled" {
 		return nil
 	}
 
@@ -289,23 +313,25 @@ func (p *Client) EnableProjectBGP(projectID string) error {
 	}
 
 	// we did not have a valid one, so create it
-	req := packngo.CreateBGPConfigRequest{
-		Asn:            outLocalASN,
-		Md5:            outBGPPass,
+	useCase := "kubernetes-load-balancer"
+	apiRequest := p.BGPApi.RequestBgpConfig(ctx, projectID)
+	_, err = apiRequest.BgpConfigRequestInput(metal.BgpConfigRequestInput{
+		Asn:            int32(outLocalASN),
+		Md5:            &outBGPPass,
 		DeploymentType: "local",
-		UseCase:        "kubernetes-load-balancer",
-	}
-	_, err = p.BGPConfig.Create(projectID, req)
+		UseCase:        &useCase,
+	}).Execute() //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 	return err
 }
 
 // ensureNodeBGPEnabled check if the node has bgp enabled, and set it if it does not
-func (p *Client) EnsureNodeBGPEnabled(id string) error {
+func (p *Client) EnsureNodeBGPEnabled(ctx context.Context, id string) error {
 	// fortunately, this is idempotent, so just create
-	req := packngo.CreateBGPSessionRequest{
-		AddressFamily: "ipv4",
+	addressFamily := "ipv4"
+	req := metal.BGPSessionInput{
+		AddressFamily: &addressFamily,
 	}
-	_, response, err := p.BGPSessions.Create(id, req)
+	_, response, err := p.DevicesApi.CreateBgpSession(ctx, id).BGPSessionInput(req).Execute() //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 	// if we already had one, then we can ignore the error
 	// this really should be a 409, but 422 is what is returned
 	if response != nil && response.StatusCode == 422 && strings.Contains(fmt.Sprintf("%s", err), "already has session") {
@@ -314,25 +340,35 @@ func (p *Client) EnsureNodeBGPEnabled(id string) error {
 	return err
 }
 
-func (p *Client) GetIPByClusterIdentifier(namespace, name, projectID string) (packngo.IPAddressReservation, error) {
+func (p *Client) GetIPByClusterIdentifier(ctx context.Context, namespace, name, projectID string) (*metal.IPReservation, error) {
 	var err error
-	var reservedIP packngo.IPAddressReservation
+	var ipReservation *metal.IPReservation
 
-	listOpts := &packngo.ListOptions{}
-	reservedIPs, _, err := p.ProjectIPs.List(projectID, listOpts)
+	eipIdentifier := generateElasticIPIdentifier(name)
+	reservedIPs, _, err := p.IPAddressesApi.FindIPReservations(ctx, projectID).Execute() //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 	if err != nil {
-		return reservedIP, err
+		return ipReservation, err
 	}
-	for _, reservedIP := range reservedIPs {
-		for _, v := range reservedIP.Tags {
-			if v == generateElasticIPIdentifier(name) {
-				return reservedIP, nil
+	for _, reservedIPWrapper := range reservedIPs.IpAddresses {
+		ipReservation = reservedIPWrapper.IPReservation
+		if ipReservation != nil {
+			for _, tag := range ipReservation.Tags {
+				if tag == eipIdentifier {
+					return ipReservation, nil
+				}
 			}
 		}
 	}
-	return reservedIP, ErrControlPlanEndpointNotFound
+	return ipReservation, ErrControlPlanEndpointNotFound
 }
 
 func generateElasticIPIdentifier(name string) string {
 	return fmt.Sprintf("cluster-api-provider-packet:cluster-id:%s", name)
+}
+
+// This function provides backwards compatibility for the packngo
+// debug environment variable while allowing us to introduce a new
+// debug variable in the future that is not tied to packngo
+func checkEnvForDebug() bool {
+	return os.Getenv(legacyDebugVar) != ""
 }

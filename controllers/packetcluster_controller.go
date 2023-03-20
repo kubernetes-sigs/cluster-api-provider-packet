@@ -113,7 +113,7 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 
 	packetCluster := clusterScope.PacketCluster
 
-	ipReserv, err := r.PacketClient.GetIPByClusterIdentifier(clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID)
+	ipReserv, err := r.PacketClient.GetIPByClusterIdentifier(ctx, clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID)
 	switch {
 	case errors.Is(err, packet.ErrControlPlanEndpointNotFound):
 		// Parse metro and facility from the cluster spec
@@ -128,7 +128,7 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 		}
 
 		// There is not an ElasticIP with the right tags, at this point we can create one
-		ip, err := r.PacketClient.CreateIP(clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID, facility, metro)
+		ip, err := r.PacketClient.CreateIP(ctx, clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID, facility, metro)
 		if err != nil {
 			log.Error(err, "error reserving an ip")
 			return ctrl.Result{}, err
@@ -143,13 +143,13 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 	default:
 		// If there is an ElasticIP with the right tag just use it again
 		clusterScope.PacketCluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
-			Host: ipReserv.Address,
+			Host: ipReserv.GetAddress(),
 			Port: 6443,
 		}
 	}
 
 	if clusterScope.PacketCluster.Spec.VIPManager == "KUBE_VIP" {
-		if err := r.PacketClient.EnableProjectBGP(packetCluster.Spec.ProjectID); err != nil {
+		if err := r.PacketClient.EnableProjectBGP(ctx, packetCluster.Spec.ProjectID); err != nil {
 			log.Error(err, "error enabling bgp for project")
 			return ctrl.Result{}, err
 		}

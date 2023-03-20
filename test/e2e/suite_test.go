@@ -30,9 +30,9 @@ import (
 	"strings"
 	"testing"
 
+	metal "github.com/equinix-labs/metal-go/metal/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/packethost/packngo"
 	"golang.org/x/crypto/ssh"
 	"k8s.io/apimachinery/pkg/runtime"
 	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
@@ -182,7 +182,7 @@ var _ = SynchronizedAfterSuite(func() {
 		if metalAuthToken != "" && sshKeyID != "" {
 			By("Cleaning up the generated SSH Key")
 			metalClient := packet.NewClient(metalAuthToken)
-			_, err := metalClient.SSHKeys.Delete(sshKeyID)
+			_, err := metalClient.SSHKeysApi.DeleteSSHKey(nil, sshKeyID).Execute()
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
@@ -290,15 +290,17 @@ func generateSSHKey() (string, string) {
 	Expect(err).NotTo(HaveOccurred())
 
 	metalClient := packet.NewClient(metalAuthToken)
-	res, _, err := metalClient.SSHKeys.Create(
-		&packngo.SSHKeyCreateRequest{
-			Label: fmt.Sprintf("capp-e2e-%s", util.RandomString(6)),
-			Key:   string(ssh.MarshalAuthorizedKey(pub)),
+	label := fmt.Sprintf("capp-e2e-%s", util.RandomString(6))
+	key := string(ssh.MarshalAuthorizedKey(pub))
+	res, _, err := metalClient.SSHKeysApi.CreateSSHKey(nil).SSHKeyCreateInput(
+		metal.SSHKeyCreateInput{
+			Label: &label,
+			Key:   &key,
 		},
-	)
+	).Execute()
 	Expect(err).NotTo(HaveOccurred())
-	Expect(res.ID).NotTo(BeEmpty())
-	Expect(res.Label).NotTo(BeEmpty())
+	Expect(res.GetId()).NotTo(BeEmpty())
+	Expect(res.GetLabel()).NotTo(BeEmpty())
 
-	return res.ID, res.Label
+	return res.GetId(), res.GetLabel()
 }
