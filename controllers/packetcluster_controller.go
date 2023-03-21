@@ -168,7 +168,7 @@ func (r *PacketClusterReconciler) SetupWithManager(ctx context.Context, mgr ctrl
 		WithEventFilter(predicates.ResourceIsNotExternallyManaged(log)).
 		Watches(
 			&source.Kind{Type: &clusterv1.Cluster{}},
-			handler.EnqueueRequestsFromMapFunc(util.ClusterToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("PacketCluster"))),
+			handler.EnqueueRequestsFromMapFunc(util.ClusterToInfrastructureMapFunc(ctx, infrav1.GroupVersion.WithKind("PacketCluster"), mgr.GetClient(), &infrav1.PacketCluster{})),
 			builder.WithPredicates(predicates.ClusterUpdateUnpaused(log)),
 		).
 		Complete(r)
