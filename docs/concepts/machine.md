@@ -11,7 +11,7 @@ kind: PacketMachine
 metadata:
   name: "qa-controlplane-0"
 spec:
-  os: "ubuntu_18_04"
+  os: "ubuntu_22_04"
   billingCycle: hourly
   machineType: "c3.small.x86"
   sshKeys:
