@@ -7,7 +7,7 @@ metadata:
 spec:
   template:
     spec:
-      OS: "${NODE_OS:=ubuntu_18_04}"
+      OS: "${NODE_OS:=ubuntu_22_04}"
       billingCycle: hourly
       machineType: "${WORKER_NODE_TYPE}"
       sshKeys:

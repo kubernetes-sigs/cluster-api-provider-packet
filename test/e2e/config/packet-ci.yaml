@@ -165,7 +165,7 @@ variables:
   COREDNS_VERSION_UPGRADE_TO: "v1.8.6"
 
   # Infra provider specific variables
-  NODE_OS: "ubuntu_18_04"
+  NODE_OS: "ubuntu_22_04"
   POD_CIDR: "192.168.0.0/16"
   SERVICE_CIDR: "172.26.0.0/16"
 

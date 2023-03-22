@@ -257,7 +257,7 @@ spec:
     spec:
       billingCycle: hourly
       machineType: ${CONTROLPLANE_NODE_TYPE}
-      os: ${NODE_OS:=ubuntu_18_04}
+      os: ${NODE_OS:=ubuntu_22_04}
       sshKeys:
       - ${SSH_KEY}
       tags: []
@@ -271,7 +271,7 @@ spec:
     spec:
       billingCycle: hourly
       machineType: ${WORKER_NODE_TYPE}
-      os: ${NODE_OS:=ubuntu_18_04}
+      os: ${NODE_OS:=ubuntu_22_04}
       sshKeys:
       - ${SSH_KEY}
       tags: []
