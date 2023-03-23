@@ -85,9 +85,12 @@ func main() {
 	}
 
 	if profilerAddress != "" {
-		setupLog.Info("Profiler listening for requests", "profiler-address", profilerAddress)
+		setupLog.Info(fmt.Sprintf("Profiler listening for requests at %s", profilerAddress))
 		go func() {
-			setupLog.Error(http.ListenAndServe(profilerAddress, nil), "listen and serve error")
+			srv := http.Server{Addr: profilerAddress, ReadHeaderTimeout: 2 * time.Second}
+			if err := srv.ListenAndServe(); err != nil {
+				setupLog.Error(err, "problem running profiler server")
+			}
 		}()
 	}
 

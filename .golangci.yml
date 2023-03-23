@@ -1,82 +1,47 @@
 linters:
-  enable:
-  - asciicheck
-  - bidichk
-  - bodyclose
-  - containedctx
-  - contextcheck
-  # - cyclop
-  - decorder
-  - depguard
-  - dogsled
-  - dupl
-  - durationcheck
-  - errchkjson
-  # - errname
-  - errorlint
-  # - exhaustive
-  # - exhaustivestruct
-  - exportloopref
-  # - forbidigo
-  - forcetypeassert
-  # - funlen
-  - gci
-  # - gochecknoglobals
-  # - gochecknoinits
-  # - gocognit
-  - goconst
-  - gocritic
-  - gocyclo
-  # - godot
-  # - godox
-  - goerr113
-  - gofmt
-  # - gofumpt
-  - goheader
-  - goimports
-  # - gomnd
-  - gomoddirectives
-  - gomodguard
-  - goprintffuncname
-  - gosec
-  - grouper
-  - ifshort
-  - importas
-  - ireturn
-  # - lll
-  - maintidx
-  - makezero
-  - misspell
-  - nakedret
-  # - nestif
-  - nilerr
-  # - nilnil
-  # - nlreturn
-  - noctx
-  - nolintlint
-  # - paralleltest
-  - prealloc
-  - predeclared
-  - promlinter
-  - revive
-  - rowserrcheck
-  - sqlclosecheck
-  - stylecheck
-  # - tagliatelle
-  - tenv
-  # - testpackage
-  # - thelper
-  # - tparallel
-  - unconvert
-  - unparam
-  # - varnamelen
-  - wastedassign
-  - whitespace
-  # - wrapcheck
-  # - wsl
+  enable-all: true
+  disable:
+    - cyclop
+    - deadcode
+    - errname
+    - exhaustive
+    - exhaustruct
+    - exhaustivestruct
+    - forbidigo
+    - funlen
+    - gci
+    - gochecknoglobals
+    - gochecknoinits
+    - gocognit
+    - godot
+    - godox
+    - golint
+    - gofumpt
+    - gomnd
+    - ifshort
+    - interfacer
+    - lll
+    - maligned
+    - nestif
+    - nilnil
+    - nlreturn
+    - nosnakecase
+    - paralleltest
+    - scopelint
+    - structcheck
+    - tagliatelle
+    - testpackage
+    - thelper
+    - tparallel
+    - varcheck
+    - varnamelen
+    - wrapcheck
+    - wsl
 
 linters-settings:
   importas:
+    # Do not allow unaliased imports of aliased packages.
+    # Default: false
     no-unaliased: true
     alias:
       # Kubernetes
@@ -93,58 +58,32 @@ linters-settings:
       # Controller Runtime
       - pkg: sigs.k8s.io/controller-runtime
         alias: ctrl
-  gosimple:
-    go: "1.17"
-  staticcheck:
-    go: "1.17"
-  stylecheck:
-    go: "1.17"
-  unused:
-    go: "1.17"
   tagliatelle:
     case:
-      # use-field-name: true
       rules:
+        # Any struct tag type can be used.
+        # Support string case: `camel`, `pascal`, `kebab`, `snake`, `goCamel`, `goPascal`, `goKebab`, `goSnake`, `upper`, `lower`, `header`
         json: goCamel
   gomoddirectives:
-    # Allow local `replace` directives. Default is false.
-    replace-local: false
-    # List of allowed `replace` directives. Default is empty.
+    # List of allowed `replace` directives.
+    # Default: []
     replace-allow-list:
       - sigs.k8s.io/cluster-api
-    # Allow to not explain why the version has been retracted in the `retract` directives. Default is false.
-    retract-allow-no-explanation: false
-    # Forbid the use of the `exclude` directives. Default is false.
-    exclude-forbidden: false
-  gci:
-    # put imports beginning with prefix after 3rd-party packages;
-    # only support one prefix
-    # if not set, use goimports.local-prefixes
-    local-prefixes: sigs.k8s.io/cluster-api-provider-packet
   goimports:
     # put imports beginning with prefix after 3rd-party packages;
     # it's a comma-separated list of prefixes
     local-prefixes: sigs.k8s.io/cluster-api-provider-packet
   nolintlint:
-    # Enable to ensure that nolint directives are all used. Default is true.
-    allow-unused: false
-    # Disable to ensure that nolint directives don't have a leading space. Default is true.
-    allow-leading-space: true
-    # Exclude following linters from requiring an explanation.  Default is [].
-    allow-no-explanation: []
-    # Enable to require an explanation of nonzero length after each nolint directive. Default is false.
-    require-explanation: false
-    # Enable to require nolint directives to mention the specific linter being suppressed. Default is false.
+    # Enable to require nolint directives to mention the specific linter being suppressed.
+    # Default: false
     require-specific: true
-issues:
-  exclude-rules:
-    - linters:
-        - lll
-        - wsl
-      source: "^// \\+kubebuilder:"
-
+  revive:
+    rules:
+      - name: unused-parameter
+        disabled: true
 
 run:
+  go: '1.19'
   timeout: 10m
   skip-files:
   - "zz_generated.*\\.go$"
