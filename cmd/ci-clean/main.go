@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	AuthTokenEnvVar = "PACKET_API_KEY" // nolint:gosec
+	AuthTokenEnvVar = "PACKET_API_KEY" //nolint:gosec
 	ProjectIDEnvVar = "PROJECT_ID"
 )
 

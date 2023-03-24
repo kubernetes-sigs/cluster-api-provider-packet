@@ -33,7 +33,7 @@ type PacketMachineSpec struct {
 	OS           string   `json:"OS"` //nolint: tagliatelle
 	BillingCycle string   `json:"billingCycle"`
 	MachineType  string   `json:"machineType"`
-	SshKeys      []string `json:"sshKeys,omitempty"` //nolint: revive,stylecheck
+	SshKeys      []string `json:"sshKeys,omitempty"` //nolint: stylecheck
 
 	// Facility represents the Packet facility for this cluster.
 	// Override from the PacketCluster spec.
