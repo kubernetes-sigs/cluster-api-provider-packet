@@ -85,6 +85,22 @@ func (c *PacketCluster) ValidateUpdate(oldRaw runtime.Object) error {
 		)
 	}
 
+	// Must have either one of Metro or Facility
+	if len(c.Spec.Facility) == 0 && len(c.Spec.Metro) == 0 {
+		allErrs = append(allErrs,
+			field.Invalid(field.NewPath("spec", "Metro"),
+				c.Spec.Metro, "field is required when Facility is not set"),
+		)
+	}
+
+	// Must not have both Metro and Facility
+	if len(c.Spec.Facility) > 0 && len(c.Spec.Metro) > 0 {
+		allErrs = append(allErrs,
+			field.Invalid(field.NewPath("spec", "Facility"),
+				c.Spec.Facility, "field is mutually exclusive with Metro"),
+		)
+	}
+
 	if len(allErrs) == 0 {
 		return nil
 	}

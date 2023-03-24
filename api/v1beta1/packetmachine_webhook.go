@@ -61,6 +61,17 @@ func (m *PacketMachine) ValidateUpdate(old runtime.Object) error {
 		})
 	}
 
+	// Either Metro or Facility must be set, but not both
+	if m.Spec.Metro != "" && m.Spec.Facility != "" {
+		return apierrors.NewInvalid(GroupVersion.WithKind("PacketMachine").GroupKind(), m.Name, field.ErrorList{
+			field.Forbidden(field.NewPath("spec", "metro"), "cannot be set when spec.facility is set"),
+		})
+	} else if m.Spec.Metro == "" && m.Spec.Facility == "" {
+		return apierrors.NewInvalid(GroupVersion.WithKind("PacketMachine").GroupKind(), m.Name, field.ErrorList{
+			field.Required(field.NewPath("spec", "metro"), "must be set when spec.facility is not set"),
+		})
+	}
+
 	newPacketMachineSpec, _ := newPacketMachine["spec"].(map[string]interface{})
 	oldPacketMachineSpec, _ := oldPacketMachine["spec"].(map[string]interface{})
 

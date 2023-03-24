@@ -35,6 +35,7 @@ type PacketClusterSpec struct {
 	ProjectID string `json:"projectID"`
 
 	// Facility represents the Packet facility for this cluster
+	// +optional
 	Facility string `json:"facility,omitempty"`
 
 	// Metro represents the Packet metro for this cluster
