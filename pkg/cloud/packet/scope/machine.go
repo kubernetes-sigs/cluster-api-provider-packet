@@ -280,12 +280,12 @@ func getProviderIDPrefix(ctx context.Context, mgmtClient client.Client, workload
 
 // providerIDFromKubeadmConfig attempts to determine the appropriate providerID prefix to use based on the configuration
 // of the referenced KubeadmConfig resource. It uses the following precedence:
-// - If an explicit providerID is being configured for the kubelet through extra arguments in the InitConfiguration, use it
-// - If an explicit providerID is being configured for the kubelet through extra arguments in the JoinConfiguration, use it
-//   (InitConfiguration and JoinConfiguration are mutually exclusive options)
-// - If the PostKubeadmCommands are deploying packet-ccm, use "packet"
-// - If the PostKubeadmCommands are deploying cloud-provider-equinix-metal, use "equinixmetal"
-// - Otherwise, return ""
+//   - If an explicit providerID is being configured for the kubelet through extra arguments in the InitConfiguration, use it
+//   - If an explicit providerID is being configured for the kubelet through extra arguments in the JoinConfiguration, use it
+//     (InitConfiguration and JoinConfiguration are mutually exclusive options)
+//   - If the PostKubeadmCommands are deploying packet-ccm, use "packet"
+//   - If the PostKubeadmCommands are deploying cloud-provider-equinix-metal, use "equinixmetal"
+//   - Otherwise, return ""
 func providerIDFromKubeadmConfig(ctx context.Context, mgmtClient client.Client, namespace, name string) (string, error) {
 	kubeadmConfig := new(bootstrapv1.KubeadmConfig)
 	key := client.ObjectKey{
