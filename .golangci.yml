@@ -39,14 +39,6 @@ linters:
     - wsl
 
 linters-settings:
-  godot:
-    #   declarations - for top level declaration comments (default);
-    #   toplevel     - for top level comments;
-    #   all          - for all comments.
-    scope: toplevel
-    exclude:
-    - '^ \+.*'
-    - '^ ANCHOR.*'
   importas:
     # Do not allow unaliased imports of aliased packages.
     # Default: false
