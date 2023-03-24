@@ -60,12 +60,12 @@ endif
 ## Binaries.
 
 # Sync to controller-tools version in https://github.com/kubernetes-sigs/cluster-api/blob/v{VERSION}/hack/tools/go.mod
-CONTROLLER_GEN_VER := v0.8.0
+CONTROLLER_GEN_VER := v0.10.0
 CONTROLLER_GEN_BIN := controller-gen
 CONTROLLER_GEN := $(TOOLS_BIN_DIR)/$(CONTROLLER_GEN_BIN)-$(CONTROLLER_GEN_VER)
 
 # Sync to k8s.io/* verisons in https://github.com/kubernetes-sigs/cluster-api/blob/v{VERSION}/go.mod
-CONVERSION_GEN_VER := v0.23.5
+CONVERSION_GEN_VER := v0.25.0
 CONVERSION_GEN_BIN := conversion-gen
 CONVERSION_GEN := $(TOOLS_BIN_DIR)/$(CONVERSION_GEN_BIN)-$(CONVERSION_GEN_VER)
 
@@ -75,7 +75,7 @@ ENVSUBST_BIN := envsubst
 ENVSUBST := $(TOOLS_BIN_DIR)/$(ENVSUBST_BIN)
 
 # Bump as necessary/desired to latest that supports our version of go at https://github.com/golangci/golangci-lint/releases
-GOLANGCI_LINT_VER := v1.47.3
+GOLANGCI_LINT_VER := v1.52.1
 GOLANGCI_LINT_BIN := golangci-lint
 GOLANGCI_LINT := $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER)
 
@@ -86,7 +86,7 @@ KUSTOMIZE_BIN := kustomize
 KUSTOMIZE := $(TOOLS_BIN_DIR)/$(KUSTOMIZE_BIN)-$(KUSTOMIZE_VER)
 
 # Sync to github.com/onsi/ginkgo verison in https://github.com/kubernetes-sigs/cluster-api/blob/v{VERSION}/go.mod
-GINKGO_VER := v1.16.5
+GINKGO_VER := v2.6.0
 GINKGO_BIN := ginkgo
 GINKGO := $(TOOLS_BIN_DIR)/$(GINKGO_BIN)-$(GINKGO_VER)
 
@@ -119,7 +119,7 @@ endif
 # Build time versioning details.
 LDFLAGS := $(shell hack/version.sh)
 
-GOLANG_VERSION := 1.17.7
+GOLANG_VERSION := 1.19.6
 
 ## --------------------------------------
 ## Help
@@ -159,15 +159,16 @@ $(E2E_CONF_FILE): $(ENVSUBST) $(E2E_CONF_FILE_SOURCE)
 run-e2e-tests: $(KUSTOMIZE) $(GINKGO) $(E2E_CONF_FILE) e2e-test-templates $(if $(SKIP_IMAGE_BUILD),,e2e-image) ## Run the e2e tests
 	$(MAKE) set-manifest-image MANIFEST_IMG=$(REGISTRY)/$(IMAGE_NAME) MANIFEST_TAG=$(TAG)
 	$(MAKE) set-manifest-pull-policy PULL_POLICY=IfNotPresent
-	cd test/e2e; time $(GINKGO) -v -trace -progress -v -tags=e2e \
+	cd test/e2e; time $(GINKGO) -v --trace --progress --tags=e2e \
 		--randomizeAllSpecs -race $(GINKGO_ADDITIONAL_ARGS) \
-		-focus=$(GINKGO_FOCUS) -skip=$(GINKGO_SKIP) \
+		--focus=$(GINKGO_FOCUS) --skip=$(GINKGO_SKIP) \
 		-nodes=$(GINKGO_NODES) --noColor=$(GINKGO_NOCOLOR) \
+		--output-dir="$(ARTIFACTS)" --junit-report="junit.e2e_suite.1.xml" \
 		--flakeAttempts=$(GINKGO_FLAKE_ATTEMPTS) ./ -- \
 		-e2e.artifacts-folder="$(ARTIFACTS)" \
 		-e2e.config="$(E2E_CONF_FILE)" \
 		-e2e.skip-resource-cleanup=$(SKIP_CLEANUP) \
-		-e2e.use-existing-cluster=$(SKIP_CREATE_MGMT_CLUSTER)
+		-e2e.use-existing-cluster=$(SKIP_CREATE_MGMT_CLUSTER) 
 
 .PHONY: test-e2e-conformance
 test-e2e-conformance:
@@ -241,7 +242,7 @@ $(CONVERSION_GEN): ## Build conversion-gen.
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) k8s.io/code-generator/cmd/conversion-gen $(CONVERSION_GEN_BIN) $(CONVERSION_GEN_VER)
 
 $(GINKGO): ## Build ginkgo.
-	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) github.com/onsi/ginkgo/ginkgo $(GINKGO_BIN) $(GINKGO_VER)
+	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) github.com/onsi/ginkgo/v2/ginkgo $(GINKGO_BIN) $(GINKGO_VER)
 
 ## --------------------------------------
 ## Linting
