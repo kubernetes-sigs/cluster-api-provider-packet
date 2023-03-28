@@ -48,28 +48,26 @@ func (m *PacketMachine) ValidateCreate() error {
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
 func (m *PacketMachine) ValidateUpdate(old runtime.Object) error {
+	machineLog.Info("validate update", "name", m.Name)
+	var allErrs field.ErrorList
+
 	newPacketMachine, err := runtime.DefaultUnstructuredConverter.ToUnstructured(m)
 	if err != nil {
-		return apierrors.NewInvalid(GroupVersion.WithKind("PacketMachine").GroupKind(), m.Name, field.ErrorList{
-			field.InternalError(nil, errors.Wrap(err, "failed to convert new PacketMachine to unstructured object")),
-		})
-	}
-	oldPacketMachine, err := runtime.DefaultUnstructuredConverter.ToUnstructured(old)
-	if err != nil {
-		return apierrors.NewInvalid(GroupVersion.WithKind("PacketMachine").GroupKind(), m.Name, field.ErrorList{
-			field.InternalError(nil, errors.Wrap(err, "failed to convert old PacketMachine to unstructured object")),
-		})
+		allErrs = append(allErrs,
+			field.InternalError(nil, errors.Wrap(err,
+				"failed to convert new PacketMachine to unstructured object")))
 	}
 
-	// Either Metro or Facility must be set, but not both
+	oldPacketMachine, err := runtime.DefaultUnstructuredConverter.ToUnstructured(old)
+	if err != nil {
+		allErrs = append(allErrs,
+			field.InternalError(nil, errors.Wrap(err,
+				"failed to convert old PacketMachine to unstructured object")))
+	}
+
+	// If both Metro and Facility are set, ignore Facility
 	if m.Spec.Metro != "" && m.Spec.Facility != "" {
-		return apierrors.NewInvalid(GroupVersion.WithKind("PacketMachine").GroupKind(), m.Name, field.ErrorList{
-			field.Forbidden(field.NewPath("spec", "metro"), "cannot be set when spec.facility is set"),
-		})
-	} else if m.Spec.Metro == "" && m.Spec.Facility == "" {
-		return apierrors.NewInvalid(GroupVersion.WithKind("PacketMachine").GroupKind(), m.Name, field.ErrorList{
-			field.Required(field.NewPath("spec", "metro"), "must be set when spec.facility is not set"),
-		})
+		machineLog.Info("Metro and Facility are both set, ignoring Facility.")
 	}
 
 	newPacketMachineSpec, _ := newPacketMachine["spec"].(map[string]interface{})
@@ -84,12 +82,17 @@ func (m *PacketMachine) ValidateUpdate(old runtime.Object) error {
 	delete(newPacketMachineSpec, "tags")
 
 	if !reflect.DeepEqual(oldPacketMachineSpec, newPacketMachineSpec) {
-		return apierrors.NewInvalid(GroupVersion.WithKind("PacketMachine").GroupKind(), m.Name, field.ErrorList{
-			field.Forbidden(field.NewPath("spec"), "cannot be modified"),
-		})
+		allErrs = append(allErrs,
+			field.Invalid(field.NewPath("spec"),
+				m.Spec, "cannot be modified"),
+		)
 	}
 
-	return nil
+	if len(allErrs) == 0 {
+		return nil
+	}
+
+	return apierrors.NewInvalid(GroupVersion.WithKind("PacketMachine").GroupKind(), m.Name, allErrs)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type.
