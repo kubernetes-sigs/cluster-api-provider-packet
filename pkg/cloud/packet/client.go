@@ -92,9 +92,11 @@ type CreateDeviceRequest struct {
 }
 
 func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packngo.Device, error) {
-	if req.MachineScope.PacketMachine.Spec.IPXEUrl != "" {
+	packetMachineSpec := req.MachineScope.PacketMachine.Spec
+	packetClusterSpec := req.MachineScope.PacketCluster.Spec
+	if packetMachineSpec.IPXEUrl != "" {
 		// Error if pxe url and OS conflict
-		if req.MachineScope.PacketMachine.Spec.OS != ipxeOS {
+		if packetMachineSpec.OS != ipxeOS {
 			return nil, fmt.Errorf("os should be set to custom_pxe when using pxe urls: %w", ErrInvalidRequest)
 		}
 	}
@@ -110,8 +112,8 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packn
 		"kubernetesVersion": pointer.StringPtrDerefOr(req.MachineScope.Machine.Spec.Version, ""),
 	}
 
-	tags := make([]string, 0, len(req.MachineScope.PacketMachine.Spec.Tags)+len(req.ExtraTags))
-	copy(tags, req.MachineScope.PacketMachine.Spec.Tags)
+	tags := make([]string, 0, len(packetMachineSpec.Tags)+len(req.ExtraTags))
+	copy(tags, packetMachineSpec.Tags)
 	tags = append(tags, req.ExtraTags...)
 
 	tmpl, err := template.New("user-data").Parse(userData)
@@ -138,32 +140,42 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packn
 
 	userData = stringWriter.String()
 
-	// Allow to override the facility for each PacketMachineTemplate
-	facility := req.MachineScope.PacketCluster.Spec.Facility
-	if req.MachineScope.PacketMachine.Spec.Facility != "" {
-		facility = req.MachineScope.PacketMachine.Spec.Facility
-	}
+	// If Metro or Facility are specified at the Machine level, we ignore the
+	// values set at the Cluster level
+	var metro, facility string
 
-	// Allow to override the metro for each PacketMachineTemplate
-	metro := req.MachineScope.PacketCluster.Spec.Metro
-	if req.MachineScope.PacketMachine.Spec.Metro != "" {
-		metro = req.MachineScope.PacketMachine.Spec.Metro
+	if packetMachineSpec.Facility != "" || packetMachineSpec.Metro != "" {
+		metro = packetMachineSpec.Metro
+		facility = packetMachineSpec.Facility
+		// If both specified, metro takes precedence over facility
+		if metro != "" {
+			facility = ""
+		}
+	} else {
+		// Machine level is empty so set facility and metro to cluster level values
+		facility = packetClusterSpec.Facility
+		metro = packetClusterSpec.Metro
+
+		// If both specified, metro takes precedence over facility
+		if metro != "" {
+			facility = ""
+		}
 	}
 
 	serverCreateOpts := &packngo.DeviceCreateRequest{
 		Hostname:      req.MachineScope.Name(),
-		ProjectID:     req.MachineScope.PacketCluster.Spec.ProjectID,
+		ProjectID:     packetClusterSpec.ProjectID,
 		Facility:      []string{facility},
 		Metro:         metro,
-		BillingCycle:  req.MachineScope.PacketMachine.Spec.BillingCycle,
-		Plan:          req.MachineScope.PacketMachine.Spec.MachineType,
-		OS:            req.MachineScope.PacketMachine.Spec.OS,
-		IPXEScriptURL: req.MachineScope.PacketMachine.Spec.IPXEUrl,
+		BillingCycle:  packetMachineSpec.BillingCycle,
+		Plan:          packetMachineSpec.MachineType,
+		OS:            packetMachineSpec.OS,
+		IPXEScriptURL: packetMachineSpec.IPXEUrl,
 		Tags:          tags,
 		UserData:      userData,
 	}
 
-	reservationIDs := strings.Split(req.MachineScope.PacketMachine.Spec.HardwareReservationID, ",")
+	reservationIDs := strings.Split(packetMachineSpec.HardwareReservationID, ",")
 
 	// If there are no reservationIDs to process, go ahead and return early
 	if len(reservationIDs) == 0 {
