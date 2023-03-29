@@ -329,13 +329,13 @@ func (wc *wrappedClient) DeleteAllOf(ctx context.Context, obj client.Object, opt
 	return wc.client.DeleteAllOf(ctx, obj, opts...)
 }
 
-func (wc *wrappedClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+func (wc *wrappedClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	err := wc.recordClusterNameForResource(obj)
 	if err != nil {
 		return err
 	}
 
-	return wc.client.Get(ctx, key, obj)
+	return wc.client.Get(ctx, key, obj, opts...)
 }
 
 func (wc *wrappedClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
