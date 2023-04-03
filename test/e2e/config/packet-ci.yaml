@@ -127,7 +127,7 @@ providers:
     - sourcePath: "../data/v1beta1/cluster-template-node-drain.yaml"
     - sourcePath: "../data/v1beta1/cluster-template-md-remediation.yaml"
     - sourcePath: "../data/v1beta1/cluster-template-kcp-remediation.yaml"
-  - name: v0.7.99 # next; use manifest from source files
+  - name: v0.6.99 # next; use manifest from source files
     value: "../../../config/default"
     replacements:
     - old: "image: .*/cluster-api-provider-packet:.*"
