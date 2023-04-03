@@ -41,6 +41,7 @@ type PacketMachineSpec struct {
 	Facility string `json:"facility,omitempty"`
 
 	// Metro represents the Packet metro for this cluster
+	// Override from the PacketCluster spec.
 	// +optional
 	Metro string `json:"metro,omitempty"`
 
