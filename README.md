@@ -34,7 +34,7 @@ You should then follow the [Cluster API Quick Start Guide](https://cluster-api.s
 
 If you do not change the generated `yaml` files, it will use defaults. You can look in the [templates/cluster-template.yaml](./templates/cluster-template.yaml) file for details.
 
-* `CPEM_VERSION`                 (defaults to `v3.5.0`)
+* `CPEM_VERSION`                 (defaults to `v3.6.0`)
 * `KUBE_VIP_VERSION`             (defaults to `v0.5.0`)
 * `NODE_OS`                      (defaults to `ubuntu_22_04`)
 * `POD_CIDR`                     (defaults to `192.168.0.0/16`)
