@@ -79,7 +79,8 @@ spec:
               machineType:
                 type: string
               metro:
-                description: Metro represents the Packet metro for this cluster
+                description: Metro represents the Packet metro for this cluster Override
+                  from the PacketCluster spec.
                 type: string
               providerID:
                 description: ProviderID is the unique identifier as specified by the
@@ -213,7 +214,8 @@ spec:
               machineType:
                 type: string
               metro:
-                description: Metro represents the Packet metro for this cluster
+                description: Metro represents the Packet metro for this cluster Override
+                  from the PacketCluster spec.
                 type: string
               os:
                 type: string
