@@ -162,13 +162,13 @@ run-e2e-tests: $(KUSTOMIZE) $(GINKGO) $(E2E_CONF_FILE) e2e-test-templates $(if $
 	cd test/e2e; time $(GINKGO) -v --trace --tags=e2e \
 		--randomize-all -race $(GINKGO_ADDITIONAL_ARGS) \
 		--focus=$(GINKGO_FOCUS) --skip=$(GINKGO_SKIP) \
-		-nodes=$(GINKGO_NODES) --no-color=$(GINKGO_NOCOLOR) \
+		--nodes=$(GINKGO_NODES) --no-color=$(GINKGO_NOCOLOR) \
 		--output-dir="$(ARTIFACTS)" --junit-report="junit.e2e_suite.1.xml" \
 		--flake-attempts=$(GINKGO_FLAKE_ATTEMPTS) ./ -- \
 		-e2e.artifacts-folder="$(ARTIFACTS)" \
 		-e2e.config="$(E2E_CONF_FILE)" \
 		-e2e.skip-resource-cleanup=$(SKIP_CLEANUP) \
-		-e2e.use-existing-cluster=$(SKIP_CREATE_MGMT_CLUSTER) 
+		-e2e.use-existing-cluster=$(SKIP_CREATE_MGMT_CLUSTER)
 
 .PHONY: test-e2e-conformance
 test-e2e-conformance:
