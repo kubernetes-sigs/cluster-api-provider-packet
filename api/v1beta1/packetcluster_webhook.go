@@ -47,6 +47,23 @@ func (c *PacketCluster) Default() {
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
 func (c *PacketCluster) ValidateCreate() error {
 	clusterlog.Info("validate create", "name", c.Name)
+	allErrs := field.ErrorList{}
+
+	// Must have either one of Metro or Facility
+	if len(c.Spec.Facility) == 0 && len(c.Spec.Metro) == 0 {
+		allErrs = append(allErrs,
+			field.Invalid(field.NewPath("spec", "Metro"),
+				c.Spec.Metro, "field is required when Facility is not set"),
+		)
+	}
+
+	// If both Metro and Facility are set, ignore Facility, we'll leave this to
+	// the controller to deal with - the facility will need to reside in the
+	// metro.
+
+	if len(allErrs) > 0 {
+		return apierrors.NewInvalid(GroupVersion.WithKind("PacketCluster").GroupKind(), c.Name, allErrs)
+	}
 
 	return nil
 }
@@ -64,20 +81,6 @@ func (c *PacketCluster) ValidateUpdate(oldRaw runtime.Object) error {
 		)
 	}
 
-	if !reflect.DeepEqual(c.Spec.Facility, old.Spec.Facility) {
-		allErrs = append(allErrs,
-			field.Invalid(field.NewPath("spec", "Facility"),
-				c.Spec.Facility, "field is immutable"),
-		)
-	}
-
-	if !reflect.DeepEqual(c.Spec.Metro, old.Spec.Metro) {
-		allErrs = append(allErrs,
-			field.Invalid(field.NewPath("spec", "Metro"),
-				c.Spec.Metro, "field is immutable"),
-		)
-	}
-
 	if !reflect.DeepEqual(c.Spec.VIPManager, old.Spec.VIPManager) {
 		allErrs = append(allErrs,
 			field.Invalid(field.NewPath("spec", "VIPManager"),
@@ -91,11 +94,6 @@ func (c *PacketCluster) ValidateUpdate(oldRaw runtime.Object) error {
 			field.Invalid(field.NewPath("spec", "Metro"),
 				c.Spec.Metro, "field is required when Facility is not set"),
 		)
-	}
-
-	// If both Metro and Facility are set, ignore Facility
-	if len(c.Spec.Facility) > 0 && len(c.Spec.Metro) > 0 {
-		clusterlog.Info("Metro and Facility are both set, ignoring Facility.")
 	}
 
 	if len(allErrs) == 0 {
