@@ -33,7 +33,7 @@ var _ = Describe("[General] Running the Cluster API E2E tests", func() {
 	// tested:
 	// - capi_e2e.KCPAdoptionSpec
 	// - capi_e2e.MachinePoolSpec ???
-	// - capi_e2e.ClusetrClassChangesSpec
+	// - capi_e2e.ClusterClassChangesSpec
 
 	// The following upstream tests are not implemented because they are subsets of
 	// capi_e2e.ClusterUpgradeConformanceSpec:
