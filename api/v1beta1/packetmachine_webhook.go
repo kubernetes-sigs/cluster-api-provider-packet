@@ -42,6 +42,15 @@ func (m *PacketMachine) SetupWebhookWithManager(mgr ctrl.Manager) error {
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
 func (m *PacketMachine) ValidateCreate() error {
 	machineLog.Info("validate create", "name", m.Name)
+	allErrs := field.ErrorList{}
+
+	// If both Metro and Facility are set, ignore Facility, we'll leave this to
+	// the controller to deal with - the facility will need to reside in the
+	// metro.
+
+	if len(allErrs) > 0 {
+		return apierrors.NewInvalid(GroupVersion.WithKind("PacketMachine").GroupKind(), m.Name, allErrs)
+	}
 
 	return nil
 }
@@ -65,11 +74,6 @@ func (m *PacketMachine) ValidateUpdate(old runtime.Object) error {
 				"failed to convert old PacketMachine to unstructured object")))
 	}
 
-	// If both Metro and Facility are set, ignore Facility
-	if m.Spec.Metro != "" && m.Spec.Facility != "" {
-		machineLog.Info("Metro and Facility are both set, ignoring Facility.")
-	}
-
 	newPacketMachineSpec, _ := newPacketMachine["spec"].(map[string]interface{})
 	oldPacketMachineSpec, _ := oldPacketMachine["spec"].(map[string]interface{})
 
@@ -80,6 +84,14 @@ func (m *PacketMachine) ValidateUpdate(old runtime.Object) error {
 	// allow changes to tags
 	delete(oldPacketMachineSpec, "tags")
 	delete(newPacketMachineSpec, "tags")
+
+	// allow changes to facility
+	delete(oldPacketMachineSpec, "facility")
+	delete(newPacketMachineSpec, "facility")
+
+	// allow changes to metro
+	delete(oldPacketMachineSpec, "metro")
+	delete(newPacketMachineSpec, "metro")
 
 	if !reflect.DeepEqual(oldPacketMachineSpec, newPacketMachineSpec) {
 		allErrs = append(allErrs,
