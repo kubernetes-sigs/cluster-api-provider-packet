@@ -142,30 +142,17 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packn
 
 	// If Metro or Facility are specified at the Machine level, we ignore the
 	// values set at the Cluster level
-	var metro, facility string
+	facility := packetClusterSpec.Facility
+	metro := packetClusterSpec.Metro
 
 	if packetMachineSpec.Facility != "" || packetMachineSpec.Metro != "" {
 		metro = packetMachineSpec.Metro
 		facility = packetMachineSpec.Facility
-		// If both specified, metro takes precedence over facility
-		if metro != "" {
-			facility = ""
-		}
-	} else {
-		// Machine level is empty so set facility and metro to cluster level values
-		facility = packetClusterSpec.Facility
-		metro = packetClusterSpec.Metro
-
-		// If both specified, metro takes precedence over facility
-		if metro != "" {
-			facility = ""
-		}
 	}
 
 	serverCreateOpts := &packngo.DeviceCreateRequest{
 		Hostname:      req.MachineScope.Name(),
 		ProjectID:     packetClusterSpec.ProjectID,
-		Facility:      []string{facility},
 		Metro:         metro,
 		BillingCycle:  packetMachineSpec.BillingCycle,
 		Plan:          packetMachineSpec.MachineType,
@@ -173,6 +160,10 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*packn
 		IPXEScriptURL: packetMachineSpec.IPXEUrl,
 		Tags:          tags,
 		UserData:      userData,
+	}
+
+	if facility != "" {
+		serverCreateOpts.Facility = []string{facility}
 	}
 
 	reservationIDs := strings.Split(packetMachineSpec.HardwareReservationID, ",")
