@@ -365,7 +365,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	if machineScope.PacketCluster.Spec.VIPManager == "KUBE_VIP" {
 		if err := r.PacketClient.EnsureNodeBGPEnabled(dev.ID); err != nil {
 			// Do not treat an error enabling bgp on machine as fatal
-			return ctrl.Result{RequeueAfter: time.Second * 20}, fmt.Errorf("failed to enable bpg on machine %s: %w", machineScope.Name(), err)
+			return ctrl.Result{RequeueAfter: time.Second * 20}, fmt.Errorf("failed to enable bgp on machine %s: %w", machineScope.Name(), err)
 		}
 	}
 
