@@ -297,7 +297,7 @@ func (p *Client) EnsureNodeBGPEnabled(id string) error {
 	_, response, err := p.BGPSessions.Create(id, req)
 	// if we already had one, then we can ignore the error
 	// this really should be a 409, but 422 is what is returned
-	if response.StatusCode == 422 && strings.Contains(fmt.Sprintf("%s", err), "already has session") {
+	if response != nil && response.StatusCode == 422 && strings.Contains(fmt.Sprintf("%s", err), "already has session") {
 		err = nil
 	}
 	return err
