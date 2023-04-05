@@ -42,12 +42,21 @@ export DOCKER_CLI_EXPERIMENTAL := enabled
 CURL_RETRIES=3
 
 # Directories.
+#
+# Full directory of where the Makefile resides
 ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+EXP_DIR := exp
+BIN_DIR := bin
+TEST_DIR := test
 TOOLS_DIR := hack/tools
-TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/bin)
-PATH := $(TOOLS_BIN_DIR):$(PATH)
-BIN_DIR := $(abspath $(ROOT_DIR)/bin)
-GO_INSTALL = ./scripts/go_install.sh
+TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/$(BIN_DIR))
+E2E_FRAMEWORK_DIR := $(TEST_DIR)/framework
+CAPD_DIR := $(TEST_DIR)/infrastructure/docker
+TEST_EXTENSION_DIR := $(TEST_DIR)/extension
+GO_INSTALL := ./scripts/go_install.sh
+OBSERVABILITY_DIR := hack/observability
+
+export PATH := $(abspath $(TOOLS_BIN_DIR)):$(PATH)
 
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 # Set --output-base for conversion-gen if we are not within GOPATH
@@ -88,7 +97,8 @@ KUSTOMIZE := $(TOOLS_BIN_DIR)/$(KUSTOMIZE_BIN)-$(KUSTOMIZE_VER)
 # Sync to github.com/onsi/ginkgo verison in https://github.com/kubernetes-sigs/cluster-api/blob/v{VERSION}/go.mod
 GINKGO_VER := v2.6.0
 GINKGO_BIN := ginkgo
-GINKGO := $(TOOLS_BIN_DIR)/$(GINKGO_BIN)-$(GINKGO_VER)
+GINKGO := $(abspath $(TOOLS_BIN_DIR)/$(GINKGO_BIN)-$(GINKGO_VER))
+GINKGO_PKG := github.com/onsi/ginkgo/v2/ginkgo
 
 TIMEOUT := $(shell command -v timeout || command -v gtimeout)
 
@@ -136,19 +146,31 @@ help:  ## Display this help
 test: ## Run tests
 	source ./scripts/fetch_ext_bins.sh; fetch_tools; setup_envs; go test -v ./... -coverprofile cover.out
 
-# Allow overriding the e2e configurations
+#
+# Ginkgo configuration.
+#
+GINKGO_FOCUS ?=
+GINKGO_SKIP ?=
 GINKGO_NODES ?= 1
+GINKGO_TIMEOUT ?= 6h
+GINKGO_POLL_PROGRESS_AFTER ?= 60m
+GINKGO_POLL_PROGRESS_INTERVAL ?= 5m
+E2E_CONF_FILE ?= $(ROOT_DIR)/$(TEST_DIR)/e2e/config/packet-ci-envsubst.yaml
+SKIP_RESOURCE_CLEANUP ?= false
+USE_EXISTING_CLUSTER ?= false
 GINKGO_NOCOLOR ?= false
-GINKGO_FOCUS ?= ""
-GINKGO_SKIP ?= ""
-GINKGO_FLAKE_ATTEMPTS ?= 2
+
+# to set multiple ginkgo skip flags, if any
+ifneq ($(strip $(GINKGO_SKIP)),)
+	_SKIP_ARGS := $(foreach arg,$(strip $(GINKGO_SKIP)),--skip="$(arg)")
+endif
+
+# Additinal GINKGO overrides
+GINKGO_FLAKE_ATTEMPTS ?= 0
+E2E_CONF_FILE_SOURCE ?= $(ROOT_DIR)/$(TEST_DIR)/e2e/config/packet-ci.yaml
+SKIP_IMAGE_BUILD ?= false
+
 ARTIFACTS ?= $(ROOT_DIR)/_artifacts
-SKIP_CLEANUP ?= false
-SKIP_CREATE_MGMT_CLUSTER ?= false
-E2E_DIR ?= $(REPO_ROOT)/test/e2e
-KUBETEST_CONF_PATH ?= $(abspath $(E2E_DIR)/data/kubetest/conformance.yaml)
-E2E_CONF_FILE_SOURCE ?= $(E2E_DIR)/config/packet-ci.yaml
-E2E_CONF_FILE ?= $(E2E_DIR)/config/packet-ci-envsubst.yaml
 
 .PHONY: $(E2E_CONF_FILE)
 $(E2E_CONF_FILE): $(ENVSUBST) $(E2E_CONF_FILE_SOURCE)
@@ -159,16 +181,14 @@ $(E2E_CONF_FILE): $(ENVSUBST) $(E2E_CONF_FILE_SOURCE)
 run-e2e-tests: $(KUSTOMIZE) $(GINKGO) $(E2E_CONF_FILE) e2e-test-templates $(if $(SKIP_IMAGE_BUILD),,e2e-image) ## Run the e2e tests
 	$(MAKE) set-manifest-image MANIFEST_IMG=$(REGISTRY)/$(IMAGE_NAME) MANIFEST_TAG=$(TAG)
 	$(MAKE) set-manifest-pull-policy PULL_POLICY=IfNotPresent
-	cd test/e2e; time $(GINKGO) -v --trace --tags=e2e \
-		--randomize-all -race $(GINKGO_ADDITIONAL_ARGS) \
-		--focus=$(GINKGO_FOCUS) --skip=$(GINKGO_SKIP) \
-		--nodes=$(GINKGO_NODES) --no-color=$(GINKGO_NOCOLOR) \
-		--output-dir="$(ARTIFACTS)" --junit-report="junit.e2e_suite.1.xml" \
-		--flake-attempts=$(GINKGO_FLAKE_ATTEMPTS) ./ -- \
+	$(GINKGO) -v --trace --poll-progress-after=$(GINKGO_POLL_PROGRESS_AFTER) \
+		--poll-progress-interval=$(GINKGO_POLL_PROGRESS_INTERVAL) --tags=e2e --focus="$(GINKGO_FOCUS)" \
+		$(_SKIP_ARGS) --nodes=$(GINKGO_NODES) --timeout=$(GINKGO_TIMEOUT) --no-color=$(GINKGO_NOCOLOR) \
+		--flake-attempts=$(GINKGO_FLAKE_ATTEMPTS) \
+		--output-dir="$(ARTIFACTS)" --junit-report="junit.e2e_suite.1.xml" $(GINKGO_ARGS) $(ROOT_DIR)/$(TEST_DIR)/e2e -- \
 		-e2e.artifacts-folder="$(ARTIFACTS)" \
 		-e2e.config="$(E2E_CONF_FILE)" \
-		-e2e.skip-resource-cleanup=$(SKIP_CLEANUP) \
-		-e2e.use-existing-cluster=$(SKIP_CREATE_MGMT_CLUSTER)
+		-e2e.skip-resource-cleanup=$(SKIP_RESOURCE_CLEANUP) -e2e.use-existing-cluster=$(USE_EXISTING_CLUSTER)
 
 .PHONY: test-e2e-conformance
 test-e2e-conformance:
@@ -176,11 +196,11 @@ test-e2e-conformance:
 
 .PHONY: test-e2e-management-upgrade
 test-e2e-management-upgrade:
-	$(MAKE) run-e2e-tests GINKGO_FOCUS="'\[Management Upgrade\]'"
+	$(MAKE) run-e2e-tests GINKGO_FOCUS="'\[Management-Upgrade\]'"
 
 .PHONY: test-e2e-workload-upgrade
 test-e2e-workload-upgrade:
-	$(MAKE) run-e2e-tests GINKGO_FOCUS="'\[Workload Upgrade\]'"
+	$(MAKE) run-e2e-tests GINKGO_FOCUS="'\[Workload-Upgrade\]'"
 
 .PHONY: test-e2e-quickstart
 test-e2e-quickstart:
@@ -188,11 +208,11 @@ test-e2e-quickstart:
 
 .PHONY: test-e2e-local
 test-e2e-local:
-	$(MAKE) run-e2e-tests GINKGO_SKIP="'\[QuickStart\]|\[Conformance\]|\[Needs Published Image\]|\[Management Upgrade\]|\[Workload Upgrade\]'"
+	$(MAKE) run-e2e-tests GINKGO_SKIP="'\[QuickStart\]|\[Conformance\]|\[Needs-Published-Image\]|\[Management-Upgrade\]|\[Workload-Upgrade\]'"
 
 .PHONY: test-e2e-ci
 test-e2e-ci:
-	$(MAKE) run-e2e-tests GINKGO_SKIP="'\[QuickStart\]|\[Conformance\]|\[Management Upgrade\]|\[Workload Upgrade\]'"
+	$(MAKE) run-e2e-tests GINKGO_SKIP="'\[QuickStart\]|\[Conformance\]|\[Management-Upgrade\]|\[Workload-Upgrade\]'"
 
 ## --------------------------------------
 ## E2E Test Templates
@@ -241,8 +261,8 @@ $(CONTROLLER_GEN): ## Build controller-gen from tools folder.
 $(CONVERSION_GEN): ## Build conversion-gen.
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) k8s.io/code-generator/cmd/conversion-gen $(CONVERSION_GEN_BIN) $(CONVERSION_GEN_VER)
 
-$(GINKGO): ## Build ginkgo.
-	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) github.com/onsi/ginkgo/v2/ginkgo $(GINKGO_BIN) $(GINKGO_VER)
+$(GINKGO): # Build ginkgo from tools folder.
+	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(GINKGO_PKG) $(GINKGO_BIN) $(GINKGO_VER)
 
 ## --------------------------------------
 ## Linting

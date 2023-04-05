@@ -26,10 +26,10 @@ import (
 	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
 )
 
-var _ = Describe("[Management Upgrade] Running the Cluster API E2E tests", func() {
+var _ = Describe("[Management-Upgrade] Running the Cluster API E2E tests", func() {
 	ctx := context.TODO()
 
-	Context("[Needs Published Image] Running tests that require published images", func() {
+	Context("[Needs-Published-Image] Running tests that require published images", func() {
 		Context("Running the clusterctl upgrade spec on a cluster with packet-ccm", func() {
 			capi_e2e.ClusterctlUpgradeSpec(ctx, func() capi_e2e.ClusterctlUpgradeSpecInput {
 				return capi_e2e.ClusterctlUpgradeSpecInput{

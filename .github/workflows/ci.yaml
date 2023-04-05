@@ -312,7 +312,7 @@ jobs:
         name: e2e-conformance
         path: _artifacts
   e2e-management-upgrade:
-    name: "E2E management upgrade"
+    name: "E2E Management-Upgrade"
     concurrency: ci-${{ github.ref }}-e2e-management-upgrade
     runs-on: ubuntu-latest
     needs:
@@ -368,7 +368,7 @@ jobs:
         name: e2e-management-upgrade
         path: _artifacts
   e2e-workload-upgrade:
-    name: "E2E workload upgrade"
+    name: "E2E Workload-Upgrade"
     concurrency: ci-${{ github.ref }}-e2e-workload-upgrade
     runs-on: ubuntu-latest
     needs:
