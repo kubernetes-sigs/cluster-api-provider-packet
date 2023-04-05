@@ -53,13 +53,9 @@ func (c *PacketCluster) ValidateCreate() error {
 	if len(c.Spec.Facility) == 0 && len(c.Spec.Metro) == 0 {
 		allErrs = append(allErrs,
 			field.Invalid(field.NewPath("spec", "Metro"),
-				c.Spec.Metro, "field is required when Facility is not set"),
+				c.Spec.Metro, "field is required"),
 		)
 	}
-
-	// If both Metro and Facility are set, ignore Facility, we'll leave this to
-	// the controller to deal with - the facility will need to reside in the
-	// metro.
 
 	if len(allErrs) > 0 {
 		return apierrors.NewInvalid(GroupVersion.WithKind("PacketCluster").GroupKind(), c.Name, allErrs)
@@ -92,7 +88,7 @@ func (c *PacketCluster) ValidateUpdate(oldRaw runtime.Object) error {
 	if len(c.Spec.Facility) == 0 && len(c.Spec.Metro) == 0 {
 		allErrs = append(allErrs,
 			field.Invalid(field.NewPath("spec", "Metro"),
-				c.Spec.Metro, "Metro is required when Facility is not set"),
+				c.Spec.Metro, "Metro is required"),
 		)
 	}
 
@@ -100,7 +96,7 @@ func (c *PacketCluster) ValidateUpdate(oldRaw runtime.Object) error {
 	if len(c.Spec.Facility) > 0 && len(c.Spec.Metro) > 0 {
 		allErrs = append(allErrs,
 			field.Invalid(field.NewPath("spec", "Facility"),
-				c.Spec.Facility, "Metro and Facility are mutually exclusive"),
+				c.Spec.Facility, "Metro and Facility are mutually exclusive, Metro is recommended"),
 		)
 	}
 
