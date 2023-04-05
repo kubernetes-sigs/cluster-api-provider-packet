@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 )
 
-var _ = Describe("[Workload Upgrade] Running the Cluster API E2E Workload Cluster Upgrade tests", func() {
+var _ = Describe("[Workload-Upgrade] Running the Cluster API E2E Workload Cluster Upgrade tests", func() {
 	ctx := context.TODO()
 
 	// The following upstream tests are not implemented because they are subsets of
