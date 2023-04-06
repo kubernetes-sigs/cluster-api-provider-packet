@@ -190,6 +190,7 @@ jobs:
         TAG: ${{ steps.meta.outputs.version }}
     - name: "e2e-quickstart"
       env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         TAG: ${{ steps.meta.outputs.version }}
         PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
         PROJECT_ID: ${{ secrets.PROJECT_ID }}
@@ -248,6 +249,7 @@ jobs:
         TAG: ${{ steps.meta.outputs.version }}
     - name: "e2e"
       env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         TAG: ${{ steps.meta.outputs.version }}
         PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
         PROJECT_ID: ${{ secrets.PROJECT_ID }}
@@ -306,6 +308,7 @@ jobs:
         TAG: ${{ steps.meta.outputs.version }}
     - name: "e2e-conformance"
       env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         TAG: ${{ steps.meta.outputs.version }}
         PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
         PROJECT_ID: ${{ secrets.PROJECT_ID }}
@@ -364,6 +367,7 @@ jobs:
         TAG: ${{ steps.meta.outputs.version }}
     - name: "e2e-management-upgrade"
       env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         TAG: ${{ steps.meta.outputs.version }}
         PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
         PROJECT_ID: ${{ secrets.PROJECT_ID }}
@@ -422,6 +426,7 @@ jobs:
         TAG: ${{ steps.meta.outputs.version }}
     - name: "e2e-workload-upgrade"
       env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         TAG: ${{ steps.meta.outputs.version }}
         PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
         PROJECT_ID: ${{ secrets.PROJECT_ID }}
