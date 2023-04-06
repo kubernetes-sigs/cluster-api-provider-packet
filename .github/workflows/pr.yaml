@@ -15,7 +15,9 @@ jobs:
       uses: actions/checkout@v3
       with:
         fetch-depth: 0
-    - uses: ./.github/actions/setup-go
+    - uses: actions/setup-go@v4
+      with: 
+        go-version-file: './go.mod'
     - uses: actions/cache@v3
       with:
         path: hack/tools/bin
