@@ -42,15 +42,6 @@ func (m *PacketMachine) SetupWebhookWithManager(mgr ctrl.Manager) error {
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
 func (m *PacketMachine) ValidateCreate() error {
 	machineLog.Info("validate create", "name", m.Name)
-	allErrs := field.ErrorList{}
-
-	// If both Metro and Facility are set, ignore Facility, we'll leave this to
-	// the controller to deal with - the facility will need to reside in the
-	// metro.
-
-	if len(allErrs) > 0 {
-		return apierrors.NewInvalid(GroupVersion.WithKind("PacketMachine").GroupKind(), m.Name, allErrs)
-	}
 
 	return nil
 }
