@@ -29,6 +29,8 @@ jobs:
       with:
         fetch-depth: 0
     - uses: actions/setup-go@v4
+      with: 
+        go-version-file: './go.mod'
     - uses: actions/cache@v3
       with:
         path: hack/tools/bin
@@ -56,6 +58,8 @@ jobs:
     - name: checkout
       uses: actions/checkout@v3
     - uses: actions/setup-go@v4
+      with: 
+        go-version-file: './go.mod'
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v2
     - name: Set up Docker Buildx
@@ -116,6 +120,8 @@ jobs:
     - name: checkout
       uses: actions/checkout@v3
     - uses: actions/setup-go@v4
+      with: 
+        go-version-file: './go.mod'
     - uses: actions/cache@v3
       with:
         path: hack/tools/bin
@@ -154,6 +160,8 @@ jobs:
     - name: checkout
       uses: actions/checkout@v3
     - uses: actions/setup-go@v4
+      with: 
+        go-version-file: './go.mod'
     - uses: actions/cache@v3
       with:
         path: hack/tools/bin
@@ -210,6 +218,8 @@ jobs:
     - name: checkout
       uses: actions/checkout@v3
     - uses: actions/setup-go@v4
+      with: 
+        go-version-file: './go.mod'
     - uses: actions/cache@v3
       with:
         path: hack/tools/bin
@@ -266,6 +276,8 @@ jobs:
     - name: checkout
       uses: actions/checkout@v3
     - uses: actions/setup-go@v4
+      with: 
+        go-version-file: './go.mod'
     - uses: actions/cache@v3
       with:
         path: hack/tools/bin
@@ -322,6 +334,8 @@ jobs:
     - name: checkout
       uses: actions/checkout@v3
     - uses: actions/setup-go@v4
+      with: 
+        go-version-file: './go.mod'
     - uses: actions/cache@v3
       with:
         path: hack/tools/bin
@@ -378,6 +392,8 @@ jobs:
     - name: checkout
       uses: actions/checkout@v3
     - uses: actions/setup-go@v4
+      with: 
+        go-version-file: './go.mod'
     - uses: actions/cache@v3
       with:
         path: hack/tools/bin
