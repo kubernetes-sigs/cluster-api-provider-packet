@@ -1,33 +1,58 @@
+# Please see the documentation for all configuration options:
+# https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
 version: 2
 updates:
-  # Maintain dependencies for GitHub Actions.
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "daily"
-    commit-message:
+# GitHub Actions
+- package-ecosystem: "github-actions"
+  directory: "/"
+  schedule:
+      interval: "weekly"
+  commit-message:
       prefix: ":seedling:"
-
-  # Maintain dependencies for Go modules.
-  - package-ecosystem: "gomod"
-    directory: "/"
-    schedule:
-      interval: "daily"
-    commit-message:
-      prefix: ":seedling:"
-  
-  # Maintain e2e test Go modules
-  - package-ecosystem: "gomod"
-    directory: "/test/e2e"
-    schedule:
-      interval: "daily"  
-    commit-message:
-      prefix: ":seedling:"
-  
-  # Maintain dependencies for Docker images.
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "daily"
-    commit-message:
-      prefix: ":seedling:"
+  labels:
+    - "ok-to-test"
+# Go
+- package-ecosystem: "gomod"
+  directory: "/"
+  schedule:
+    interval: "weekly"
+  ignore:
+  # Ignore controller-runtime as its upgraded manually.
+  - dependency-name: "sigs.k8s.io/controller-runtime"
+  # Ignore k8s and its transitives modules as they are upgraded manually
+  # together with controller-runtime.
+  - dependency-name: "k8s.io/*"
+  - dependency-name: "go.etcd.io/*"
+  - dependency-name: "google.golang.org/grpc"
+  commit-message:
+    prefix: ":seedling:"
+  labels:
+    - "area/dependency"
+    - "ok-to-test"
+# Maintain e2e test Go modules
+- package-ecosystem: "gomod"
+  directory: "/test/e2e"
+  schedule:
+    interval: "weekly"  
+  ignore:
+  # Ignore controller-runtime as its upgraded manually.
+  - dependency-name: "sigs.k8s.io/controller-runtime"
+  # Ignore k8s and its transitives modules as they are upgraded manually
+  # together with controller-runtime.
+  - dependency-name: "k8s.io/*"
+  - dependency-name: "go.etcd.io/*"
+  - dependency-name: "google.golang.org/grpc"
+  commit-message:
+    prefix: ":seedling:"
+  labels:
+    - "area/dependency"
+    - "ok-to-test"
+# Maintain dependencies for Docker images.
+- package-ecosystem: "docker"
+  directory: "/"
+  schedule:
+    interval: "weekly"
+  commit-message:
+    prefix: ":seedling:"
+  labels:
+    - "ok-to-test"
