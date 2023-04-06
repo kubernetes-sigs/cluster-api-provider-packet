@@ -136,7 +136,6 @@ metadata:
   name: "${CLUSTER_NAME}"
 spec:
   projectID: "${PROJECT_ID}"
-  facility: "${FACILITY}"
   metro: "${METRO}"
   vipManager: "CPEM"
 ---

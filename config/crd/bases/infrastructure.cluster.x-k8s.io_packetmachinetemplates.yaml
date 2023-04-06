@@ -148,7 +148,7 @@ spec:
                       machineType:
                         type: string
                       metro:
-                        description: Metro represents the Packet metro for this cluster
+                        description: Metro represents the Packet metro for this machine
                           Override from the PacketCluster spec.
                         type: string
                       os:
