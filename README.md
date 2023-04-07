@@ -10,6 +10,17 @@ This is the official [cluster-api](https://github.com/kubernetes-sigs/cluster-ap
 
 ![Packetbot works hard to keep Kubernetes cluster in a good shape](./docs/banner.png)
 
+## Ugrading to v0.7.X
+
+**IMPORTANT** Before you upgrade, please note that Facilities have been deprecated as of version v0.7.0
+
+* Newly generated cluster yaml files will use Metro by default.
+* Facility is still usable, but should be moved away from as soon as you can
+* See here for more info on the facility deprecation: [Bye Facilities, Hello (again) Metros](https://feedback.equinixmetal.com/changelog/bye-facilities-hello-again-metros)
+* If you would like to upgrade your existing clusters from using facilities to using metros, please work with your Equinix support team to figure out the best course of action. We can also provide some support via our [community Slack](https://slack.equinixmetal.com/) and the [Equinix Helix community site](https://community.equinix.com/).
+* The basic requirement will be to replace `facility: sv15` with `metro: sv` (insert your correct metro instead of sv, for more information check out our [Metros documentation](https://deploy.equinix.com/developers/docs/metal/locations/metros/)) in your existing PacketCluster and PacketMachine objects and/or yaml files used to reconcile those objects (if you're say, managing them via GitOps)
+* The expectation is that if the devices are already in the correct metros you've specified, no disruption will happen to clusters or their devices.
+
 ## Requirements
 
 To use the cluster-api to deploy a Kubernetes cluster to Equinix Metal, you need the following:
