@@ -40,6 +40,11 @@ type PacketMachineSpec struct {
 	// +optional
 	Facility string `json:"facility,omitempty"`
 
+	// Metro represents the Packet metro for this cluster
+	// Override from the PacketCluster spec.
+	// +optional
+	Metro string `json:"metro,omitempty"`
+
 	// IPXEUrl can be used to set the pxe boot url when using custom OSes with this provider.
 	// Note that OS should also be set to "custom_ipxe" if using this value.
 	// +optional

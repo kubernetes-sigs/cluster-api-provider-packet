@@ -47,6 +47,19 @@ func (c *PacketCluster) Default() {
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
 func (c *PacketCluster) ValidateCreate() error {
 	clusterlog.Info("validate create", "name", c.Name)
+	allErrs := field.ErrorList{}
+
+	// Must have either one of Metro or Facility
+	if len(c.Spec.Facility) == 0 && len(c.Spec.Metro) == 0 {
+		allErrs = append(allErrs,
+			field.Invalid(field.NewPath("spec", "Metro"),
+				c.Spec.Metro, "field is required"),
+		)
+	}
+
+	if len(allErrs) > 0 {
+		return apierrors.NewInvalid(GroupVersion.WithKind("PacketCluster").GroupKind(), c.Name, allErrs)
+	}
 
 	return nil
 }
@@ -64,17 +77,26 @@ func (c *PacketCluster) ValidateUpdate(oldRaw runtime.Object) error {
 		)
 	}
 
-	if !reflect.DeepEqual(c.Spec.Facility, old.Spec.Facility) {
-		allErrs = append(allErrs,
-			field.Invalid(field.NewPath("spec", "Facility"),
-				c.Spec.Facility, "field is immutable"),
-		)
-	}
-
 	if !reflect.DeepEqual(c.Spec.VIPManager, old.Spec.VIPManager) {
 		allErrs = append(allErrs,
 			field.Invalid(field.NewPath("spec", "VIPManager"),
 				c.Spec.VIPManager, "field is immutable"),
+		)
+	}
+
+	// Must have at least Metro or Facility specified
+	if len(c.Spec.Facility) == 0 && len(c.Spec.Metro) == 0 {
+		allErrs = append(allErrs,
+			field.Invalid(field.NewPath("spec", "Metro"),
+				c.Spec.Metro, "Metro is required"),
+		)
+	}
+
+	// Must have only one of Metro or Facility
+	if len(c.Spec.Facility) > 0 && len(c.Spec.Metro) > 0 {
+		allErrs = append(allErrs,
+			field.Invalid(field.NewPath("spec", "Facility"),
+				c.Spec.Facility, "Metro and Facility are mutually exclusive, Metro is recommended"),
 		)
 	}
 

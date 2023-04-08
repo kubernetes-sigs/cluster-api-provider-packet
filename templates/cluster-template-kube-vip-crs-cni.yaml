@@ -244,7 +244,7 @@ kind: PacketCluster
 metadata:
   name: ${CLUSTER_NAME}
 spec:
-  facility: ${FACILITY}
+  metro: ${METRO}
   projectID: ${PROJECT_ID}
   vipManager: KUBE_VIP
 ---

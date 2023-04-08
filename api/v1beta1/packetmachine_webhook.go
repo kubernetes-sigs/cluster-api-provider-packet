@@ -48,17 +48,29 @@ func (m *PacketMachine) ValidateCreate() error {
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
 func (m *PacketMachine) ValidateUpdate(old runtime.Object) error {
+	machineLog.Info("validate update", "name", m.Name)
+	var allErrs field.ErrorList
+
+	// Must have only one of Metro or Facility specified
+	if len(m.Spec.Facility) > 0 && len(m.Spec.Metro) > 0 {
+		allErrs = append(allErrs,
+			field.Invalid(field.NewPath("spec", "Facility"),
+				m.Spec.Facility, "Metro and Facility field are mutually exclusive"),
+		)
+	}
+
 	newPacketMachine, err := runtime.DefaultUnstructuredConverter.ToUnstructured(m)
 	if err != nil {
-		return apierrors.NewInvalid(GroupVersion.WithKind("PacketMachine").GroupKind(), m.Name, field.ErrorList{
-			field.InternalError(nil, errors.Wrap(err, "failed to convert new PacketMachine to unstructured object")),
-		})
+		allErrs = append(allErrs,
+			field.InternalError(nil, errors.Wrap(err,
+				"failed to convert new PacketMachine to unstructured object")))
 	}
+
 	oldPacketMachine, err := runtime.DefaultUnstructuredConverter.ToUnstructured(old)
 	if err != nil {
-		return apierrors.NewInvalid(GroupVersion.WithKind("PacketMachine").GroupKind(), m.Name, field.ErrorList{
-			field.InternalError(nil, errors.Wrap(err, "failed to convert old PacketMachine to unstructured object")),
-		})
+		allErrs = append(allErrs,
+			field.InternalError(nil, errors.Wrap(err,
+				"failed to convert old PacketMachine to unstructured object")))
 	}
 
 	newPacketMachineSpec, _ := newPacketMachine["spec"].(map[string]interface{})
@@ -72,13 +84,26 @@ func (m *PacketMachine) ValidateUpdate(old runtime.Object) error {
 	delete(oldPacketMachineSpec, "tags")
 	delete(newPacketMachineSpec, "tags")
 
+	// allow changes to facility
+	delete(oldPacketMachineSpec, "facility")
+	delete(newPacketMachineSpec, "facility")
+
+	// allow changes to metro
+	delete(oldPacketMachineSpec, "metro")
+	delete(newPacketMachineSpec, "metro")
+
 	if !reflect.DeepEqual(oldPacketMachineSpec, newPacketMachineSpec) {
-		return apierrors.NewInvalid(GroupVersion.WithKind("PacketMachine").GroupKind(), m.Name, field.ErrorList{
-			field.Forbidden(field.NewPath("spec"), "cannot be modified"),
-		})
+		allErrs = append(allErrs,
+			field.Invalid(field.NewPath("spec"),
+				m.Spec, "cannot be modified"),
+		)
 	}
 
-	return nil
+	if len(allErrs) == 0 {
+		return nil
+	}
+
+	return apierrors.NewInvalid(GroupVersion.WithKind("PacketMachine").GroupKind(), m.Name, allErrs)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type.

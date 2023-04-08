@@ -78,6 +78,10 @@ spec:
                 type: string
               machineType:
                 type: string
+              metro:
+                description: Metro represents the Packet metro for this cluster Override
+                  from the PacketCluster spec.
+                type: string
               providerID:
                 description: ProviderID is the unique identifier as specified by the
                   cloud provider.
@@ -208,6 +212,10 @@ spec:
                   to "custom_ipxe" if using this value.
                 type: string
               machineType:
+                type: string
+              metro:
+                description: Metro represents the Packet metro for this machine Override
+                  from the PacketCluster spec.
                 type: string
               os:
                 type: string

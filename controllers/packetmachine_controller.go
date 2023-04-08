@@ -52,7 +52,11 @@ const (
 	force = true
 )
 
-var ErrMissingDevice = errors.New("machine does not exist")
+var (
+	ErrMissingDevice = errors.New("machine does not exist")
+	ErrFacilityMatch = errors.New("instance facility does not match machine facility")
+	ErrMetroMatch    = errors.New("instance metro does not match machine metro")
+)
 
 // PacketMachineReconciler reconciles a PacketMachine object
 type PacketMachineReconciler struct {
@@ -410,6 +414,16 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		conditions.MarkUnknown(machineScope.PacketMachine, infrav1.DeviceReadyCondition, "", "")
 
 		result = ctrl.Result{}
+	}
+
+	// If Metro or Facility has changed in the spec, verify that the facility's metro is compatible with the requested spec change.
+
+	if machineScope.PacketMachine.Spec.Facility != "" && machineScope.PacketMachine.Spec.Facility != dev.Facility.Code {
+		return ctrl.Result{}, fmt.Errorf("%w: %s != %s", ErrFacilityMatch, machineScope.PacketMachine.Spec.Facility, dev.Facility.Code)
+	}
+
+	if machineScope.PacketMachine.Spec.Metro != "" && machineScope.PacketMachine.Spec.Metro != dev.Metro.Code {
+		return ctrl.Result{}, fmt.Errorf("%w: %s != %s", ErrMetroMatch, machineScope.PacketMachine.Spec.Facility, dev.Facility.Code)
 	}
 
 	return result, nil

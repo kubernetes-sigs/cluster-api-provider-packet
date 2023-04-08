@@ -116,8 +116,19 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 	ipReserv, err := r.PacketClient.GetIPByClusterIdentifier(clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID)
 	switch {
 	case errors.Is(err, packet.ErrControlPlanEndpointNotFound):
+		// Parse metro and facility from the cluster spec
+		var metro, facility string
+
+		facility = packetCluster.Spec.Facility
+		metro = packetCluster.Spec.Metro
+
+		// If both specified, metro takes precedence over facility
+		if metro != "" {
+			facility = ""
+		}
+
 		// There is not an ElasticIP with the right tags, at this point we can create one
-		ip, err := r.PacketClient.CreateIP(clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID, packetCluster.Spec.Facility)
+		ip, err := r.PacketClient.CreateIP(clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID, facility, metro)
 		if err != nil {
 			log.Error(err, "error reserving an ip")
 			return ctrl.Result{}, err

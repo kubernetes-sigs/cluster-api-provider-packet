@@ -238,6 +238,7 @@ func Convert_v1beta1_PacketClusterList_To_v1alpha3_PacketClusterList(in *v1beta1
 func autoConvert_v1alpha3_PacketClusterSpec_To_v1beta1_PacketClusterSpec(in *PacketClusterSpec, out *v1beta1.PacketClusterSpec, s conversion.Scope) error {
 	out.ProjectID = in.ProjectID
 	out.Facility = in.Facility
+	out.Metro = in.Metro
 	if err := apiv1alpha3.Convert_v1alpha3_APIEndpoint_To_v1beta1_APIEndpoint(&in.ControlPlaneEndpoint, &out.ControlPlaneEndpoint, s); err != nil {
 		return err
 	}
@@ -253,6 +254,7 @@ func Convert_v1alpha3_PacketClusterSpec_To_v1beta1_PacketClusterSpec(in *PacketC
 func autoConvert_v1beta1_PacketClusterSpec_To_v1alpha3_PacketClusterSpec(in *v1beta1.PacketClusterSpec, out *PacketClusterSpec, s conversion.Scope) error {
 	out.ProjectID = in.ProjectID
 	out.Facility = in.Facility
+	out.Metro = in.Metro
 	if err := apiv1alpha3.Convert_v1beta1_APIEndpoint_To_v1alpha3_APIEndpoint(&in.ControlPlaneEndpoint, &out.ControlPlaneEndpoint, s); err != nil {
 		return err
 	}
@@ -361,6 +363,7 @@ func autoConvert_v1alpha3_PacketMachineSpec_To_v1beta1_PacketMachineSpec(in *Pac
 	out.MachineType = in.MachineType
 	// WARNING: in.SshKeys requires manual conversion: does not exist in peer-type
 	out.Facility = in.Facility
+	out.Metro = in.Metro
 	out.IPXEUrl = in.IPXEUrl
 	out.HardwareReservationID = in.HardwareReservationID
 	out.ProviderID = (*string)(unsafe.Pointer(in.ProviderID))
@@ -374,6 +377,7 @@ func autoConvert_v1beta1_PacketMachineSpec_To_v1alpha3_PacketMachineSpec(in *v1b
 	out.MachineType = in.MachineType
 	// WARNING: in.SSHKeys requires manual conversion: does not exist in peer-type
 	out.Facility = in.Facility
+	out.Metro = in.Metro
 	out.IPXEUrl = in.IPXEUrl
 	out.HardwareReservationID = in.HardwareReservationID
 	out.ProviderID = (*string)(unsafe.Pointer(in.ProviderID))
