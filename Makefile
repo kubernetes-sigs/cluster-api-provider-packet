@@ -168,7 +168,7 @@ endif
 # Additinal GINKGO overrides
 GINKGO_FLAKE_ATTEMPTS ?= 0
 E2E_CONF_FILE_SOURCE ?= $(ROOT_DIR)/$(TEST_DIR)/e2e/config/packet-ci.yaml
-SKIP_IMAGE_BUILD ?= false
+SKIP_IMAGE_BUILD ?= 
 
 ARTIFACTS ?= $(ROOT_DIR)/_artifacts
 

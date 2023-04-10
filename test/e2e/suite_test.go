@@ -110,7 +110,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	// Before all ParallelNodes.
 	Expect(os.Getenv(AuthTokenEnvVar)).NotTo(BeEmpty())
 	Expect(os.Getenv(ProjectIDEnvVar)).NotTo(BeEmpty())
-	Expect(os.Getenv("FACILITY")).NotTo(BeEmpty())
+	Expect(os.Getenv("METRO")).NotTo(BeEmpty())
 	Expect(os.Getenv("CONTROLPLANE_NODE_TYPE")).NotTo(BeEmpty())
 	Expect(os.Getenv("WORKER_NODE_TYPE")).NotTo(BeEmpty())
 
