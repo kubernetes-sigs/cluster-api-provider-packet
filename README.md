@@ -18,7 +18,11 @@ This is the official [cluster-api](https://github.com/kubernetes-sigs/cluster-ap
 * Facility is still usable, but should be moved away from as soon as you can
 * See here for more info on the facility deprecation: [Bye Facilities, Hello (again) Metros](https://feedback.equinixmetal.com/changelog/bye-facilities-hello-again-metros)
 * If you would like to upgrade your existing clusters from using facilities to using metros, please work with your Equinix support team to figure out the best course of action. We can also provide some support via our [community Slack](https://slack.equinixmetal.com/) and the [Equinix Helix community site](https://community.equinix.com/).
-* The basic process will be to upgrade to v0.7.0, then replace `facility: sv15` with `metro: sv` (insert your correct metro instead of sv, for more information check out our [Metros documentation](https://deploy.equinix.com/developers/docs/metal/locations/metros/)) in your existing PacketCluster and PacketMachine objects and/or yaml files used to reconcile those objects (if you're say, managing them via GitOps)
+* The basic process will be to upgrade to v0.7.0, then replace `facility: sv15` with `metro: sv` (insert your correct metro instead of sv, for more information check out our [Metros documentation](https://deploy.equinix.com/developers/docs/metal/locations/metros/)) in your existing PacketCluster and PacketMachine objects.
+  * For example, to updatea  PacketCluster object from facility `sv15` to metro `sv`
+    * `kubectl patch packetclusters my-cluster --type='json' -p '[{"op":"remove","path":"/spec/facility"},{"op":"add","path":"/spec/metro","value":"sv"}]'`
+  * To update a PacketMachineTemplate object from facility `sv15` to metro `sv` **PLEASE NOTE** Most people do not set the facility on their PacketMachineTemplate objects, so you may not need to do this step.
+    * `kubectl patch packetmachinetemplate my-cluster-control-plane --type='json' -p '[{"op":"remove","path":"/spec/template/spec/facility"},{"op":"add","path":"/spec/template/spec/metro","value":"sv"}]'`
 * The expectation is that if the devices are already in the correct metros you've specified, no disruption will happen to clusters or their devices, however, **as with any breaking change you should verify this outside of production before you upgrade.**
 
 ## Requirements
