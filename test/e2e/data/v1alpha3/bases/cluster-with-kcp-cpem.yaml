@@ -6,7 +6,7 @@ metadata:
   name: '${CLUSTER_NAME}'
 spec:
   projectID: "${PROJECT_ID}"
-  metro: "${METRO}"
+  facility: "${FACILITY}"
 
 ---
 # Cluster object with
