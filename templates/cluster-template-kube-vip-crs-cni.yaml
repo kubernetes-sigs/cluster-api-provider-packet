@@ -158,11 +158,11 @@ spec:
       if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
         export KUBECONFIG=/etc/kubernetes/admin.conf
         export CPEM_YAML=https://github.com/equinix/cloud-provider-equinix-metal/releases/download/${CPEM_VERSION:=v3.6.0}/deployment.yaml
-        export SECRET_DATA='cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "loadbalancer": "kube-vip://"}'''
+        export SECRET_DATA='cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}"}'''
         kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}" || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}") || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}")
         kubectl apply -f $${CPEM_YAML} || (sleep 1 && kubectl apply -f $${CPEM_YAML}) || (sleep 1 && kubectl apply -f $${CPEM_YAML})
       else
-        KVVERSION="${KUBE_VIP_VERSION:=v0.5.0}"
+        KVVERSION="${KUBE_VIP_VERSION:=v0.5.12}"
         ctr image pull ghcr.io/kube-vip/kube-vip:$${KVVERSION}
         ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$KVVERSION vip /kube-vip manifest pod \
         --interface "lo" \
@@ -219,7 +219,7 @@ spec:
       done
       if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
         ip addr add {{ .controlPlaneEndpoint }} dev lo
-        KVVERSION="${KUBE_VIP_VERSION:=v0.5.0}"
+        KVVERSION="${KUBE_VIP_VERSION:=v0.5.12}"
         ctr image pull ghcr.io/kube-vip/kube-vip:$${KVVERSION}
         ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$KVVERSION vip /kube-vip manifest pod \
         --interface "lo" \
