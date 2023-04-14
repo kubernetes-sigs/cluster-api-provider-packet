@@ -103,7 +103,7 @@ GINKGO_PKG := github.com/onsi/ginkgo/v2/ginkgo
 TIMEOUT := $(shell command -v timeout || command -v gtimeout)
 
 # Define Docker related variables. Releases should modify and double check these vars.
-REGISTRY ?= ghcr.io/equinix-labs
+REGISTRY ?= ghcr.io/kubernetes-sigs
 export IMAGE_NAME ?= cluster-api-provider-packet
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
 export TAG ?= dev

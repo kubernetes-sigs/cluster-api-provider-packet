@@ -6,7 +6,7 @@
 # - packet
 
 images:
-- name: "${REGISTRY:=ghcr.io/equinix-labs}/${IMAGE_NAME:=cluster-api-provider-packet}:${TAG:=e2e}"
+- name: "${REGISTRY:=ghcr.io/kubernetes-sigs}/${IMAGE_NAME:=cluster-api-provider-packet}:${TAG:=e2e}"
   loadBehavior: mustLoad
 
 providers:
