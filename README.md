@@ -51,7 +51,7 @@ If you do not change the generated `yaml` files, it will use defaults. You can l
 
 * `CPEM_VERSION`                 (defaults to `v3.6.0`)
 * `KUBE_VIP_VERSION`             (defaults to `v0.5.12`)
-* `NODE_OS`                      (defaults to `ubuntu_22_04`)
+* `NODE_OS`                      (defaults to `ubuntu_20_04`)
 * `POD_CIDR`                     (defaults to `192.168.0.0/16`)
 * `SERVICE_CIDR`                 (defaults to `172.26.0.0/16`)
   
@@ -70,7 +70,7 @@ spec:
     spec:
       billingCycle: hourly
       machineType: c3.small.x86
-      os: ubuntu_22_04
+      os: ubuntu_20_04
       sshKeys:
       - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDvMgVEubPLztrvVKgNPnRe9sZSjAqaYj9nmCkgr4PdK username@computer
       tags: []

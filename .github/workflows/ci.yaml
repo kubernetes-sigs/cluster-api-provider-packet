@@ -1,4 +1,6 @@
-name: Continuous Integration
+---
+name: CI Workflow
+
 on:
   push:
     branches:
@@ -6,75 +8,60 @@ on:
   schedule:
   - cron: "5 0 * * *" # TODO: Run every 4 hours to soak test, should be less frequent before merge (weekly/daily/???)
   workflow_dispatch:
+
 env:
   IMAGE_NAME: cluster-api-provider-packet
   GHCR_REGISTRY: ghcr.io/${{ github.repository_owner }}
   DOCKER_REGISTRY: ${{ secrets.DOCKER_ORG }}
   QUAY_REGISTRY: quay.io/${{ secrets.QUAY_ORG }}
-  REGISTRY: quay.io/${{ secrets.QUAY_ORG }}
-  metadata_flavor: latest=false
-  metadata_tags: type=sha
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+
 
 jobs:
   validate:
     name: "Validate ${{ matrix.target }}"
     runs-on: ubuntu-latest
+
     strategy:
       fail-fast: false
       matrix:
         target: ["verify", "lint", "test"]
+    
     steps:
+    
     - name: checkout
       uses: actions/checkout@v3
       with:
         fetch-depth: 0
+    
     - uses: actions/setup-go@v4
       with: 
         go-version-file: './go.mod'
-    - uses: actions/cache@v3
-      with:
-        path: hack/tools/bin
-        key: ${{ runner.os }}-tools-bin-${{ matrix.target }}-${{ hashFiles('Makefile') }}
-        restore-keys: |
-          ${{ runner.os }}-tools-bin-${{ matrix.target }}-
-          ${{ runner.os }}-tools-bin-
-    - uses: actions/cache@v3
-      if: ${{ matrix.target == 'test' }}
-      with:
-        path: /tmp/kubebuilder-tools-*.tar.gz
-        key: ${{ runner.os }}-tmp-${{ matrix.target }}-${{ hashFiles('scripts/fetch_ext_bins.sh') }}
-        restore-keys: |
-          ${{ runner.os }}-tmp-${{ matrix.target }}-
-          ${{ runner.os }}-tmp-
+
     - name: ${{ matrix.target }}
       run: make ${{ matrix.target }}
 
-  manager-image:
-    name: Build and push manager image
+  build-image:
+    name: Build and Push Image
     runs-on: ubuntu-latest
-    needs:
-    - validate
+
+    permissions:
+      packages: write # needed to push docker image to ghcr.io
+      pull-requests: write # needed to create and update comments in PRs
+
+
     steps:
-    - name: checkout
+
+    - name: Checkout git repo
       uses: actions/checkout@v3
-    - uses: actions/setup-go@v4
-      with: 
-        go-version-file: './go.mod'
+
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v2
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
 
-    - name: Generate metadata
-      id: meta
-      uses: ./.github/actions/metadata
-      with:
-        docker_username: ${{ secrets.DOCKER_USERNAME }}
-        quay_username: ${{ secrets.QUAY_USERNAME }}
-        metadata_flavor: ${{ env.metadata_flavor }}
-        metadata_tags: ${{ env.metadata_tags }}
-
-    - name: Log in to ghcr.io
+    - name: Login to ghcr.io registry
       uses: docker/login-action@v2
       with:
         registry: ghcr.io
@@ -100,98 +87,120 @@ jobs:
         username: ${{ secrets.QUAY_USERNAME }}
         password: ${{ secrets.QUAY_PASSWORD }}
 
-    - name: Build and push manager image
+    - name: Docker meta
+      id: docker_meta
+      uses: docker/metadata-action@v4
+      with:
+        images: ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
+        flavor: |
+          latest=false
+        tags: |
+            type=raw,value=latest,enable=${{ endsWith(github.ref, github.event.repository.default_branch) }}
+            type=semver,pattern={{version}}
+            type=edge
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
+            type=sha,priority=1001
+
+    - name: Docker Build and Push to GHCR
       uses: docker/build-push-action@v4
       with:
         context: .
         push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        platforms: linux/amd64,linux/arm64
-        cache-from: type=gha, scope=${{ github.workflow }}
-        cache-to: type=gha, mode=max, scope=${{ github.workflow }}
+        tags: ${{ steps.docker_meta.outputs.tags }}
+        labels: ${{ steps.docker_meta.outpus.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64, linux/arm64, linux/arm/v7
 
-  test-release:
-    name: Test Release
+      # If PR, put image tags in the PR comments
+      # from https://github.com/marketplace/actions/create-or-update-comment
+    - name: Find comment for image tags
+      uses: peter-evans/find-comment@v2
+      if: github.event_name == 'pull_request'
+      id: fc
+      with:
+        issue-number: ${{ github.event.pull_request.number }}
+        comment-author: 'github-actions[bot]'
+        body-includes: Docker image tag(s) pushed
+
+      # If PR, put image tags in the PR comments
+    - name: Create or update comment for image tags
+      uses: peter-evans/create-or-update-comment@v3
+      if: github.event_name == 'pull_request'
+      with:
+        comment-id: ${{ steps.fc.outputs.comment-id }}
+        issue-number: ${{ github.event.pull_request.number }}
+        body: |
+          Docker image tag(s) pushed:
+          ```text
+          ${{ steps.docker_meta.outputs.tags }}
+          ```
+
+          Labels added to images:
+          ```text
+          ${{ steps.docker_meta.outputs.labels }}
+          ```
+        edit-mode: replace
+
+    outputs:
+      image-tag: "${{ steps.docker_meta.outputs.version }}"
+
+  release-manifests:
+    name: Make Release Manifests
     runs-on: ubuntu-latest
-    needs:
-    - validate
+    needs: [build-image]
+    env:
+      TAG: ${{ needs.build-image.outputs.image-tag }}
+
     steps:
+
     - name: checkout
       uses: actions/checkout@v3
+
     - uses: actions/setup-go@v4
       with: 
         go-version-file: './go.mod'
-    - uses: actions/cache@v3
-      with:
-        path: hack/tools/bin
-        key: ${{ runner.os }}-tools-bin-release-${{ hashFiles('Makefile') }}
-        restore-keys: |
-          ${{ runner.os }}-tools-bin-release-
-          ${{ runner.os }}-tools-bin-
 
-    - name: Generate metadata
-      id: meta
-      uses: ./.github/actions/metadata
-      with:
-        docker_username: ${{ secrets.DOCKER_USERNAME }}
-        quay_username: ${{ secrets.QUAY_USERNAME }}
-        metadata_flavor: ${{ env.metadata_flavor }}
-        metadata_tags: ${{ env.metadata_tags }}
-
-    - name: Test Release
-      env:
-        TAG: ${{ steps.meta.outputs.version }}
+    - name: Make Release
       run: make release
+
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: test-release
+        name: release-manifests
         path: out/release
 
   e2e-quickstart:
     name: "E2E quickstart"
     concurrency: ci-${{ github.ref }}-e2e-quickstart
     runs-on: ubuntu-latest
-    needs:
-    - manager-image
-    - test-release
+    needs: [build-image, release-manifests]
+    env:
+      TAG: ${{ needs.build-image.outputs.image-tag }}
+
     steps:
+
     - name: checkout
       uses: actions/checkout@v3
+    
     - uses: actions/setup-go@v4
       with: 
         go-version-file: './go.mod'
-    - uses: actions/cache@v3
-      with:
-        path: hack/tools/bin
-        key: ${{ runner.os }}-tools-bin-e2e-${{ hashFiles('Makefile') }}
-        restore-keys: |
-          ${{ runner.os }}-tools-bin-e2e-
-          ${{ runner.os }}-tools-bin-
+
     - name: Download artifact
       uses: actions/download-artifact@v3
       with:
-        name: test-release
+        name: release-manifests
         path: out/release
 
-    - name: Generate metadata
-      id: meta
-      uses: ./.github/actions/metadata
-      with:
-        docker_username: ${{ secrets.DOCKER_USERNAME }}
-        quay_username: ${{ secrets.QUAY_USERNAME }}
-        metadata_flavor: ${{ env.metadata_flavor }}
-        metadata_tags: ${{ env.metadata_tags }}
-
     - name: Prepull the pre-built image
-      run: docker pull ${REGISTRY}/${IMAGE_NAME}:${TAG}
-      env:
-        TAG: ${{ steps.meta.outputs.version }}
+      run: docker pull ${GHCR_REGISTRY}/${IMAGE_NAME}:${TAG}
+
     - name: "e2e-quickstart"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        TAG: ${{ steps.meta.outputs.version }}
         PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
         PROJECT_ID: ${{ secrets.PROJECT_ID }}
         E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
@@ -202,55 +211,43 @@ jobs:
         WORKER_NODE_TYPE: c3.medium.x86
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi-quickstart.sh
+
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       if: ${{ always() }}
       with:
         name: e2e-quickstart
         path: _artifacts
+
   e2e:
     name: "E2E"
     concurrency: ci-${{ github.ref }}-e2e
     runs-on: ubuntu-latest
-    needs:
-    - manager-image
-    - test-release
+    needs: [build-image, release-manifests]
+    env:
+      TAG: ${{ needs.build-image.outputs.image-tag }}
+
     steps:
+
     - name: checkout
       uses: actions/checkout@v3
+
     - uses: actions/setup-go@v4
       with: 
         go-version-file: './go.mod'
-    - uses: actions/cache@v3
-      with:
-        path: hack/tools/bin
-        key: ${{ runner.os }}-tools-bin-e2e-${{ hashFiles('Makefile') }}
-        restore-keys: |
-          ${{ runner.os }}-tools-bin-e2e-
-          ${{ runner.os }}-tools-bin-
+
     - name: Download artifact
       uses: actions/download-artifact@v3
       with:
-        name: test-release
+        name: release-manifests
         path: out/release
 
-    - name: Generate metadata
-      id: meta
-      uses: ./.github/actions/metadata
-      with:
-        docker_username: ${{ secrets.DOCKER_USERNAME }}
-        quay_username: ${{ secrets.QUAY_USERNAME }}
-        metadata_flavor: ${{ env.metadata_flavor }}
-        metadata_tags: ${{ env.metadata_tags }}
-
     - name: Prepull the pre-built image
-      run: docker pull ${REGISTRY}/${IMAGE_NAME}:${TAG}
-      env:
-        TAG: ${{ steps.meta.outputs.version }}
+      run: docker pull ${GHCR_REGISTRY}/${IMAGE_NAME}:${TAG}
+
     - name: "e2e"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        TAG: ${{ steps.meta.outputs.version }}
         PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
         PROJECT_ID: ${{ secrets.PROJECT_ID }}
         E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
@@ -261,55 +258,43 @@ jobs:
         WORKER_NODE_TYPE: c3.medium.x86
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi.sh
+
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       if: ${{ always() }}
       with:
         name: e2e
         path: _artifacts
+
   e2e-conformance:
     name: "E2E conformance"
     concurrency: ci-${{ github.ref }}-e2e-conformance
     runs-on: ubuntu-latest
-    needs:
-    - manager-image
-    - test-release
+    needs: [build-image, release-manifests]
+    env:
+      TAG: ${{ needs.build-image.outputs.image-tag }}
+
     steps:
+
     - name: checkout
       uses: actions/checkout@v3
+
     - uses: actions/setup-go@v4
       with: 
         go-version-file: './go.mod'
-    - uses: actions/cache@v3
-      with:
-        path: hack/tools/bin
-        key: ${{ runner.os }}-tools-bin-e2e-${{ hashFiles('Makefile') }}
-        restore-keys: |
-          ${{ runner.os }}-tools-bin-e2e-
-          ${{ runner.os }}-tools-bin-
+
     - name: Download artifact
       uses: actions/download-artifact@v3
       with:
-        name: test-release
+        name: release-manifests
         path: out/release
 
-    - name: Generate metadata
-      id: meta
-      uses: ./.github/actions/metadata
-      with:
-        docker_username: ${{ secrets.DOCKER_USERNAME }}
-        quay_username: ${{ secrets.QUAY_USERNAME }}
-        metadata_flavor: ${{ env.metadata_flavor }}
-        metadata_tags: ${{ env.metadata_tags }}
-
     - name: Prepull the pre-built image
-      run: docker pull ${REGISTRY}/${IMAGE_NAME}:${TAG}
-      env:
-        TAG: ${{ steps.meta.outputs.version }}
+      run: docker pull ${GHCR_REGISTRY}/${IMAGE_NAME}:${TAG}
+
     - name: "e2e-conformance"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        TAG: ${{ steps.meta.outputs.version }}
         PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
         PROJECT_ID: ${{ secrets.PROJECT_ID }}
         E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
@@ -320,114 +305,91 @@ jobs:
         WORKER_NODE_TYPE: c3.medium.x86
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi-conformance.sh
+
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       if: ${{ always() }}
       with:
         name: e2e-conformance
         path: _artifacts
+
   e2e-management-upgrade:
     name: "E2E Management-Upgrade"
     concurrency: ci-${{ github.ref }}-e2e-management-upgrade
     runs-on: ubuntu-latest
-    needs:
-    - manager-image
-    - test-release
+    needs: [build-image, release-manifests]
+    env:
+      TAG: ${{ needs.build-image.outputs.image-tag }}
+
     steps:
+    
     - name: checkout
       uses: actions/checkout@v3
+    
     - uses: actions/setup-go@v4
       with: 
         go-version-file: './go.mod'
-    - uses: actions/cache@v3
-      with:
-        path: hack/tools/bin
-        key: ${{ runner.os }}-tools-bin-e2e-${{ hashFiles('Makefile') }}
-        restore-keys: |
-          ${{ runner.os }}-tools-bin-e2e-
-          ${{ runner.os }}-tools-bin-
+
     - name: Download artifact
       uses: actions/download-artifact@v3
       with:
-        name: test-release
+        name: release-manifests
         path: out/release
 
-    - name: Generate metadata
-      id: meta
-      uses: ./.github/actions/metadata
-      with:
-        docker_username: ${{ secrets.DOCKER_USERNAME }}
-        quay_username: ${{ secrets.QUAY_USERNAME }}
-        metadata_flavor: ${{ env.metadata_flavor }}
-        metadata_tags: ${{ env.metadata_tags }}
-
     - name: Prepull the pre-built image
-      run: docker pull ${REGISTRY}/${IMAGE_NAME}:${TAG}
-      env:
-        TAG: ${{ steps.meta.outputs.version }}
+      run: docker pull ${GHCR_REGISTRY}/${IMAGE_NAME}:${TAG}
+
     - name: "e2e-management-upgrade"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        TAG: ${{ steps.meta.outputs.version }}
         PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
         PROJECT_ID: ${{ secrets.PROJECT_ID }}
         E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
         SKIP_IMAGE_BUILD: "1"
         MANIFEST_PATH: "../../../out/release"
+        FACILITY: da11
         METRO: da
         CONTROLPLANE_NODE_TYPE: c3.medium.x86
         WORKER_NODE_TYPE: c3.medium.x86
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi-management-upgrade.sh
+
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       if: ${{ always() }}
       with:
         name: e2e-management-upgrade
         path: _artifacts
+
   e2e-workload-upgrade:
     name: "E2E Workload-Upgrade"
     concurrency: ci-${{ github.ref }}-e2e-workload-upgrade
     runs-on: ubuntu-latest
-    needs:
-    - manager-image
-    - test-release
+    needs: [build-image, release-manifests]
+    env:
+      TAG: ${{ needs.build-image.outputs.image-tag }}
+
     steps:
+
     - name: checkout
       uses: actions/checkout@v3
+
     - uses: actions/setup-go@v4
       with: 
         go-version-file: './go.mod'
-    - uses: actions/cache@v3
-      with:
-        path: hack/tools/bin
-        key: ${{ runner.os }}-tools-bin-e2e-${{ hashFiles('Makefile') }}
-        restore-keys: |
-          ${{ runner.os }}-tools-bin-e2e-
-          ${{ runner.os }}-tools-bin-
+
     - name: Download artifact
       uses: actions/download-artifact@v3
       with:
-        name: test-release
+        name: release-manifests
         path: out/release
 
-    - name: Generate metadata
-      id: meta
-      uses: ./.github/actions/metadata
-      with:
-        docker_username: ${{ secrets.DOCKER_USERNAME }}
-        quay_username: ${{ secrets.QUAY_USERNAME }}
-        metadata_flavor: ${{ env.metadata_flavor }}
-        metadata_tags: ${{ env.metadata_tags }}
-
     - name: Prepull the pre-built image
-      run: docker pull ${REGISTRY}/${IMAGE_NAME}:${TAG}
-      env:
-        TAG: ${{ steps.meta.outputs.version }}
+      run: docker pull ${GHCR_REGISTRY}/${IMAGE_NAME}:${TAG}
+
     - name: "e2e-workload-upgrade"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        TAG: ${{ steps.meta.outputs.version }}
         PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
         PROJECT_ID: ${{ secrets.PROJECT_ID }}
         E2E_CONF_FILE_SOURCE: "${{ github.workspace }}/test/e2e/config/packet-ci-actions.yaml"
@@ -438,6 +400,7 @@ jobs:
         WORKER_NODE_TYPE: c3.medium.x86
         GINKGO_NODES: "1"
       run: ./scripts/ci-e2e-capi-workload-upgrade.sh
+
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       if: ${{ always() }}
