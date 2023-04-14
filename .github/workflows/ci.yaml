@@ -14,7 +14,7 @@ env:
   GHCR_REGISTRY: ghcr.io/${{ github.repository_owner }}
   DOCKER_REGISTRY: ${{ secrets.DOCKER_ORG }}
   QUAY_REGISTRY: quay.io/${{ secrets.QUAY_ORG }}
-  REGISTRY: ${{ env.QUAY_REGISTRY }}
+  REGISTRY: $QUAY_REGISTRY
 
 jobs:
   validate:
@@ -111,7 +111,7 @@ jobs:
         context: .
         push: true
         tags: ${{ steps.docker_meta.outputs.tags }}
-        labels: ${{ steps.docker_meta.outpus.labels }}
+        labels: ${{ steps.docker_meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
         platforms: linux/amd64, linux/arm64, linux/arm/v7
