@@ -14,7 +14,7 @@ env:
   GHCR_REGISTRY: ghcr.io/${{ github.repository_owner }}
   DOCKER_REGISTRY: ${{ secrets.DOCKER_ORG }}
   QUAY_REGISTRY: quay.io/${{ secrets.QUAY_ORG }}
-  REGISTRY: $QUAY_REGISTRY
+  REGISTRY: quay.io/${{ secrets.QUAY_ORG }}
 
 jobs:
   validate:
