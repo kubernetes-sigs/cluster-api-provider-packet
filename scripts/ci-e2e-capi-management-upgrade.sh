@@ -35,7 +35,7 @@ source "${REPO_ROOT}/hack/ensure-go.sh"
 # Verify the required Environment Variables are present.
 : "${PACKET_API_KEY:?Environment variable empty or not defined.}"
 : "${PROJECT_ID:?Environment variable empty or not defined.}"
-: "${METRO:?Environment variable empty or not defined.}"
+: "${FACILITY:?Environment variable empty or not defined.}"
 : "${CONTROLPLANE_NODE_TYPE:?Environment variable empty or not defined.}"
 : "${WORKER_NODE_TYPE:?Environment variable empty or not defined.}"
 
