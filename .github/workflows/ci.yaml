@@ -14,8 +14,7 @@ env:
   GHCR_REGISTRY: ghcr.io/${{ github.repository_owner }}
   DOCKER_REGISTRY: ${{ secrets.DOCKER_ORG }}
   QUAY_REGISTRY: quay.io/${{ secrets.QUAY_ORG }}
-  REGISTRY: ghcr.io/${{ github.repository_owner }}
-
+  REGISTRY: ${{ env.QUAY_REGISTRY }}
 
 jobs:
   validate:
@@ -91,7 +90,10 @@ jobs:
       id: docker_meta
       uses: docker/metadata-action@v4
       with:
-        images: ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
+        images: |
+          ${{ env.QUAY_REGISTRY }}/${{ env.IMAGE_NAME }}
+          ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
+          ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}
         flavor: |
           latest=false
         tags: |
@@ -103,7 +105,7 @@ jobs:
             type=ref,event=pr
             type=sha,priority=1001
 
-    - name: Docker Build and Push to GHCR
+    - name: Docker Build and Push
       uses: docker/build-push-action@v4
       with:
         context: .
@@ -196,7 +198,7 @@ jobs:
         path: out/release
 
     - name: Prepull the pre-built image
-      run: docker pull ${GHCR_REGISTRY}/${IMAGE_NAME}:${TAG}
+      run: docker pull ${REGISTRY}/${IMAGE_NAME}:${TAG}
 
     - name: "e2e-quickstart"
       env:
@@ -243,7 +245,7 @@ jobs:
         path: out/release
 
     - name: Prepull the pre-built image
-      run: docker pull ${GHCR_REGISTRY}/${IMAGE_NAME}:${TAG}
+      run: docker pull ${REGISTRY}/${IMAGE_NAME}:${TAG}
 
     - name: "e2e"
       env:
@@ -290,7 +292,7 @@ jobs:
         path: out/release
 
     - name: Prepull the pre-built image
-      run: docker pull ${GHCR_REGISTRY}/${IMAGE_NAME}:${TAG}
+      run: docker pull ${REGISTRY}/${IMAGE_NAME}:${TAG}
 
     - name: "e2e-conformance"
       env:
@@ -337,7 +339,7 @@ jobs:
         path: out/release
 
     - name: Prepull the pre-built image
-      run: docker pull ${GHCR_REGISTRY}/${IMAGE_NAME}:${TAG}
+      run: docker pull ${REGISTRY}/${IMAGE_NAME}:${TAG}
 
     - name: "e2e-management-upgrade"
       env:
@@ -385,7 +387,7 @@ jobs:
         path: out/release
 
     - name: Prepull the pre-built image
-      run: docker pull ${GHCR_REGISTRY}/${IMAGE_NAME}:${TAG}
+      run: docker pull ${REGISTRY}/${IMAGE_NAME}:${TAG}
 
     - name: "e2e-workload-upgrade"
       env:
