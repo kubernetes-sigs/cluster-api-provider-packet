@@ -15,6 +15,7 @@ env:
   DOCKER_REGISTRY: ${{ secrets.DOCKER_ORG }}
   QUAY_REGISTRY: quay.io/${{ secrets.QUAY_ORG }}
   REGISTRY: quay.io/${{ secrets.QUAY_ORG }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   validate:
@@ -97,7 +98,6 @@ jobs:
         flavor: |
           latest=false
         tags: |
-            type=raw,value=latest,enable=${{ endsWith(github.ref, github.event.repository.default_branch) }}
             type=semver,pattern={{version}}
             type=edge
             type=ref,event=branch

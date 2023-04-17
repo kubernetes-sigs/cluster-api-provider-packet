@@ -4,6 +4,10 @@ on:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
 
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
 jobs:
   validate:
     name: "Validate ${{ matrix.target }}"

@@ -9,6 +9,7 @@ env:
   GHCR_REGISTRY: ghcr.io/${{ github.repository_owner }}
   DOCKER_REGISTRY: ${{ secrets.DOCKER_ORG }}
   QUAY_REGISTRY: quay.io/${{ secrets.QUAY_ORG }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
 
