@@ -14,6 +14,8 @@ spec:
     kind: PacketMachineTemplate
     listKind: PacketMachineTemplateList
     plural: packetmachinetemplates
+    shortNames:
+    - pmt
     singular: packetmachinetemplate
   scope: Namespaced
   versions:
