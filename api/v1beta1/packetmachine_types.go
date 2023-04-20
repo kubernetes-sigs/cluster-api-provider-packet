@@ -132,7 +132,7 @@ type PacketMachineStatus struct {
 
 // +kubebuilder:subresource:status
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:path=packetmachines,scope=Namespaced,categories=cluster-api
+// +kubebuilder:resource:path=packetmachines,shortName=pma,scope=Namespaced,categories=cluster-api
 // +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="Cluster",type="string",JSONPath=".metadata.labels.cluster\\.x-k8s\\.io/cluster-name",description="Cluster to which this PacketMachine belongs"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.instanceState",description="Packet instance state"
