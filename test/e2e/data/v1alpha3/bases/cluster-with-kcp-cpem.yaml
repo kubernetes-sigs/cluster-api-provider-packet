@@ -90,7 +90,7 @@ spec:
           netmask 255.255.255.255
         EOF
       - systemctl restart networking
-      - 'if [ -f "/run/kubeadm/kubeadm.yaml" ]; then kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system metal-cloud-config --from-literal=cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "eipTag": "cluster-api-provider-packet:cluster-id:${CLUSTER_NAME}"}''; kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.6.0/deployment.yaml; fi'
+      - 'if [ -f "/run/kubeadm/kubeadm.yaml" ]; then kubectl --kubeconfig /etc/kubernetes/admin.conf create secret generic -n kube-system metal-cloud-config --from-literal=cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}", "eipTag": "cluster-api-provider-packet:cluster-id:${CLUSTER_NAME}"}''; kubectl apply --kubeconfig /etc/kubernetes/admin.conf -f https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.6.1/deployment.yaml; fi'
     preKubeadmCommands:
       - sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
       - swapoff -a
