@@ -87,7 +87,9 @@ jobs:
         DOCKER_METADATA_PR_HEAD_SHA: true
       with:
         images: |
+          ${{ env.QUAY_REGISTRY }}/${{ env.IMAGE_NAME }}
           ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
+          ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}
         flavor: |
           latest=false
         tags: |
