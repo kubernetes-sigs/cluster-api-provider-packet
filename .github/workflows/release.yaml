@@ -103,6 +103,7 @@ jobs:
     needs: [build-image]
     env:
       TAG: ${{ needs.build-image.outputs.image-tag }}
+      REGISTRY: ${{ env.QUAY_REGISTRY }}
 
     steps:
     
