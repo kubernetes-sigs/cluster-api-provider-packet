@@ -3,7 +3,7 @@ module sigs.k8s.io/cluster-api-provider-packet/test/e2e
 go 1.19
 
 replace (
-	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.3.5
+	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.3.7
 	sigs.k8s.io/cluster-api-provider-packet => ../../
 )
 
@@ -14,13 +14,13 @@ require (
 	github.com/onsi/gomega v1.24.1
 	github.com/packethost/packngo v0.29.0
 	golang.org/x/crypto v0.3.0
-	k8s.io/api v0.25.8
-	k8s.io/apimachinery v0.25.8
-	k8s.io/client-go v0.25.8
+	k8s.io/api v0.25.10
+	k8s.io/apimachinery v0.25.10
+	k8s.io/client-go v0.25.10
 	k8s.io/utils v0.0.0-20220823124924-e9cbc92d1a73
-	sigs.k8s.io/cluster-api v1.3.5
+	sigs.k8s.io/cluster-api v1.3.7
 	sigs.k8s.io/cluster-api-provider-packet v0.0.0-00010101000000-000000000000
-	sigs.k8s.io/cluster-api/test v1.3.5
+	sigs.k8s.io/cluster-api/test v1.3.7
 	sigs.k8s.io/controller-runtime v0.13.1
 )
 
@@ -55,7 +55,7 @@ require (
 	github.com/gobuffalo/flect v0.3.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
-	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/cel-go v0.12.4 // indirect
 	github.com/google/gnostic v0.6.9 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
@@ -117,11 +117,11 @@ require (
 	k8s.io/apiextensions-apiserver v0.25.0 // indirect
 	k8s.io/apiserver v0.25.0 // indirect
 	k8s.io/cluster-bootstrap v0.25.0 // indirect
-	k8s.io/component-base v0.25.8 // indirect
+	k8s.io/component-base v0.25.10 // indirect
 	k8s.io/klog/v2 v2.80.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20220803164354-a70c9af30aea // indirect
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
-	sigs.k8s.io/kind v0.17.0 // indirect
+	sigs.k8s.io/kind v0.18.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )

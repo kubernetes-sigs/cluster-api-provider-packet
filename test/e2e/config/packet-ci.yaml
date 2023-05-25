@@ -31,8 +31,8 @@ providers:
         new: --metrics-addr=:8080
     files:
     - sourcePath: "../data/shared/v1beta1/metadata.yaml"
-  - name: v1.3.6 # latest published release in the v1beta1 series
-    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.3.6/core-components.yaml"
+  - name: v1.3.7 # latest published release in the v1beta1 series
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.3.7/core-components.yaml"
     type: "url"
     contract: v1beta1
     replacements:
@@ -62,8 +62,8 @@ providers:
         new: --metrics-addr=:8080
     files:
     - sourcePath: "../data/shared/v1beta1/metadata.yaml"
-  - name: v1.3.6 # latest published release in the v1beta1 series
-    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.3.6/bootstrap-components.yaml"
+  - name: v1.3.7 # latest published release in the v1beta1 series
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.3.7/bootstrap-components.yaml"
     type: "url"
     contract: v1beta1
     replacements:
@@ -93,8 +93,8 @@ providers:
         new: --metrics-addr=:8080
     files:
     - sourcePath: "../data/shared/v1beta1/metadata.yaml"
-  - name: v1.3.6 # latest published release in the v1beta1 series; this is used for v1beta1 --> main clusterctl upgrades test only.
-    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.3.6/control-plane-components.yaml"
+  - name: v1.3.7 # latest published release in the v1beta1 series; this is used for v1beta1 --> main clusterctl upgrades test only.
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.3.7/control-plane-components.yaml"
     type: "url"
     contract: v1beta1
     replacements:
@@ -114,7 +114,7 @@ providers:
       # Add cluster templates
       - sourcePath: "../data/v1alpha3/cluster-template-packet-ccm.yaml"
       - sourcePath: "../data/v1alpha3/cluster-template-cpem.yaml"
-  - name: v0.7.0 #latest in the v1beta1 series
+  - name: v0.7.2 #latest in the v1beta1 series
     value: "../../../config/default"
     replacements:
     - old: "image: .*/cluster-api-provider-packet:.*"
