@@ -12,7 +12,7 @@ require (
 	github.com/docker/distribution v2.8.2+incompatible
 	github.com/onsi/ginkgo/v2 v2.6.0
 	github.com/onsi/gomega v1.24.1
-	github.com/packethost/packngo v0.29.0
+	github.com/packethost/packngo v0.30.0
 	golang.org/x/crypto v0.3.0
 	k8s.io/api v0.25.10
 	k8s.io/apimachinery v0.25.10
