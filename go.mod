@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/onsi/gomega v1.24.1
-	github.com/packethost/packngo v0.29.0
+	github.com/packethost/packngo v0.30.0
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
