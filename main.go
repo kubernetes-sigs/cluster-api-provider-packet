@@ -29,12 +29,15 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	cgrecord "k8s.io/client-go/tools/record"
 	"k8s.io/component-base/version"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+
+	"k8s.io/component-base/logs"
+	logsv1 "k8s.io/component-base/logs/api/v1"
 
 	infrav1alpha3 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
 	infrav1beta1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
@@ -44,8 +47,9 @@ import (
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	scheme     = runtime.NewScheme()
+	logOptions = logs.NewOptions()
+	setupLog   = ctrl.Log.WithName("setup")
 )
 
 func init() {
@@ -54,7 +58,6 @@ func init() {
 	utilruntime.Must(infrav1beta1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 	utilruntime.Must(bootstrapv1.AddToScheme(scheme))
-
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -81,6 +84,11 @@ func main() {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.Parse()
 
+	if err := logsv1.ValidateAndApply(logOptions, nil); err != nil {
+		setupLog.Error(err, "unable to start manager")
+		os.Exit(1)
+	}
+
 	if watchNamespace != "" {
 		setupLog.Info("Watching cluster-api objects only in namespace for reconciliation", "namespace", watchNamespace)
 	}
@@ -95,7 +103,8 @@ func main() {
 		}()
 	}
 
-	ctrl.SetLogger(klogr.New())
+	// klog.Background will automatically use the right logger.
+	ctrl.SetLogger(klog.Background())
 
 	// Machine and cluster operations can create enough events to trigger the event recorder spam filter
 	// Setting the burst size higher ensures all events will be recorded and submitted to the API
@@ -284,4 +293,6 @@ func initFlags(fs *pflag.FlagSet) {
 		":9440",
 		"The address the health endpoint binds to.",
 	)
+
+	logsv1.AddFlags(logOptions, fs)
 }
