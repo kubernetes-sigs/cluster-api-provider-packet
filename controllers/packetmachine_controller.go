@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/packethost/packngo"
+	metal "github.com/equinix-labs/metal-go/metal/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -258,26 +258,26 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 
 	providerID := machineScope.GetInstanceID()
 	var (
-		dev                  *packngo.Device
+		dev                  *metal.Device
 		addrs                []corev1.NodeAddress
 		err                  error
-		controlPlaneEndpoint packngo.IPAddressReservation
+		controlPlaneEndpoint *metal.IPReservation
+		resp                 *http.Response
 	)
 
 	if providerID != "" {
 		// If we already have a providerID, then retrieve the device using the
 		// providerID. This means that the Machine has already been created
 		// and we successfully recorded the providerID.
-		dev, err = r.PacketClient.GetDevice(providerID)
+		dev, resp, err = r.PacketClient.GetDevice(ctx, providerID) //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 		if err != nil {
-			var perr *packngo.ErrorResponse
-			if errors.As(err, &perr) && perr.Response != nil {
-				if perr.Response.StatusCode == http.StatusNotFound {
+			if resp != nil {
+				if resp.StatusCode == http.StatusNotFound {
 					machineScope.SetFailureReason(capierrors.UpdateMachineError)
 					machineScope.SetFailureMessage(fmt.Errorf("failed to find device: %w", err))
 					log.Error(err, "unable to find device")
 					conditions.MarkFalse(machineScope.PacketMachine, infrav1.DeviceReadyCondition, infrav1.InstanceNotFoundReason, clusterv1.ConditionSeverityError, err.Error())
-				} else if perr.Response.StatusCode == http.StatusForbidden {
+				} else if resp.StatusCode == http.StatusForbidden {
 					machineScope.SetFailureReason(capierrors.UpdateMachineError)
 					log.Error(err, "device failed to provision")
 					machineScope.SetFailureMessage(fmt.Errorf("device failed to provision: %w", err))
@@ -294,6 +294,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		// created a device by using the tags that we assign to devices
 		// on creation.
 		dev, err = r.PacketClient.GetDeviceByTags(
+			ctx,
 			machineScope.PacketCluster.Spec.ProjectID,
 			packet.DefaultCreateTags(machineScope.Namespace(), machineScope.Machine.Name, machineScope.Cluster.Name),
 		)
@@ -324,6 +325,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		// to template out the kube-vip deployment
 		if machineScope.IsControlPlane() {
 			controlPlaneEndpoint, _ = r.PacketClient.GetIPByClusterIdentifier(
+				ctx,
 				machineScope.Cluster.Namespace,
 				machineScope.Cluster.Name,
 				machineScope.PacketCluster.Spec.ProjectID)
@@ -331,12 +333,12 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 				if len(controlPlaneEndpoint.Assignments) == 0 {
 					a := corev1.NodeAddress{
 						Type:    corev1.NodeExternalIP,
-						Address: controlPlaneEndpoint.Address,
+						Address: controlPlaneEndpoint.GetAddress(),
 					}
 					addrs = append(addrs, a)
 				}
 			}
-			createDeviceReq.ControlPlaneEndpoint = controlPlaneEndpoint.Address
+			createDeviceReq.ControlPlaneEndpoint = controlPlaneEndpoint.GetAddress()
 		}
 
 		dev, err = r.PacketClient.NewDevice(ctx, createDeviceReq)
@@ -363,11 +365,11 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	}
 
 	// we do not need to set this as equinixmetal://<id> because SetProviderID() does the formatting for us
-	machineScope.SetProviderID(dev.ID)
-	machineScope.SetInstanceStatus(infrav1.PacketResourceStatus(dev.State))
+	machineScope.SetProviderID(dev.GetId())
+	machineScope.SetInstanceStatus(infrav1.PacketResourceStatus(dev.GetState()))
 
 	if machineScope.PacketCluster.Spec.VIPManager == "KUBE_VIP" {
-		if err := r.PacketClient.EnsureNodeBGPEnabled(dev.ID); err != nil {
+		if err := r.PacketClient.EnsureNodeBGPEnabled(ctx, dev.GetId()); err != nil {
 			// Do not treat an error enabling bgp on machine as fatal
 			return ctrl.Result{RequeueAfter: time.Second * 20}, fmt.Errorf("failed to enable bgp on machine %s: %w", machineScope.Name(), err)
 		}
@@ -379,7 +381,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	// Proceed to reconcile the PacketMachine state.
 	var result reconcile.Result
 
-	switch infrav1.PacketResourceStatus(dev.State) {
+	switch infrav1.PacketResourceStatus(dev.GetState()) {
 	case infrav1.PacketResourceStatusNew, infrav1.PacketResourceStatusQueued, infrav1.PacketResourceStatusProvisioning:
 		log.Info("Machine instance is pending", "instance-id", machineScope.GetInstanceID())
 		machineScope.SetNotReady()
@@ -389,13 +391,15 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 
 		if machineScope.PacketCluster.Spec.VIPManager == "CPEM" {
 			controlPlaneEndpoint, _ = r.PacketClient.GetIPByClusterIdentifier(
+				ctx,
 				machineScope.Cluster.Namespace,
 				machineScope.Cluster.Name,
 				machineScope.PacketCluster.Spec.ProjectID)
 			if len(controlPlaneEndpoint.Assignments) == 0 && machineScope.IsControlPlane() {
-				if _, _, err := r.PacketClient.DeviceIPs.Assign(dev.ID, &packngo.AddressStruct{
-					Address: controlPlaneEndpoint.Address,
-				}); err != nil {
+				apiRequest := r.PacketClient.DevicesApi.CreateIPAssignment(ctx, *dev.Id).IPAssignmentInput(metal.IPAssignmentInput{
+					Address: controlPlaneEndpoint.GetAddress(),
+				})
+				if _, _, err := apiRequest.Execute(); err != nil { //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 					log.Error(err, "err assigining elastic ip to control plane. retrying...")
 					return ctrl.Result{RequeueAfter: time.Second * 20}, nil
 				}
@@ -408,22 +412,24 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		result = ctrl.Result{}
 	default:
 		machineScope.SetNotReady()
-		log.Info("Equinix Metal device state is undefined", "state", dev.State, "device-id", machineScope.GetInstanceID())
+		log.Info("Equinix Metal device state is undefined", "state", dev.GetState(), "device-id", machineScope.GetInstanceID())
 		machineScope.SetFailureReason(capierrors.UpdateMachineError)
-		machineScope.SetFailureMessage(fmt.Errorf("instance status %q is unexpected", dev.State)) //nolint:goerr113
+		machineScope.SetFailureMessage(fmt.Errorf("instance status %q is unexpected", dev.GetState())) //nolint:goerr113
 		conditions.MarkUnknown(machineScope.PacketMachine, infrav1.DeviceReadyCondition, "", "")
 
 		result = ctrl.Result{}
 	}
 
 	// If Metro or Facility has changed in the spec, verify that the facility's metro is compatible with the requested spec change.
+	deviceFacility := dev.Facility.Code
+	deviceMetro := dev.Metro.Code
 
-	if machineScope.PacketMachine.Spec.Facility != "" && machineScope.PacketMachine.Spec.Facility != dev.Facility.Code {
-		return ctrl.Result{}, fmt.Errorf("%w: %s != %s", ErrFacilityMatch, machineScope.PacketMachine.Spec.Facility, dev.Facility.Code)
+	if machineScope.PacketMachine.Spec.Facility != "" && machineScope.PacketMachine.Spec.Facility != *deviceFacility {
+		return ctrl.Result{}, fmt.Errorf("%w: %s != %s", ErrFacilityMatch, machineScope.PacketMachine.Spec.Facility, *deviceFacility)
 	}
 
-	if machineScope.PacketMachine.Spec.Metro != "" && machineScope.PacketMachine.Spec.Metro != dev.Metro.Code {
-		return ctrl.Result{}, fmt.Errorf("%w: %s != %s", ErrMetroMatch, machineScope.PacketMachine.Spec.Facility, dev.Facility.Code)
+	if machineScope.PacketMachine.Spec.Metro != "" && machineScope.PacketMachine.Spec.Metro != *deviceMetro {
+		return ctrl.Result{}, fmt.Errorf("%w: %s != %s", ErrMetroMatch, machineScope.PacketMachine.Spec.Facility, *deviceMetro)
 	}
 
 	return result, nil
@@ -436,12 +442,13 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 	packetmachine := machineScope.PacketMachine
 	providerID := machineScope.GetInstanceID()
 
-	var device *packngo.Device
+	var device *metal.Device
 
 	if providerID == "" {
 		// If no providerID was recorded, check to see if there are any instances
 		// that match by tags
 		dev, err := r.PacketClient.GetDeviceByTags(
+			ctx,
 			machineScope.PacketCluster.Spec.ProjectID,
 			packet.DefaultCreateTags(machineScope.Namespace(), machineScope.Machine.Name, machineScope.Cluster.Name),
 		)
@@ -457,12 +464,12 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 
 		device = dev
 	} else {
+		var resp *http.Response
 		// Otherwise, try to retrieve the device by the providerID
-		dev, err := r.PacketClient.GetDevice(providerID)
+		dev, resp, err := r.PacketClient.GetDevice(ctx, providerID) //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 		if err != nil {
-			var errResp *packngo.ErrorResponse
-			if errors.As(err, &errResp) && errResp.Response != nil {
-				if errResp.Response.StatusCode == http.StatusNotFound {
+			if resp != nil {
+				if resp.StatusCode == http.StatusNotFound {
 					// When the server does not exist we do not have anything left to do.
 					// Probably somebody manually deleted the server from the UI or via API.
 					log.Info("Server not found by id, nothing left to do")
@@ -470,7 +477,7 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 					return ctrl.Result{}, nil
 				}
 
-				if errResp.Response.StatusCode == http.StatusForbidden {
+				if resp.StatusCode == http.StatusForbidden {
 					// When a server fails to provision it will return a 403
 					log.Info("Server appears to have failed provisioning, nothing left to do")
 					controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
@@ -490,7 +497,8 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 		return ctrl.Result{}, fmt.Errorf("%w: %s", ErrMissingDevice, packetmachine.Name)
 	}
 
-	if _, err := r.PacketClient.Devices.Delete(device.ID, force); err != nil {
+	apiRequest := r.PacketClient.DevicesApi.DeleteDevice(ctx, device.GetId()).ForceDelete(force)
+	if _, err := apiRequest.Execute(); err != nil { //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 		return ctrl.Result{}, fmt.Errorf("failed to delete the machine: %w", err)
 	}
 

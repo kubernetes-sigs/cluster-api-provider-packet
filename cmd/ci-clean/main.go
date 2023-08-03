@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -24,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/packethost/packngo"
+	metal "github.com/equinix-labs/metal-go/metal/v1"
 	"github.com/spf13/cobra"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 
@@ -55,7 +56,7 @@ func main() {
 				return fmt.Errorf("%s: %w", ProjectIDEnvVar, ErrMissingRequiredEnvVar)
 			}
 
-			return cleanup(metalAuthToken, metalProjectID) //nolint:wrapcheck
+			return cleanup(context.Background(), metalAuthToken, metalProjectID) //nolint:wrapcheck
 		},
 	}
 
@@ -64,55 +65,50 @@ func main() {
 	}
 }
 
-func cleanup(metalAuthToken, metalProjectID string) error {
+func cleanup(ctx context.Context, metalAuthToken, metalProjectID string) error {
 	metalClient := packet.NewClient(metalAuthToken)
-	listOpts := &packngo.ListOptions{}
 	var errs []error
 
-	devices, _, err := metalClient.Devices.List(metalProjectID, listOpts)
+	devices, _, err := metalClient.DevicesApi.FindProjectDevices(ctx, metalProjectID).Execute()
 	if err != nil {
 		return fmt.Errorf("failed to list devices: %w", err)
 	}
 
-	if err := deleteDevices(metalClient, devices); err != nil {
+	if err := deleteDevices(ctx, metalClient, *devices); err != nil {
 		errs = append(errs, err)
 	}
 
-	ips, _, err := metalClient.ProjectIPs.List(metalProjectID, listOpts)
+	ips, _, err := metalClient.IPAddressesApi.FindIPReservations(ctx, metalProjectID).Execute()
 	if err != nil {
 		return fmt.Errorf("failed to list ip addresses: %w", err)
 	}
 
-	if err := deleteIPs(metalClient, ips); err != nil {
+	if err := deleteIPs(ctx, metalClient, *ips); err != nil {
 		errs = append(errs, err)
 	}
 
-	keys, _, err := metalClient.Projects.ListSSHKeys(metalProjectID, listOpts)
+	keys, _, err := metalClient.SSHKeysApi.FindProjectSSHKeys(ctx, metalProjectID).Execute()
 	if err != nil {
 		return fmt.Errorf("failed to list ssh keys: %w", err)
 	}
 
-	if err := deleteKeys(metalClient, keys); err != nil {
+	if err := deleteKeys(ctx, metalClient, *keys); err != nil {
 		errs = append(errs, err)
 	}
 
 	return kerrors.NewAggregate(errs)
 }
 
-func deleteDevices(metalClient *packet.Client, devices []packngo.Device) error {
+func deleteDevices(ctx context.Context, metalClient *packet.Client, devices metal.DeviceList) error {
 	var errs []error
 
-	for _, d := range devices {
-		created, err := time.Parse(time.RFC3339, d.Created)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to parse creation time for device %q: %w", d.Hostname, err))
-			continue
-		}
-		if time.Since(created) > 4*time.Hour {
-			fmt.Printf("Deleting device: %s\n", d.Hostname)
-			_, err := metalClient.Devices.Delete(d.ID, false)
+	for _, d := range devices.Devices {
+		if time.Since(d.GetCreatedAt()) > 4*time.Hour {
+			hostname := d.GetHostname()
+			fmt.Printf("Deleting device: %s\n", hostname)
+			_, err := metalClient.DevicesApi.DeleteDevice(ctx, d.GetId()).ForceDelete(false).Execute()
 			if err != nil {
-				errs = append(errs, fmt.Errorf("failed to delete device %q: %w", d.Hostname, err))
+				errs = append(errs, fmt.Errorf("failed to delete device %q: %w", hostname, err))
 			}
 		}
 	}
@@ -120,23 +116,21 @@ func deleteDevices(metalClient *packet.Client, devices []packngo.Device) error {
 	return kerrors.NewAggregate(errs)
 }
 
-func deleteIPs(metalClient *packet.Client, ips []packngo.IPAddressReservation) error {
+func deleteIPs(ctx context.Context, metalClient *packet.Client, ips metal.IPReservationList) error {
 	var errs []error
 
-	for _, ip := range ips {
-		created, err := time.Parse(time.RFC3339, ip.Created)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to parse creation time for ip address %q: %w", ip.Address, err))
-			continue
-		}
-
-		if time.Since(created) > 4*time.Hour {
+	for _, reservation := range ips.IpAddresses {
+		// TODO: per the spec, `reservation` could be an `IPReservation` or a `VrfIpReservation`
+		// maybe metal-go could define and we could move the if block to function that takes
+		// that interface as an argument
+		ip := reservation.IPReservation
+		if ip != nil && time.Since(ip.GetCreatedAt()) > 4*time.Hour {
 			for _, tag := range ip.Tags {
 				if strings.HasPrefix(tag, "cluster-api-provider-packet:cluster-id:") || strings.HasPrefix(tag, "usage=cloud-provider-equinix-metal-auto") {
-					fmt.Printf("Deleting IP: %s\n", ip.Address)
+					fmt.Printf("Deleting IP: %s\n", ip.GetAddress())
 
-					if _, err := metalClient.ProjectIPs.Remove(ip.ID); err != nil {
-						errs = append(errs, fmt.Errorf("failed to delete ip address %q: %w", ip.Address, err))
+					if _, err := metalClient.IPAddressesApi.DeleteIPAddress(ctx, ip.GetId()).Execute(); err != nil {
+						errs = append(errs, fmt.Errorf("failed to delete ip address %q: %w", ip.GetAddress(), err))
 					}
 
 					break
@@ -148,20 +142,15 @@ func deleteIPs(metalClient *packet.Client, ips []packngo.IPAddressReservation) e
 	return kerrors.NewAggregate(errs)
 }
 
-func deleteKeys(metalClient *packet.Client, keys []packngo.SSHKey) error {
+func deleteKeys(ctx context.Context, metalClient *packet.Client, keys metal.SSHKeyList) error {
 	var errs []error
 
-	for _, k := range keys {
-		created, err := time.Parse(time.RFC3339, k.Created)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to parse creation time for SSH Key %q: %w", k.Label, err))
-			continue
-		}
-		if time.Since(created) > 4*time.Hour {
-			fmt.Printf("Deleting SSH Key: %s\n", k.Label)
-			_, err := metalClient.SSHKeys.Delete(k.ID)
+	for _, k := range keys.SshKeys {
+		if time.Since(k.GetCreatedAt()) > 4*time.Hour {
+			fmt.Printf("Deleting SSH Key: %s\n", k.GetLabel())
+			_, err := metalClient.SSHKeysApi.DeleteSSHKey(ctx, k.GetId()).Execute()
 			if err != nil {
-				errs = append(errs, fmt.Errorf("failed to delete SSH Key %q: %w", k.Label, err))
+				errs = append(errs, fmt.Errorf("failed to delete SSH Key %q: %w", k.GetLabel(), err))
 			}
 		}
 	}
