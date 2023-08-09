@@ -310,7 +310,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		// Avoid a flickering condition between InstanceProvisionStarted and InstanceProvisionFailed if there's a persistent failure with createInstance
 		if conditions.GetReason(machineScope.PacketMachine, infrav1.DeviceReadyCondition) != infrav1.InstanceProvisionFailedReason {
 			conditions.MarkFalse(machineScope.PacketMachine, infrav1.DeviceReadyCondition, infrav1.InstanceProvisionStartedReason, clusterv1.ConditionSeverityInfo, "")
-			if patchErr := machineScope.PatchObject(ctx); err != nil {
+			if patchErr := machineScope.PatchObject(ctx); patchErr != nil {
 				log.Error(patchErr, "failed to patch conditions")
 				return ctrl.Result{}, patchErr
 			}
