@@ -277,7 +277,7 @@ func (wc *wrappedClient) recordClusterNameForResource(obj client.Object) error {
 		clusterName = obj.GetName()
 	}
 
-	labeledCluster, ok := obj.GetLabels()[clusterv1.ClusterLabelName]
+	labeledCluster, ok := obj.GetLabels()[clusterv1.ClusterNameLabel]
 	if ok {
 		clusterName = labeledCluster
 	}
