@@ -143,7 +143,8 @@ func (r *PacketMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Handle deleted machines
 	if !packetmachine.ObjectMeta.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, machineScope)
+		err = r.reconcileDelete(ctx, machineScope)
+		return ctrl.Result{}, err
 	}
 
 	return r.reconcile(ctx, machineScope)
@@ -435,7 +436,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	return result, nil
 }
 
-func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineScope *scope.MachineScope) (ctrl.Result, error) {
+func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineScope *scope.MachineScope) error {
 	log := ctrl.LoggerFrom(ctx, "machine", machineScope.Machine.Name, "cluster", machineScope.Cluster.Name)
 	log.Info("Reconciling Delete PacketMachine")
 
@@ -453,13 +454,13 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 			packet.DefaultCreateTags(machineScope.Namespace(), machineScope.Machine.Name, machineScope.Cluster.Name),
 		)
 		if err != nil {
-			return ctrl.Result{}, err
+			return err
 		}
 
 		if dev == nil {
 			log.Info("Server not found by tags, nothing left to do")
 			controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
-			return ctrl.Result{}, nil
+			return nil
 		}
 
 		device = dev
@@ -474,18 +475,18 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 					// Probably somebody manually deleted the server from the UI or via API.
 					log.Info("Server not found by id, nothing left to do")
 					controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
-					return ctrl.Result{}, nil
+					return nil
 				}
 
 				if resp.StatusCode == http.StatusForbidden {
 					// When a server fails to provision it will return a 403
 					log.Info("Server appears to have failed provisioning, nothing left to do")
 					controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
-					return ctrl.Result{}, nil
+					return nil
 				}
 			}
 
-			return ctrl.Result{}, fmt.Errorf("error retrieving machine status %s: %w", packetmachine.Name, err)
+			return fmt.Errorf("error retrieving machine status %s: %w", packetmachine.Name, err)
 		}
 
 		device = dev
@@ -499,9 +500,9 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 
 	apiRequest := r.PacketClient.DevicesApi.DeleteDevice(ctx, device.GetId()).ForceDelete(force)
 	if _, err := apiRequest.Execute(); err != nil { //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
-		return ctrl.Result{}, fmt.Errorf("failed to delete the machine: %w", err)
+		return fmt.Errorf("failed to delete the machine: %w", err)
 	}
 
 	controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
-	return ctrl.Result{}, nil
+	return nil
 }

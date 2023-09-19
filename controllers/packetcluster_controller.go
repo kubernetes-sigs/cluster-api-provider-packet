@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package controllers contains PacketCluster controller logic.
 package controllers
 
 import (
@@ -104,10 +105,11 @@ func (r *PacketClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return r.reconcileDelete(ctx, clusterScope)
 	}
 
-	return r.reconcileNormal(ctx, clusterScope)
+	err = r.reconcileNormal(ctx, clusterScope)
+	return ctrl.Result{}, err
 }
 
-func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
+func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterScope *scope.ClusterScope) error {
 	log := ctrl.LoggerFrom(ctx).WithValues("cluster", clusterScope.Cluster.Name)
 	log.Info("Reconciling PacketCluster")
 
@@ -131,7 +133,7 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 		ip, err := r.PacketClient.CreateIP(ctx, clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID, facility, metro)
 		if err != nil {
 			log.Error(err, "error reserving an ip")
-			return ctrl.Result{}, err
+			return err
 		}
 		clusterScope.PacketCluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
 			Host: ip.To4().String(),
@@ -139,7 +141,7 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 		}
 	case err != nil:
 		log.Error(err, "error getting cluster IP")
-		return ctrl.Result{}, err
+		return err
 	default:
 		// If there is an ElasticIP with the right tag just use it again
 		clusterScope.PacketCluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
@@ -151,14 +153,14 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 	if clusterScope.PacketCluster.Spec.VIPManager == "KUBE_VIP" {
 		if err := r.PacketClient.EnableProjectBGP(ctx, packetCluster.Spec.ProjectID); err != nil {
 			log.Error(err, "error enabling bgp for project")
-			return ctrl.Result{}, err
+			return err
 		}
 	}
 
 	clusterScope.PacketCluster.Status.Ready = true
 	conditions.MarkTrue(packetCluster, infrav1.NetworkInfrastructureReadyCondition)
 
-	return ctrl.Result{}, nil
+	return nil
 }
 
 func (r *PacketClusterReconciler) reconcileDelete(_ context.Context, _ *scope.ClusterScope) (ctrl.Result, error) {
