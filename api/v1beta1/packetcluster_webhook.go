@@ -50,7 +50,7 @@ func (c *PacketCluster) ValidateCreate() error {
 	allErrs := field.ErrorList{}
 
 	// Must have either one of Metro or Facility
-	if len(c.Spec.Facility) == 0 && len(c.Spec.Metro) == 0 {
+	if c.Spec.Facility == "" && c.Spec.Metro == "" {
 		allErrs = append(allErrs,
 			field.Invalid(field.NewPath("spec", "Metro"),
 				c.Spec.Metro, "field is required"),
@@ -85,7 +85,7 @@ func (c *PacketCluster) ValidateUpdate(oldRaw runtime.Object) error {
 	}
 
 	// Must have at least Metro or Facility specified
-	if len(c.Spec.Facility) == 0 && len(c.Spec.Metro) == 0 {
+	if c.Spec.Facility == "" && c.Spec.Metro == "" {
 		allErrs = append(allErrs,
 			field.Invalid(field.NewPath("spec", "Metro"),
 				c.Spec.Metro, "Metro is required"),
