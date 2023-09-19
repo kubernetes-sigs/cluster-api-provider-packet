@@ -244,7 +244,7 @@ func (p *Client) GetDeviceByTags(ctx context.Context, project string, tags []str
 
 // CreateIP reserves an IP via Packet API. The request fails straight if no IP are available for the specified project.
 // This prevent the cluster to become ready.
-func (p *Client) CreateIP(ctx context.Context, namespace, clusterName, projectID, facility, metro string) (net.IP, error) {
+func (p *Client) CreateIP(ctx context.Context, _, clusterName, projectID, facility, metro string) (net.IP, error) {
 	failOnApprovalRequired := true
 	req := metal.IPReservationRequestInput{
 		Type:                   "public_ipv4",

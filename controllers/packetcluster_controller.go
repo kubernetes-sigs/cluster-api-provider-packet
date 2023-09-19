@@ -161,7 +161,7 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 	return ctrl.Result{}, nil
 }
 
-func (r *PacketClusterReconciler) reconcileDelete(ctx context.Context, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
+func (r *PacketClusterReconciler) reconcileDelete(_ context.Context, _ *scope.ClusterScope) (ctrl.Result, error) {
 	// Initially I created this handler to remove an elastic IP when a cluster
 	// gets delete, but it does not sound like a good idea.  It is better to
 	// leave to the users the ability to decide if they want to keep and resign

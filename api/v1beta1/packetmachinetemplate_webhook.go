@@ -42,7 +42,7 @@ func (m *PacketMachineTemplate) ValidateCreate() error {
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
-func (m *PacketMachineTemplate) ValidateUpdate(old runtime.Object) error {
+func (m *PacketMachineTemplate) ValidateUpdate(_ runtime.Object) error {
 	machineTemplateLog.Info("validate update", "name", m.Name)
 
 	return nil
