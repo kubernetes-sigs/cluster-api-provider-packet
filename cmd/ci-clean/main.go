@@ -33,11 +33,11 @@ import (
 )
 
 const (
-	AuthTokenEnvVar = "PACKET_API_KEY" //nolint:gosec
-	ProjectIDEnvVar = "PROJECT_ID"
+	authTokenEnvVar = "PACKET_API_KEY" //nolint:gosec
+	projectIDEnvVar = "PROJECT_ID"
 )
 
-var ErrMissingRequiredEnvVar = errors.New("required environment variable not set")
+var errMissingRequiredEnvVar = errors.New("required environment variable not set")
 
 func main() {
 	rand.Seed(time.Now().UTC().UnixNano())
@@ -46,14 +46,14 @@ func main() {
 		Use:   "ci-clean",
 		Short: "Clean up any stray resources in CI",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			metalAuthToken := os.Getenv(AuthTokenEnvVar)
+			metalAuthToken := os.Getenv(authTokenEnvVar)
 			if metalAuthToken == "" {
-				return fmt.Errorf("%s: %w", AuthTokenEnvVar, ErrMissingRequiredEnvVar)
+				return fmt.Errorf("%s: %w", authTokenEnvVar, errMissingRequiredEnvVar)
 			}
 
-			metalProjectID := os.Getenv(ProjectIDEnvVar)
+			metalProjectID := os.Getenv(projectIDEnvVar)
 			if metalProjectID == "" {
-				return fmt.Errorf("%s: %w", ProjectIDEnvVar, ErrMissingRequiredEnvVar)
+				return fmt.Errorf("%s: %w", projectIDEnvVar, errMissingRequiredEnvVar)
 			}
 
 			return cleanup(context.Background(), metalAuthToken, metalProjectID) //nolint:wrapcheck

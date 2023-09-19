@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	MachineUIDTag = "cluster-api-provider-packet:machine-uid"
+	machineUIDTag = "cluster-api-provider-packet:machine-uid"
 	clusterIDTag  = "cluster-api-provider-packet:cluster-id"
 	namespaceTag  = "cluster-api-provider-packet:namespace"
 )

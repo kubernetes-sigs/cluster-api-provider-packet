@@ -53,9 +53,9 @@ const (
 )
 
 var (
-	ErrMissingDevice = errors.New("machine does not exist")
-	ErrFacilityMatch = errors.New("instance facility does not match machine facility")
-	ErrMetroMatch    = errors.New("instance metro does not match machine metro")
+	errMissingDevice = errors.New("machine does not exist")
+	errFacilityMatch = errors.New("instance facility does not match machine facility")
+	errMetroMatch    = errors.New("instance metro does not match machine metro")
 )
 
 // PacketMachineReconciler reconciles a PacketMachine object
@@ -425,11 +425,11 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	deviceMetro := dev.Metro.Code
 
 	if machineScope.PacketMachine.Spec.Facility != "" && machineScope.PacketMachine.Spec.Facility != *deviceFacility {
-		return ctrl.Result{}, fmt.Errorf("%w: %s != %s", ErrFacilityMatch, machineScope.PacketMachine.Spec.Facility, *deviceFacility)
+		return ctrl.Result{}, fmt.Errorf("%w: %s != %s", errFacilityMatch, machineScope.PacketMachine.Spec.Facility, *deviceFacility)
 	}
 
 	if machineScope.PacketMachine.Spec.Metro != "" && machineScope.PacketMachine.Spec.Metro != *deviceMetro {
-		return ctrl.Result{}, fmt.Errorf("%w: %s != %s", ErrMetroMatch, machineScope.PacketMachine.Spec.Facility, *deviceMetro)
+		return ctrl.Result{}, fmt.Errorf("%w: %s != %s", errMetroMatch, machineScope.PacketMachine.Spec.Facility, *deviceMetro)
 	}
 
 	return result, nil
@@ -494,7 +494,7 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 	// We should never get there but this is a safetly check
 	if device == nil {
 		controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
-		return ctrl.Result{}, fmt.Errorf("%w: %s", ErrMissingDevice, packetmachine.Name)
+		return fmt.Errorf("%w: %s", errMissingDevice, packetmachine.Name)
 	}
 
 	apiRequest := r.PacketClient.DevicesApi.DeleteDevice(ctx, device.GetId()).ForceDelete(force)
