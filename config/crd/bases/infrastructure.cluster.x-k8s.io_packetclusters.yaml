@@ -30,7 +30,7 @@ spec:
     name: v1alpha3
     schema:
       openAPIV3Schema:
-        description: PacketCluster is the Schema for the packetclusters API
+        description: PacketCluster is the Schema for the packetclusters API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -45,7 +45,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: PacketClusterSpec defines the desired state of PacketCluster
+            description: PacketClusterSpec defines the desired state of PacketCluster.
             properties:
               controlPlaneEndpoint:
                 description: ControlPlaneEndpoint represents the endpoint used to
@@ -85,7 +85,7 @@ spec:
             - vipManager
             type: object
           status:
-            description: PacketClusterStatus defines the observed state of PacketCluster
+            description: PacketClusterStatus defines the observed state of PacketCluster.
             properties:
               ready:
                 description: Ready denotes that the cluster (infrastructure) is ready.
@@ -108,7 +108,7 @@ spec:
     name: v1beta1
     schema:
       openAPIV3Schema:
-        description: PacketCluster is the Schema for the packetclusters API
+        description: PacketCluster is the Schema for the packetclusters API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -123,7 +123,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: PacketClusterSpec defines the desired state of PacketCluster
+            description: PacketClusterSpec defines the desired state of PacketCluster.
             properties:
               controlPlaneEndpoint:
                 description: ControlPlaneEndpoint represents the endpoint used to
@@ -163,7 +163,7 @@ spec:
             - vipManager
             type: object
           status:
-            description: PacketClusterStatus defines the observed state of PacketCluster
+            description: PacketClusterStatus defines the observed state of PacketCluster.
             properties:
               conditions:
                 description: Conditions defines current service state of the PacketCluster.
