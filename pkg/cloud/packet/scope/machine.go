@@ -28,7 +28,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
 	"sigs.k8s.io/cluster-api/controllers/noderefutil"
@@ -161,7 +161,7 @@ func (m *MachineScope) GetProviderID() string {
 // SetProviderID sets the DOMachine providerID in spec from device id.
 func (m *MachineScope) SetProviderID(deviceID string) {
 	pid := fmt.Sprintf("%s://%s", m.providerIDPrefix, deviceID)
-	m.PacketMachine.Spec.ProviderID = pointer.StringPtr(pid)
+	m.PacketMachine.Spec.ProviderID = ptr.To(pid)
 }
 
 // GetInstanceID returns the DOMachine droplet instance id by parsing Spec.ProviderID.
@@ -195,7 +195,7 @@ func (m *MachineScope) SetNotReady() {
 
 // SetFailureMessage sets the PacketMachine status error message.
 func (m *MachineScope) SetFailureMessage(v error) {
-	m.PacketMachine.Status.FailureMessage = pointer.StringPtr(v.Error())
+	m.PacketMachine.Status.FailureMessage = ptr.To(v.Error())
 }
 
 // SetFailureReason sets the PacketMachine status error reason.
@@ -411,7 +411,7 @@ func hasWorkloadDeployment(ctx context.Context, workloadClient client.Client, na
 }
 
 func providerIDPrefixFromPacketMachine(packetMachine *infrav1.PacketMachine) string {
-	preexistingProviderID := pointer.StringPtrDerefOr(packetMachine.Spec.ProviderID, "")
+	preexistingProviderID := ptr.Deref(packetMachine.Spec.ProviderID, "")
 	if preexistingProviderID != "" {
 		if parsed, err := noderefutil.NewProviderID(preexistingProviderID); err == nil {
 			return parsed.CloudProvider()

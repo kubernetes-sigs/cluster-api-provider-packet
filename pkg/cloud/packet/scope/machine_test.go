@@ -28,7 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
@@ -120,7 +120,7 @@ func TestNewMachineScopeExistingProviderID(t *testing.T) {
 			Name:      util.RandomString(generatedNameLength),
 		},
 		Spec: infrav1.PacketMachineSpec{
-			ProviderID: pointer.StringPtr(initialProviderID),
+			ProviderID: ptr.To(initialProviderID),
 		},
 	}
 

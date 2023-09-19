@@ -113,7 +113,7 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*metal
 	stringWriter := &strings.Builder{}
 	userData := string(userDataRaw)
 	userDataValues := map[string]interface{}{
-		"kubernetesVersion": pointer.StringPtrDerefOr(req.MachineScope.Machine.Spec.Version, ""),
+		"kubernetesVersion": ptr.Deref(req.MachineScope.Machine.Spec.Version, ""),
 	}
 
 	tags := make([]string, 0, len(packetMachineSpec.Tags)+len(req.ExtraTags))
