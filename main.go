@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Provides the clusterapi types and reconciler for defining and managing clusters deployed on Equinix Metal devices.
 package main
 
 import (

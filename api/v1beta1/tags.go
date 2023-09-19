@@ -17,6 +17,8 @@ limitations under the License.
 package v1beta1
 
 const (
+	// ControlPlaneTag defines what we tag the control plane nodes in Equinix Metal.
 	ControlPlaneTag = "kubernetes.io/role:master"
-	WorkerTag       = "kubernetes.io/role:node"
+	// WorkerTag defines what we tag the control plane nodes in Equinix Metal.
+	WorkerTag = "kubernetes.io/role:node"
 )

@@ -39,7 +39,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
 )
 
-// PacketClusterReconciler reconciles a PacketCluster object
+// PacketClusterReconciler reconciles a PacketCluster object.
 type PacketClusterReconciler struct {
 	client.Client
 	WatchFilterValue string
@@ -187,7 +187,7 @@ func (r *PacketClusterReconciler) SetupWithManager(ctx context.Context, mgr ctrl
 		Complete(r)
 }
 
-// MachineNotFound error representing that the requested device was not yet found
+// MachineNotFound error representing that the requested device was not yet found.
 type MachineNotFound struct {
 	err string
 }
@@ -196,7 +196,7 @@ func (e *MachineNotFound) Error() string {
 	return e.err
 }
 
-// MachineNoIP error representing that the requested device does not have an IP yet assigned
+// MachineNoIP error representing that the requested device does not have an IP yet assigned.
 type MachineNoIP struct {
 	err string
 }

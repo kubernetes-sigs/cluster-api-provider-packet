@@ -26,19 +26,22 @@ const (
 	namespaceTag  = "cluster-api-provider-packet:namespace"
 )
 
+// GenerateMachineNameTag generates a tag for a machine.
 func GenerateMachineNameTag(name string) string {
-	return fmt.Sprintf("%s:%s", MachineUIDTag, name)
+	return fmt.Sprintf("%s:%s", machineUIDTag, name)
 }
 
+// GenerateClusterTag generates a tag for a cluster.
 func GenerateClusterTag(clusterName string) string {
 	return fmt.Sprintf("%s:%s", clusterIDTag, clusterName)
 }
 
+// GenerateNamespaceTag generates a tag for a namespace.
 func GenerateNamespaceTag(namespace string) string {
 	return fmt.Sprintf("%s:%s", namespaceTag, namespace)
 }
 
-// ItemsInList checks if all items are in the list
+// ItemsInList checks if all items are in the list.
 func ItemsInList(list []string, items []string) bool {
 	// convert the items against which we are mapping into a map
 	itemMap := map[string]bool{}
@@ -60,6 +63,7 @@ func ItemsInList(list []string, items []string) bool {
 	return true
 }
 
+// DefaultCreateTags returns the default tags for an Equinix Metal resource.
 func DefaultCreateTags(namespace, name, clusterName string) []string {
 	return []string{
 		GenerateClusterTag(clusterName),

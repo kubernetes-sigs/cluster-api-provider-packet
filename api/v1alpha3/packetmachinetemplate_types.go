@@ -20,7 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// PacketMachineTemplateSpec defines the desired state of PacketMachineTemplate
+// PacketMachineTemplateSpec defines the desired state of PacketMachineTemplate.
 type PacketMachineTemplateSpec struct {
 	Template PacketMachineTemplateResource `json:"template"`
 }
@@ -28,7 +28,7 @@ type PacketMachineTemplateSpec struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:path=packetmachinetemplates,shortName=pmt,scope=Namespaced,categories=cluster-api
 
-// PacketMachineTemplate is the Schema for the packetmachinetemplates API
+// PacketMachineTemplate is the Schema for the packetmachinetemplates API.
 type PacketMachineTemplate struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -38,7 +38,7 @@ type PacketMachineTemplate struct {
 
 // +kubebuilder:object:root=true
 
-// PacketMachineTemplateList contains a list of PacketMachineTemplate
+// PacketMachineTemplateList contains a list of PacketMachineTemplate.
 type PacketMachineTemplateList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

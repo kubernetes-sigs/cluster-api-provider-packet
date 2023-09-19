@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package packet implements a client to the Equinix Metal API.
 package packet
 
 import (
@@ -29,7 +30,7 @@ import (
 
 	metal "github.com/equinix-labs/metal-go/metal/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
@@ -41,25 +42,32 @@ const (
 	ipxeOS          = "custom_ipxe"
 	envVarLocalASN  = "METAL_LOCAL_ASN"
 	envVarBGPPass   = "METAL_BGP_PASS" //nolint:gosec
+	// DefaultLocalASN sets the Local ASN for BGP to our default of 65000.
 	DefaultLocalASN = 65000
 	legacyDebugVar  = "PACKNGO_DEBUG" // For backwards compatibility with packngo
 )
 
 var (
-	clientName                     = "CAPP-v1beta1"
-	clientUAFormat                 = "cluster-api-provider-packet/%s %s"
+	clientName     = "CAPP-v1beta1"
+	clientUAFormat = "cluster-api-provider-packet/%s %s"
+	// ErrControlPlanEndpointNotFound is returned when the control plane endpoint is not found.
 	ErrControlPlanEndpointNotFound = errors.New("control plane not found")
-	ErrElasticIPQuotaExceeded      = errors.New("could not create an Elastic IP due to quota limits on the account, please contact Equinix Metal support")
-	ErrInvalidIP                   = errors.New("invalid IP")
-	ErrMissingEnvVar               = errors.New("missing required env var")
-	ErrInvalidRequest              = errors.New("invalid request")
+	// ErrElasticIPQuotaExceeded is returned when the quota for elastic IPs is exceeded.
+	ErrElasticIPQuotaExceeded = errors.New("could not create an Elastic IP due to quota limits on the account, please contact Equinix Metal support")
+	// ErrInvalidIP is returned when the IP is invalid.
+	ErrInvalidIP = errors.New("invalid IP")
+	// ErrMissingEnvVar is returned when a required environment variable is missing.
+	ErrMissingEnvVar = errors.New("missing required env var")
+	// ErrInvalidRequest is returned when the request is invalid.
+	ErrInvalidRequest = errors.New("invalid request")
 )
 
+// Client is a wrapper around the Equinix Metal API client.
 type Client struct {
 	*metal.APIClient
 }
 
-// NewClient creates a new Client for the given Packet credentials
+// NewClient creates a new Client for the given Packet credentials.
 func NewClient(packetAPIKey string) *Client {
 	token := strings.TrimSpace(packetAPIKey)
 
@@ -76,6 +84,7 @@ func NewClient(packetAPIKey string) *Client {
 	return nil
 }
 
+// GetClient returns a new Equinix Metal client.
 func GetClient() (*Client, error) {
 	token := os.Getenv(apiTokenVarName)
 	if token == "" {
@@ -84,17 +93,20 @@ func GetClient() (*Client, error) {
 	return NewClient(token), nil
 }
 
+// GetDevice returns the device with the given ID.
 func (p *Client) GetDevice(ctx context.Context, deviceID string) (*metal.Device, *http.Response, error) {
 	dev, resp, err := p.DevicesApi.FindDeviceById(ctx, deviceID).Execute()
 	return dev, resp, err
 }
 
+// CreateDeviceRequest is an object representing the API request to create a Device.
 type CreateDeviceRequest struct {
 	ExtraTags            []string
 	MachineScope         *scope.MachineScope
 	ControlPlaneEndpoint string
 }
 
+// NewDevice creates a new device.
 func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*metal.Device, error) {
 	packetMachineSpec := req.MachineScope.PacketMachine.Spec
 	packetClusterSpec := req.MachineScope.PacketCluster.Spec
@@ -212,6 +224,7 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*metal
 	return nil, lastErr
 }
 
+// GetDeviceAddresses returns the addresses of the device.
 func (p *Client) GetDeviceAddresses(device *metal.Device) []corev1.NodeAddress {
 	addrs := make([]corev1.NodeAddress, 0)
 	for _, addr := range device.IpAddresses {
@@ -228,6 +241,7 @@ func (p *Client) GetDeviceAddresses(device *metal.Device) []corev1.NodeAddress {
 	return addrs
 }
 
+// GetDeviceByTags returns the first device that matches all of the tags.
 func (p *Client) GetDeviceByTags(ctx context.Context, project string, tags []string) (*metal.Device, error) {
 	devices, _, err := p.DevicesApi.FindProjectDevices(ctx, project).Execute() //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 	if err != nil {
@@ -274,7 +288,7 @@ func (p *Client) CreateIP(ctx context.Context, _, clusterName, projectID, facili
 	return ip, nil
 }
 
-// enableBGP enable bgp on the project
+// EnableProjectBGP enables bgp on the project.
 func (p *Client) EnableProjectBGP(ctx context.Context, projectID string) error {
 	// first check if it is enabled before trying to create it
 	bgpConfig, _, err := p.BGPApi.FindBgpConfigByProject(ctx, projectID).Execute() //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
@@ -324,7 +338,7 @@ func (p *Client) EnableProjectBGP(ctx context.Context, projectID string) error {
 	return err
 }
 
-// ensureNodeBGPEnabled check if the node has bgp enabled, and set it if it does not
+// EnsureNodeBGPEnabled check if the node has bgp enabled, and set it if it does not.
 func (p *Client) EnsureNodeBGPEnabled(ctx context.Context, id string) error {
 	// fortunately, this is idempotent, so just create
 	addressFamily := "ipv4"
@@ -334,13 +348,14 @@ func (p *Client) EnsureNodeBGPEnabled(ctx context.Context, id string) error {
 	_, response, err := p.DevicesApi.CreateBgpSession(ctx, id).BGPSessionInput(req).Execute() //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 	// if we already had one, then we can ignore the error
 	// this really should be a 409, but 422 is what is returned
-	if response != nil && response.StatusCode == 422 && strings.Contains(fmt.Sprintf("%s", err), "already has session") {
+	if response != nil && response.StatusCode == 422 && strings.Contains(err.Error(), "already has session") {
 		err = nil
 	}
 	return err
 }
 
-func (p *Client) GetIPByClusterIdentifier(ctx context.Context, namespace, name, projectID string) (*metal.IPReservation, error) {
+// GetIPByClusterIdentifier returns the IP reservation for the given cluster identifier.
+func (p *Client) GetIPByClusterIdentifier(ctx context.Context, _, name, projectID string) (*metal.IPReservation, error) {
 	var err error
 	var ipReservation *metal.IPReservation
 
@@ -368,7 +383,7 @@ func generateElasticIPIdentifier(name string) string {
 
 // This function provides backwards compatibility for the packngo
 // debug environment variable while allowing us to introduce a new
-// debug variable in the future that is not tied to packngo
+// debug variable in the future that is not tied to packngo.
 func checkEnvForDebug() bool {
 	return os.Getenv(legacyDebugVar) != ""
 }

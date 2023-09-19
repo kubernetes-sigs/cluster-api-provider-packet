@@ -14,13 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Cleans up any stray resources in CI.
 package main
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -40,8 +40,6 @@ const (
 var errMissingRequiredEnvVar = errors.New("required environment variable not set")
 
 func main() {
-	rand.Seed(time.Now().UTC().UnixNano())
-
 	rootCmd := &cobra.Command{ //nolint:exhaustivestruct
 		Use:   "ci-clean",
 		Short: "Clean up any stray resources in CI",

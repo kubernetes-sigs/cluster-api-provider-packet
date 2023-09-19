@@ -51,7 +51,7 @@ const (
 	WaitingForBootstrapDataReason = "WaitingForBootstrapData"
 )
 
-// PacketMachineSpec defines the desired state of PacketMachine
+// PacketMachineSpec defines the desired state of PacketMachine.
 type PacketMachineSpec struct {
 	OS           string   `json:"os"`
 	BillingCycle string   `json:"billingCycle"`
@@ -87,7 +87,7 @@ type PacketMachineSpec struct {
 	Tags Tags `json:"tags,omitempty"`
 }
 
-// PacketMachineStatus defines the observed state of PacketMachine
+// PacketMachineStatus defines the observed state of PacketMachine.
 type PacketMachineStatus struct {
 	// Ready is true when the provider resource is ready.
 	// +optional
@@ -140,7 +140,7 @@ type PacketMachineStatus struct {
 // +kubebuilder:printcolumn:name="InstanceID",type="string",JSONPath=".spec.providerID",description="Packet instance ID"
 // +kubebuilder:printcolumn:name="Machine",type="string",JSONPath=".metadata.ownerReferences[?(@.kind==\"Machine\")].name",description="Machine object which owns with this PacketMachine"
 
-// PacketMachine is the Schema for the packetmachines API
+// PacketMachine is the Schema for the packetmachines API.
 type PacketMachine struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -151,7 +151,7 @@ type PacketMachine struct {
 
 // +kubebuilder:object:root=true
 
-// PacketMachineList contains a list of PacketMachine
+// PacketMachineList contains a list of PacketMachine.
 type PacketMachineList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

@@ -58,7 +58,7 @@ var (
 	errMetroMatch    = errors.New("instance metro does not match machine metro")
 )
 
-// PacketMachineReconciler reconciles a PacketMachine object
+// PacketMachineReconciler reconciles a PacketMachine object.
 type PacketMachineReconciler struct {
 	client.Client
 	WatchFilterValue string
