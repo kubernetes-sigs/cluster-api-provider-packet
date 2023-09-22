@@ -25,10 +25,7 @@ import (
 	"net/url"
 	"os"
 	goruntime "runtime"
-	"strings"
 
-	"github.com/blang/semver"
-	"github.com/docker/distribution/reference"
 	metal "github.com/equinix-labs/metal-go/metal/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -45,7 +42,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/test/infrastructure/container"
-	capiversionutil "sigs.k8s.io/cluster-api/util/version"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
@@ -122,6 +119,11 @@ func (w *wrappedClusterProxy) GetClientSet() *kubernetes.Clientset {
 // GetRESTConfig returns the REST config for direct use with client-go if needed.
 func (w *wrappedClusterProxy) GetRESTConfig() *rest.Config {
 	return w.clusterProxy.GetRESTConfig()
+}
+
+// GetCache returns a controller-runtime cache to create informer from.
+func (w *wrappedClusterProxy) GetCache(ctx context.Context) cache.Cache {
+	return w.clusterProxy.GetCache(ctx)
 }
 
 // GetLogCollector returns the machine log collector for the Kubernetes cluster.
@@ -366,37 +368,15 @@ func (wc *wrappedClient) RESTMapper() meta.RESTMapper {
 	return wc.client.RESTMapper()
 }
 
+// SubResource returns the sub resource this client is using.
+func (wc *wrappedClient) SubResource(subResource string) client.SubResourceClient {
+	return wc.client.SubResource(subResource)
+}
+
 func (wc *wrappedClient) Scheme() *runtime.Scheme {
 	return wc.client.Scheme()
 }
 
 func (wc *wrappedClient) Status() client.StatusWriter {
 	return wc.client.Status()
-}
-
-func containerImageGTE(container corev1.Container, version semver.Version) (bool, error) {
-	ref, err := reference.ParseNormalizedNamed(container.Image)
-	if err != nil {
-		return false, fmt.Errorf("failed to parse container reference %s: %w", container.Image, err)
-	}
-
-	ref = reference.TagNameOnly(ref)
-	tagged, _ := ref.(reference.Tagged)
-	tag := tagged.Tag()
-
-	if tag == "latest" {
-		return false, nil
-	}
-
-	// If the image tag starts with sha-, assume we are running in CI and can assume the version is new enough
-	if strings.HasPrefix(tag, "sha-") {
-		return false, nil
-	}
-
-	imageVersion, err := capiversionutil.ParseMajorMinorPatchTolerant(tag)
-	if err != nil {
-		return false, fmt.Errorf("failed to get version from image: %w", err)
-	}
-
-	return imageVersion.GTE(version), nil
 }
