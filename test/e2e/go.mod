@@ -10,7 +10,7 @@ replace (
 require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/docker/distribution v2.8.2+incompatible
-	github.com/equinix-labs/metal-go v0.17.0
+	github.com/equinix-labs/metal-go v0.22.2
 	github.com/onsi/ginkgo/v2 v2.6.0
 	github.com/onsi/gomega v1.24.1
 	golang.org/x/crypto v0.12.0
