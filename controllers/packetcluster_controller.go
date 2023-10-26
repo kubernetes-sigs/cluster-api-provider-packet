@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package controllers contains PacketCluster controller logic.
 package controllers
 
 import (
@@ -38,7 +39,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
 )
 
-// PacketClusterReconciler reconciles a PacketCluster object
+// PacketClusterReconciler reconciles a PacketCluster object.
 type PacketClusterReconciler struct {
 	client.Client
 	WatchFilterValue string
@@ -104,10 +105,11 @@ func (r *PacketClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return r.reconcileDelete(ctx, clusterScope)
 	}
 
-	return r.reconcileNormal(ctx, clusterScope)
+	err = r.reconcileNormal(ctx, clusterScope)
+	return ctrl.Result{}, err
 }
 
-func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
+func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterScope *scope.ClusterScope) error {
 	log := ctrl.LoggerFrom(ctx).WithValues("cluster", clusterScope.Cluster.Name)
 	log.Info("Reconciling PacketCluster")
 
@@ -131,7 +133,7 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 		ip, err := r.PacketClient.CreateIP(ctx, clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID, facility, metro)
 		if err != nil {
 			log.Error(err, "error reserving an ip")
-			return ctrl.Result{}, err
+			return err
 		}
 		clusterScope.PacketCluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
 			Host: ip.To4().String(),
@@ -139,7 +141,7 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 		}
 	case err != nil:
 		log.Error(err, "error getting cluster IP")
-		return ctrl.Result{}, err
+		return err
 	default:
 		// If there is an ElasticIP with the right tag just use it again
 		clusterScope.PacketCluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
@@ -151,17 +153,17 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 	if clusterScope.PacketCluster.Spec.VIPManager == "KUBE_VIP" {
 		if err := r.PacketClient.EnableProjectBGP(ctx, packetCluster.Spec.ProjectID); err != nil {
 			log.Error(err, "error enabling bgp for project")
-			return ctrl.Result{}, err
+			return err
 		}
 	}
 
 	clusterScope.PacketCluster.Status.Ready = true
 	conditions.MarkTrue(packetCluster, infrav1.NetworkInfrastructureReadyCondition)
 
-	return ctrl.Result{}, nil
+	return nil
 }
 
-func (r *PacketClusterReconciler) reconcileDelete(ctx context.Context, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
+func (r *PacketClusterReconciler) reconcileDelete(_ context.Context, _ *scope.ClusterScope) (ctrl.Result, error) {
 	// Initially I created this handler to remove an elastic IP when a cluster
 	// gets delete, but it does not sound like a good idea.  It is better to
 	// leave to the users the ability to decide if they want to keep and resign
@@ -185,7 +187,7 @@ func (r *PacketClusterReconciler) SetupWithManager(ctx context.Context, mgr ctrl
 		Complete(r)
 }
 
-// MachineNotFound error representing that the requested device was not yet found
+// MachineNotFound error representing that the requested device was not yet found.
 type MachineNotFound struct {
 	err string
 }
@@ -194,7 +196,7 @@ func (e *MachineNotFound) Error() string {
 	return e.err
 }
 
-// MachineNoIP error representing that the requested device does not have an IP yet assigned
+// MachineNoIP error representing that the requested device does not have an IP yet assigned.
 type MachineNoIP struct {
 	err string
 }

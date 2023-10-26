@@ -3,8 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.10.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.11.4
   name: packetmachinetemplates.infrastructure.cluster.x-k8s.io
 spec:
   group: infrastructure.cluster.x-k8s.io
@@ -23,7 +22,7 @@ spec:
     schema:
       openAPIV3Schema:
         description: PacketMachineTemplate is the Schema for the packetmachinetemplates
-          API
+          API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -38,11 +37,11 @@ spec:
           metadata:
             type: object
           spec:
-            description: PacketMachineTemplateSpec defines the desired state of PacketMachineTemplate
+            description: PacketMachineTemplateSpec defines the desired state of PacketMachineTemplate.
             properties:
               template:
                 description: PacketMachineTemplateResource describes the data needed
-                  to create am PacketMachine from a template
+                  to create am PacketMachine from a template.
                 properties:
                   spec:
                     description: Spec is the specification of the desired behavior
@@ -105,7 +104,7 @@ spec:
     schema:
       openAPIV3Schema:
         description: PacketMachineTemplate is the Schema for the packetmachinetemplates
-          API
+          API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -120,11 +119,11 @@ spec:
           metadata:
             type: object
           spec:
-            description: PacketMachineTemplateSpec defines the desired state of PacketMachineTemplate
+            description: PacketMachineTemplateSpec defines the desired state of PacketMachineTemplate.
             properties:
               template:
                 description: PacketMachineTemplateResource describes the data needed
-                  to create am PacketMachine from a template
+                  to create am PacketMachine from a template.
                 properties:
                   spec:
                     description: Spec is the specification of the desired behavior

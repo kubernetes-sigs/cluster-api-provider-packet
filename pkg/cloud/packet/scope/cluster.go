@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package scope contains the scope interfaces for the Packet provider.
 package scope
 
 import (
@@ -81,7 +82,7 @@ func (s *ClusterScope) Namespace() string {
 	return s.Cluster.GetNamespace()
 }
 
-// SetReady sets the PacketCluster Ready Status
+// SetReady sets the PacketCluster Ready Status.
 func (s *ClusterScope) SetReady() {
 	s.PacketCluster.Status.Ready = true
 }

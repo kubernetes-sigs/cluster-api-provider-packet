@@ -3,8 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.10.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.11.4
   name: packetmachines.infrastructure.cluster.x-k8s.io
 spec:
   group: infrastructure.cluster.x-k8s.io
@@ -43,7 +42,7 @@ spec:
     name: v1alpha3
     schema:
       openAPIV3Schema:
-        description: PacketMachine is the Schema for the packetmachines API
+        description: PacketMachine is the Schema for the packetmachines API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -58,7 +57,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: PacketMachineSpec defines the desired state of PacketMachine
+            description: PacketMachineSpec defines the desired state of PacketMachine.
             properties:
               OS:
                 type: string
@@ -104,7 +103,7 @@ spec:
             - machineType
             type: object
           status:
-            description: PacketMachineStatus defines the observed state of PacketMachine
+            description: PacketMachineStatus defines the observed state of PacketMachine.
             properties:
               addresses:
                 description: Addresses contains the Packet device associated addresses.
@@ -180,7 +179,7 @@ spec:
     name: v1beta1
     schema:
       openAPIV3Schema:
-        description: PacketMachine is the Schema for the packetmachines API
+        description: PacketMachine is the Schema for the packetmachines API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -195,7 +194,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: PacketMachineSpec defines the desired state of PacketMachine
+            description: PacketMachineSpec defines the desired state of PacketMachine.
             properties:
               billingCycle:
                 type: string
@@ -241,7 +240,7 @@ spec:
             - os
             type: object
           status:
-            description: PacketMachineStatus defines the observed state of PacketMachine
+            description: PacketMachineStatus defines the observed state of PacketMachine.
             properties:
               addresses:
                 description: Addresses contains the Packet device associated addresses.

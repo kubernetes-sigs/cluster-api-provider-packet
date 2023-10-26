@@ -21,10 +21,10 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 )
 
-// VIPManagerType describes if the VIP will be managed by CPEM or kube-vip
+// VIPManagerType describes if the VIP will be managed by CPEM or kube-vip.
 type VIPManagerType string
 
-// PacketClusterSpec defines the desired state of PacketCluster
+// PacketClusterSpec defines the desired state of PacketCluster.
 type PacketClusterSpec struct {
 	// ProjectID represents the Packet Project where this cluster will be placed into
 	ProjectID string `json:"projectID"`
@@ -48,7 +48,7 @@ type PacketClusterSpec struct {
 	VIPManager VIPManagerType `json:"vipManager"`
 }
 
-// PacketClusterStatus defines the observed state of PacketCluster
+// PacketClusterStatus defines the observed state of PacketCluster.
 type PacketClusterStatus struct {
 	// Ready denotes that the cluster (infrastructure) is ready.
 	// +optional
@@ -61,7 +61,7 @@ type PacketClusterStatus struct {
 // +kubebuilder:printcolumn:name="Cluster",type="string",JSONPath=".metadata.labels.cluster\\.x-k8s\\.io/cluster-name",description="Cluster to which this PacketCluster belongs"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="PacketCluster ready status"
 
-// PacketCluster is the Schema for the packetclusters API
+// PacketCluster is the Schema for the packetclusters API.
 type PacketCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -72,7 +72,7 @@ type PacketCluster struct {
 
 // +kubebuilder:object:root=true
 
-// PacketClusterList contains a list of PacketCluster
+// PacketClusterList contains a list of PacketCluster.
 type PacketClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

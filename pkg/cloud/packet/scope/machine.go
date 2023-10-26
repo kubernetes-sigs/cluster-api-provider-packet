@@ -28,7 +28,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
 	"sigs.k8s.io/cluster-api/controllers/noderefutil"
@@ -48,13 +48,20 @@ const (
 )
 
 var (
-	ErrMissingClient              = errors.New("client is required when creating a MachineScope")
-	ErrMissingCluster             = errors.New("cluster is required when creating a MachineScope")
-	ErrMissingMachine             = errors.New("machine is required when creating a MachineScope")
-	ErrMissingPacketCluster       = errors.New("packetCluster is required when creating a MachineScope")
-	ErrMissingPacketMachine       = errors.New("packetMachine is required when creating a MachineScope")
+	// ErrMissingClient is returned when a client is not provided to the MachineScope.
+	ErrMissingClient = errors.New("client is required when creating a MachineScope")
+	// ErrMissingCluster is returned when a cluster is not provided to the MachineScope.
+	ErrMissingCluster = errors.New("cluster is required when creating a MachineScope")
+	// ErrMissingMachine is returned when a machine is not provided to the MachineScope.
+	ErrMissingMachine = errors.New("machine is required when creating a MachineScope")
+	// ErrMissingPacketCluster is returned when a packetCluster is not provided to the MachineScope.
+	ErrMissingPacketCluster = errors.New("packetCluster is required when creating a MachineScope")
+	// ErrMissingPacketMachine is returned when a packetMachine is not provided to the MachineScope.
+	ErrMissingPacketMachine = errors.New("packetMachine is required when creating a MachineScope")
+	// ErrMissingBootstrapDataSecret is returned when the bootstrap data secret is not found.
 	ErrMissingBootstrapDataSecret = errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
-	ErrBootstrapDataMissingKey    = errors.New("error retrieving bootstrap data: secret value key is missing")
+	// ErrBootstrapDataMissingKey is returned when the bootstrap data secret does not contain the "value" key.
+	ErrBootstrapDataMissingKey = errors.New("error retrieving bootstrap data: secret value key is missing")
 )
 
 // MachineScopeParams defines the input parameters used to create a new MachineScope.
@@ -127,12 +134,12 @@ func (m *MachineScope) Close() error {
 	return m.PatchObject(context.TODO())
 }
 
-// Name returns the PacketMachine name
+// Name returns the PacketMachine name.
 func (m *MachineScope) Name() string {
 	return m.PacketMachine.Name
 }
 
-// Namespace returns the PacketMachine namespace
+// Namespace returns the PacketMachine namespace.
 func (m *MachineScope) Namespace() string {
 	return m.PacketMachine.Namespace
 }
@@ -161,7 +168,7 @@ func (m *MachineScope) GetProviderID() string {
 // SetProviderID sets the DOMachine providerID in spec from device id.
 func (m *MachineScope) SetProviderID(deviceID string) {
 	pid := fmt.Sprintf("%s://%s", m.providerIDPrefix, deviceID)
-	m.PacketMachine.Spec.ProviderID = pointer.StringPtr(pid)
+	m.PacketMachine.Spec.ProviderID = ptr.To(pid)
 }
 
 // GetInstanceID returns the DOMachine droplet instance id by parsing Spec.ProviderID.
@@ -183,19 +190,19 @@ func (m *MachineScope) SetInstanceStatus(v infrav1.PacketResourceStatus) {
 	m.PacketMachine.Status.InstanceStatus = &v
 }
 
-// SetReady sets the PacketMachine Ready Status
+// SetReady sets the PacketMachine Ready Status.
 func (m *MachineScope) SetReady() {
 	m.PacketMachine.Status.Ready = true
 }
 
-// SetNotReady sets the PacketMachine Ready Status
+// SetNotReady sets the PacketMachine Ready Status.
 func (m *MachineScope) SetNotReady() {
 	m.PacketMachine.Status.Ready = false
 }
 
 // SetFailureMessage sets the PacketMachine status error message.
 func (m *MachineScope) SetFailureMessage(v error) {
-	m.PacketMachine.Status.FailureMessage = pointer.StringPtr(v.Error())
+	m.PacketMachine.Status.FailureMessage = ptr.To(v.Error())
 }
 
 // SetFailureReason sets the PacketMachine status error reason.
@@ -208,7 +215,7 @@ func (m *MachineScope) SetAddresses(addrs []corev1.NodeAddress) {
 	m.PacketMachine.Status.Addresses = addrs
 }
 
-// AdditionalTags returns Tags from the scope's PacketMachine. The returned value will never be nil.
+// Tags returns Tags from the scope's PacketMachine. The returned value will never be nil.
 func (m *MachineScope) Tags() infrav1.Tags {
 	if m.PacketMachine.Spec.Tags == nil {
 		m.PacketMachine.Spec.Tags = infrav1.Tags{}
@@ -411,7 +418,7 @@ func hasWorkloadDeployment(ctx context.Context, workloadClient client.Client, na
 }
 
 func providerIDPrefixFromPacketMachine(packetMachine *infrav1.PacketMachine) string {
-	preexistingProviderID := pointer.StringPtrDerefOr(packetMachine.Spec.ProviderID, "")
+	preexistingProviderID := ptr.Deref(packetMachine.Spec.ProviderID, "")
 	if preexistingProviderID != "" {
 		if parsed, err := noderefutil.NewProviderID(preexistingProviderID); err == nil {
 			return parsed.CloudProvider()
