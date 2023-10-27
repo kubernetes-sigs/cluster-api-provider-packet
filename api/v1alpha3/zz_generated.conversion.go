@@ -24,7 +24,8 @@ package v1alpha3
 import (
 	unsafe "unsafe"
 
-	v1 "k8s.io/api/core/v1"
+	v1 "github.com/equinix-labs/metal-go/metal/v1"
+	corev1 "k8s.io/api/core/v1"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	v1beta1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
@@ -359,7 +360,7 @@ func Convert_v1beta1_PacketMachineList_To_v1alpha3_PacketMachineList(in *v1beta1
 
 func autoConvert_v1alpha3_PacketMachineSpec_To_v1beta1_PacketMachineSpec(in *PacketMachineSpec, out *v1beta1.PacketMachineSpec, s conversion.Scope) error {
 	out.OS = in.OS
-	out.BillingCycle = in.BillingCycle
+	out.BillingCycle = v1.DeviceCreateInputBillingCycle(in.BillingCycle)
 	out.MachineType = in.MachineType
 	// WARNING: in.SshKeys requires manual conversion: does not exist in peer-type
 	out.Facility = in.Facility
@@ -373,7 +374,7 @@ func autoConvert_v1alpha3_PacketMachineSpec_To_v1beta1_PacketMachineSpec(in *Pac
 
 func autoConvert_v1beta1_PacketMachineSpec_To_v1alpha3_PacketMachineSpec(in *v1beta1.PacketMachineSpec, out *PacketMachineSpec, s conversion.Scope) error {
 	out.OS = in.OS
-	out.BillingCycle = in.BillingCycle
+	out.BillingCycle = v1.DeviceCreateInputBillingCycle(in.BillingCycle)
 	out.MachineType = in.MachineType
 	// WARNING: in.SSHKeys requires manual conversion: does not exist in peer-type
 	out.Facility = in.Facility
@@ -387,7 +388,7 @@ func autoConvert_v1beta1_PacketMachineSpec_To_v1alpha3_PacketMachineSpec(in *v1b
 
 func autoConvert_v1alpha3_PacketMachineStatus_To_v1beta1_PacketMachineStatus(in *PacketMachineStatus, out *v1beta1.PacketMachineStatus, s conversion.Scope) error {
 	out.Ready = in.Ready
-	out.Addresses = *(*[]v1.NodeAddress)(unsafe.Pointer(&in.Addresses))
+	out.Addresses = *(*[]corev1.NodeAddress)(unsafe.Pointer(&in.Addresses))
 	out.InstanceStatus = (*v1beta1.PacketResourceStatus)(unsafe.Pointer(in.InstanceStatus))
 	// WARNING: in.ErrorReason requires manual conversion: does not exist in peer-type
 	// WARNING: in.ErrorMessage requires manual conversion: does not exist in peer-type
@@ -396,7 +397,7 @@ func autoConvert_v1alpha3_PacketMachineStatus_To_v1beta1_PacketMachineStatus(in 
 
 func autoConvert_v1beta1_PacketMachineStatus_To_v1alpha3_PacketMachineStatus(in *v1beta1.PacketMachineStatus, out *PacketMachineStatus, s conversion.Scope) error {
 	out.Ready = in.Ready
-	out.Addresses = *(*[]v1.NodeAddress)(unsafe.Pointer(&in.Addresses))
+	out.Addresses = *(*[]corev1.NodeAddress)(unsafe.Pointer(&in.Addresses))
 	out.InstanceStatus = (*PacketResourceStatus)(unsafe.Pointer(in.InstanceStatus))
 	// WARNING: in.FailureReason requires manual conversion: does not exist in peer-type
 	// WARNING: in.FailureMessage requires manual conversion: does not exist in peer-type

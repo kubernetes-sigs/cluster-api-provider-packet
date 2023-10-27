@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha3
 
 import (
+	metal "github.com/equinix-labs/metal-go/metal/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
@@ -30,10 +31,10 @@ const (
 
 // PacketMachineSpec defines the desired state of PacketMachine.
 type PacketMachineSpec struct {
-	OS           string   `json:"OS"` //nolint: tagliatelle
-	BillingCycle string   `json:"billingCycle"`
-	MachineType  string   `json:"machineType"`
-	SshKeys      []string `json:"sshKeys,omitempty"`
+	OS           string                              `json:"OS"` //nolint: tagliatelle
+	BillingCycle metal.DeviceCreateInputBillingCycle `json:"billingCycle"`
+	MachineType  string                              `json:"machineType"`
+	SshKeys      []string                            `json:"sshKeys,omitempty"`
 
 	// Facility represents the Packet facility for this cluster.
 	// Override from the PacketCluster spec.

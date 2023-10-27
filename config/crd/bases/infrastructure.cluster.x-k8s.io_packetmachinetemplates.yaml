@@ -50,6 +50,8 @@ spec:
                       OS:
                         type: string
                       billingCycle:
+                        description: DeviceCreateInputBillingCycle The billing cycle
+                          of the device.
                         type: string
                       facility:
                         description: Facility represents the Packet facility for this
@@ -130,6 +132,8 @@ spec:
                       of the machine.
                     properties:
                       billingCycle:
+                        description: DeviceCreateInputBillingCycle The billing cycle
+                          of the device.
                         type: string
                       facility:
                         description: Facility represents the Packet facility for this

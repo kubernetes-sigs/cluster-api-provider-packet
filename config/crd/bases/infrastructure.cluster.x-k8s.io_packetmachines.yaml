@@ -62,6 +62,8 @@ spec:
               OS:
                 type: string
               billingCycle:
+                description: DeviceCreateInputBillingCycle The billing cycle of the
+                  device.
                 type: string
               facility:
                 description: Facility represents the Packet facility for this cluster.
@@ -197,6 +199,8 @@ spec:
             description: PacketMachineSpec defines the desired state of PacketMachine.
             properties:
               billingCycle:
+                description: DeviceCreateInputBillingCycle The billing cycle of the
+                  device.
                 type: string
               facility:
                 description: Facility represents the Packet facility for this machine.
