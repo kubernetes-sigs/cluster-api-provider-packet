@@ -1,9 +1,9 @@
 module sigs.k8s.io/cluster-api-provider-packet/test/e2e
 
-go 1.19
+go 1.20
 
 replace (
-	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.4.6
+	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.4.8
 	sigs.k8s.io/cluster-api-provider-packet => ../../
 )
 
@@ -11,14 +11,14 @@ require (
 	github.com/equinix-labs/metal-go v0.25.1
 	github.com/onsi/ginkgo/v2 v2.9.2
 	github.com/onsi/gomega v1.27.5
-	golang.org/x/crypto v0.12.0
+	golang.org/x/crypto v0.14.0
 	k8s.io/api v0.26.1
 	k8s.io/apimachinery v0.26.1
 	k8s.io/client-go v0.26.1
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
-	sigs.k8s.io/cluster-api v1.4.6
+	sigs.k8s.io/cluster-api v1.4.8
 	sigs.k8s.io/cluster-api-provider-packet v0.0.0-00010101000000-000000000000
-	sigs.k8s.io/cluster-api/test v1.4.6
+	sigs.k8s.io/cluster-api/test v1.4.8
 	sigs.k8s.io/controller-runtime v0.14.6
 )
 
@@ -101,11 +101,11 @@ require (
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
 	github.com/valyala/fastjson v1.6.4 // indirect
-	golang.org/x/net v0.13.0 // indirect
+	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/oauth2 v0.6.0 // indirect
-	golang.org/x/sys v0.11.0 // indirect
-	golang.org/x/term v0.11.0 // indirect
-	golang.org/x/text v0.12.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
+	golang.org/x/term v0.13.0 // indirect
+	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.7.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
