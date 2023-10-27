@@ -55,7 +55,7 @@ const (
 // PacketMachineSpec defines the desired state of PacketMachine.
 type PacketMachineSpec struct {
 	OS           string                              `json:"os"`
-	BillingCycle metal.DeviceCreateInputBillingCycle `json:"billingCycle"`
+	BillingCycle metal.DeviceCreateInputBillingCycle `json:"billingCycle,omitempty"`
 	MachineType  string                              `json:"machineType"`
 	SSHKeys      []string                            `json:"sshKeys,omitempty"`
 

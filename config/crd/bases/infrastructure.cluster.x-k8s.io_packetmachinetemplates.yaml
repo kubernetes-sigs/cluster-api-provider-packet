@@ -90,7 +90,6 @@ spec:
                         type: array
                     required:
                     - OS
-                    - billingCycle
                     - machineType
                     type: object
                 required:
@@ -173,7 +172,6 @@ spec:
                           type: string
                         type: array
                     required:
-                    - billingCycle
                     - machineType
                     - os
                     type: object

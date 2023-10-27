@@ -101,7 +101,6 @@ spec:
                 type: array
             required:
             - OS
-            - billingCycle
             - machineType
             type: object
           status:
@@ -239,7 +238,6 @@ spec:
                   type: string
                 type: array
             required:
-            - billingCycle
             - machineType
             - os
             type: object
