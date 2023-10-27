@@ -302,7 +302,7 @@ func (p *Client) EnableProjectBGP(ctx context.Context, projectID string) error {
 	// - bgpConfig struct does not have Status=="disabled"
 	if err != nil {
 		return err
-	} else if bgpConfig != nil && bgpConfig.GetId() != "" && strings.ToLower(bgpConfig.GetStatus()) != "disabled" {
+	} else if bgpConfig != nil && bgpConfig.GetId() != "" && bgpConfig.GetStatus() != metal.BGPCONFIGSTATUS_DISABLED {
 		return nil
 	}
 
@@ -341,7 +341,7 @@ func (p *Client) EnableProjectBGP(ctx context.Context, projectID string) error {
 // EnsureNodeBGPEnabled check if the node has bgp enabled, and set it if it does not.
 func (p *Client) EnsureNodeBGPEnabled(ctx context.Context, id string) error {
 	// fortunately, this is idempotent, so just create
-	addressFamily := "ipv4"
+	addressFamily := metal.BGPSESSIONINPUTADDRESSFAMILY_IPV4
 	req := metal.BGPSessionInput{
 		AddressFamily: &addressFamily,
 	}
