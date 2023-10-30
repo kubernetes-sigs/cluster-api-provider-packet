@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.1-experimental
+# syntax=docker/dockerfile:1
 
 # Copyright 2020 The Kubernetes Authors.
 #
@@ -15,7 +15,7 @@
 # limitations under the License.
 
 # Build the manager binary
-ARG GOVER=1.19.7
+ARG GOVER=1.20.10
 FROM golang:${GOVER} as builder
 
 WORKDIR /workspace
