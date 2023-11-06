@@ -3,7 +3,7 @@ module sigs.k8s.io/cluster-api-provider-packet
 go 1.20
 
 require (
-	github.com/equinix-labs/metal-go v0.25.1
+	github.com/equinix-labs/metal-go v0.26.0
 	github.com/onsi/gomega v1.27.5
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.6.1
