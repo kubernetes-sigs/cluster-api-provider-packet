@@ -23,7 +23,7 @@ import (
 	"context"
 
 	. "github.com/onsi/ginkgo/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 )
@@ -51,7 +51,7 @@ var _ = Describe("[Conformance] Running the Cluster API E2E Conformance tests", 
 				BootstrapClusterProxy: bootstrapClusterProxy,
 				ArtifactFolder:        artifactFolder,
 				SkipCleanup:           skipCleanup,
-				Flavor:                pointer.String(clusterctl.DefaultFlavor),
+				Flavor:                ptr.To[string](clusterctl.DefaultFlavor),
 			}
 		})
 	})

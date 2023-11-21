@@ -205,13 +205,6 @@ issues:
   # changes in PRs and avoid nitpicking.
   exclude-use-default: false
   exclude-rules:
-    - path: api/v1alpha3
-      linters:
-        - revive
-        - gosec
-        - stylecheck
-    # Specific exclude rules for deprecated fields that are still part of the codebase. These
-    # should be removed as the referenced deprecated item is removed from the project.
     - linters:
         - staticcheck
       text: "SA1019: (noderefutil.*|parsed.*) is deprecated"

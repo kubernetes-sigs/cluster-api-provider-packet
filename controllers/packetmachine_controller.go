@@ -27,11 +27,11 @@ import (
 	metal "github.com/equinix-labs/metal-go/metal/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
-	"sigs.k8s.io/cluster-api/util/collections"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/predicates"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -41,11 +41,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
+	clog "sigs.k8s.io/cluster-api/util/log"
 )
 
 const (
@@ -61,27 +61,37 @@ var (
 // PacketMachineReconciler reconciles a PacketMachine object.
 type PacketMachineReconciler struct {
 	client.Client
+	PacketClient *packet.Client
+
+	// WatchFilterValue is the label value used to filter events prior to reconciliation.
 	WatchFilterValue string
-	PacketClient     *packet.Client
 }
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=packetmachines,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=packetmachines/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;machines/status,verbs=get;list;watch
+// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;machinesets;machines;machines/status,verbs=get;list;watch
 // +kubebuilder:rbac:groups=bootstrap.cluster.x-k8s.io,resources=kubeadmconfigs;kubeadmconfigs/status,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets;,verbs=get;list;watch
 
-func (r *PacketMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
+func (r *PacketMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, rerr error) {
 	log := ctrl.LoggerFrom(ctx)
 
+	// Fetch the PacketMachine instance.
 	packetmachine := &infrav1.PacketMachine{}
-	if err := r.Get(ctx, req.NamespacedName, packetmachine); err != nil {
+	if err := r.Client.Get(ctx, req.NamespacedName, packetmachine); err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info("PacketMachine resource not found or already deleted")
+			log.Error(err, "PacketMachine resource not found or already deleted")
 			return ctrl.Result{}, nil
 		}
 
 		log.Error(err, "Unable to fetch PacketMachine resource")
+		return ctrl.Result{}, err
+	}
+
+	// AddOwners adds the owners of PacketMachine as k/v pairs to the logger.
+	// Specifically, it will add KubeadmControlPlane, MachineSet and MachineDeployment.
+	ctx, log, err := clog.AddOwners(ctx, r.Client, packetmachine)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -96,48 +106,60 @@ func (r *PacketMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, nil
 	}
 
-	log = log.WithValues("machine", machine.Name)
+	log = log.WithValues("Machine", klog.KObj(machine))
+	ctx = ctrl.LoggerInto(ctx, log)
 
 	// Fetch the Cluster.
 	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
 	if err != nil {
 		log.Info("Machine is missing cluster label or cluster does not exist")
+		return ctrl.Result{}, err
+	}
+	if cluster == nil {
+		log.Info(fmt.Sprintf("Please associate this machine with a cluster using the label %s: <name of cluster>", clusterv1.ClusterNameLabel))
 		return ctrl.Result{}, nil
 	}
 
-	log = log.WithValues("cluster", cluster.Name)
+	log = log.WithValues("Cluster", klog.KObj(cluster))
+	ctx = ctrl.LoggerInto(ctx, log)
 
-	if annotations.IsPaused(cluster, machine) {
+	// Return early if the object or Cluster is paused.
+	if annotations.IsPaused(cluster, packetmachine) {
 		log.Info("PacketMachine or linked Cluster is marked as paused. Won't reconcile")
 		return ctrl.Result{}, nil
 	}
 
+	// Fetch the Packet Cluster
 	packetcluster := &infrav1.PacketCluster{}
 	packetclusterNamespacedName := client.ObjectKey{
 		Namespace: packetmachine.Namespace,
 		Name:      cluster.Spec.InfrastructureRef.Name,
 	}
-	if err := r.Get(ctx, packetclusterNamespacedName, packetcluster); err != nil {
+	if err := r.Client.Get(ctx, packetclusterNamespacedName, packetcluster); err != nil {
 		log.Info("PacketCluster is not available yet")
 		return ctrl.Result{}, nil
 	}
 
 	// Create the machine scope
-	machineScope, err := scope.NewMachineScope(ctx, scope.MachineScopeParams{
-		Client:        r.Client,
-		Cluster:       cluster,
-		Machine:       machine,
-		PacketCluster: packetcluster,
-		PacketMachine: packetmachine,
-	})
+	machineScope, err := scope.NewMachineScope(
+		scope.MachineScopeParams{
+			Client:        r.Client,
+			Cluster:       cluster,
+			Machine:       machine,
+			PacketCluster: packetcluster,
+			PacketMachine: packetmachine,
+		})
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to create scope: %w", err)
 	}
 
 	// Always close the scope when exiting this function so we can persist any PacketMachine changes.
 	defer func() {
-		if err := machineScope.Close(); err != nil && reterr == nil {
-			reterr = err
+		if err := machineScope.Close(); err != nil && rerr == nil {
+			log.Error(err, "failed to patch packetmachine")
+			if rerr == nil {
+				rerr = err
+			}
 		}
 	}()
 
@@ -146,85 +168,86 @@ func (r *PacketMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		err = r.reconcileDelete(ctx, machineScope)
 		return ctrl.Result{}, err
 	}
-
 	return r.reconcile(ctx, machineScope)
 }
 
 func (r *PacketMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, options controller.Options) error {
 	log := ctrl.LoggerFrom(ctx)
 
-	clusterToObjectFunc, err := util.ClusterToObjectsMapper(r.Client, &infrav1.PacketMachineList{}, mgr.GetScheme())
+	clusterToPacketMachines, err := util.ClusterToTypedObjectsMapper(mgr.GetClient(), &infrav1.PacketMachineList{}, mgr.GetScheme())
 	if err != nil {
 		return fmt.Errorf("failed to create mapper for Cluster to PacketMachines: %w", err)
 	}
 
-	return ctrl.NewControllerManagedBy(mgr).
-		WithOptions(options).
+	err = ctrl.NewControllerManagedBy(mgr).
 		For(&infrav1.PacketMachine{}).
+		WithOptions(options).
 		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(log, r.WatchFilterValue)).
 		Watches(
-			&source.Kind{Type: &clusterv1.Machine{}},
+			&clusterv1.Machine{},
 			handler.EnqueueRequestsFromMapFunc(util.MachineToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("PacketMachine"))),
 		).
 		Watches(
-			&source.Kind{Type: &infrav1.PacketCluster{}},
-			handler.EnqueueRequestsFromMapFunc(r.PacketClusterToPacketMachines(ctx)),
+			&infrav1.PacketCluster{},
+			handler.EnqueueRequestsFromMapFunc(r.PacketClusterToPacketMachines),
 		).
 		Watches(
-			&source.Kind{Type: &clusterv1.Cluster{}},
-			handler.EnqueueRequestsFromMapFunc(clusterToObjectFunc),
-			builder.WithPredicates(predicates.ClusterUnpausedAndInfrastructureReady(log)),
-		).
-		Complete(r)
+			&clusterv1.Cluster{},
+			handler.EnqueueRequestsFromMapFunc(clusterToPacketMachines),
+			builder.WithPredicates(
+				predicates.ClusterUnpausedAndInfrastructureReady(log),
+			),
+		).Complete(r)
+	if err != nil {
+		return fmt.Errorf("failed setting up with a controller manager: %w", err)
+	}
+	return nil
 }
 
 // PacketClusterToPacketMachines is a handler.ToRequestsFunc to be used to enqeue requests for reconciliation
 // of PacketMachines.
-func (r *PacketMachineReconciler) PacketClusterToPacketMachines(ctx context.Context) handler.MapFunc {
+func (r *PacketMachineReconciler) PacketClusterToPacketMachines(ctx context.Context, o client.Object) []ctrl.Request {
 	log := ctrl.LoggerFrom(ctx)
-	return func(o client.Object) []ctrl.Request {
-		c, ok := o.(*infrav1.PacketCluster)
-		if !ok {
-			log.Error(fmt.Errorf("expected a PacketCluster but got a %T", o), "failed to get PacketMachine for PacketCluster") //nolint:goerr113
-			return nil
-		}
+	result := []ctrl.Request{}
+	c, ok := o.(*infrav1.PacketCluster)
+	if !ok {
+		log.Error(fmt.Errorf("expected a PacketCluster but got a %T", o), "failed to get PacketMachine for PacketCluster") //nolint:goerr113
+		return nil
+	}
 
-		log = log.WithValues("PacketCluster", c.Name, "Namespace", c.Namespace)
+	log = log.WithValues("PacketCluster", c.Name, "Namespace", c.Namespace)
 
-		// Don't handle deleted PacketClusters
-		if !c.ObjectMeta.DeletionTimestamp.IsZero() {
-			log.V(4).Info("PacketCluster has a deletion timestamp, skipping mapping.")
-			return nil
-		}
+	// Don't handle deleted PacketClusters
+	if !c.ObjectMeta.DeletionTimestamp.IsZero() {
+		log.V(4).Info("PacketCluster has a deletion timestamp, skipping mapping.")
+		return nil
+	}
 
-		cluster, err := util.GetOwnerCluster(ctx, r.Client, c.ObjectMeta)
-		switch {
-		case apierrors.IsNotFound(err) || cluster == nil:
-			log.Error(err, "owning cluster is not found, skipping mapping.")
-			return nil
-		case err != nil:
-			log.Error(err, "failed to get owning cluster")
-			return nil
-		}
-
-		machines, err := collections.GetFilteredMachinesForCluster(ctx, r.Client, cluster)
-		if err != nil {
-			log.Error(err, "failed to get Machines for Cluster")
-			return nil
-		}
-
-		var result []ctrl.Request
-
-		for _, m := range machines.UnsortedList() {
-			if m.Spec.InfrastructureRef.Name == "" {
-				continue
-			}
-			name := client.ObjectKey{Namespace: m.Namespace, Name: m.Spec.InfrastructureRef.Name}
-			result = append(result, ctrl.Request{NamespacedName: name})
-		}
-
+	cluster, err := util.GetOwnerCluster(ctx, r.Client, c.ObjectMeta)
+	switch {
+	case apierrors.IsNotFound(err) || cluster == nil:
+		log.Error(err, "owning cluster is not found, skipping mapping.")
+		return result
+	case err != nil:
+		log.Error(err, "failed to get owning cluster")
 		return result
 	}
+
+	labels := map[string]string{clusterv1.ClusterNameLabel: cluster.Name}
+	machineList := &clusterv1.MachineList{}
+	if err := r.Client.List(ctx, machineList, client.InNamespace(c.Namespace), client.MatchingLabels(labels)); err != nil {
+		log.Error(err, "failed to get Machines for Cluster")
+		return nil
+	}
+	for _, m := range machineList.Items {
+		if m.Spec.InfrastructureRef.Name == "" {
+			continue
+		}
+		name := client.ObjectKey{Namespace: m.Namespace, Name: m.Name}
+		result = append(result, ctrl.Request{NamespacedName: name})
+	}
+
+	return result
 }
 
 func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *scope.MachineScope) (ctrl.Result, error) { //nolint:gocyclo,maintidx

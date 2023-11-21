@@ -40,7 +40,6 @@ import (
 	"k8s.io/component-base/logs"
 	logsv1 "k8s.io/component-base/logs/api/v1"
 
-	infrav1alpha3 "sigs.k8s.io/cluster-api-provider-packet/api/v1alpha3"
 	infrav1beta1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-packet/controllers"
 	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
@@ -55,7 +54,6 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(infrav1alpha3.AddToScheme(scheme))
 	utilruntime.Must(infrav1beta1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 	utilruntime.Must(bootstrapv1.AddToScheme(scheme))

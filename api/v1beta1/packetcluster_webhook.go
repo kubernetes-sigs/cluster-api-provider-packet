@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // clusterlog is for logging in this package.
@@ -45,7 +46,7 @@ func (c *PacketCluster) Default() {
 }
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
-func (c *PacketCluster) ValidateCreate() error {
+func (c *PacketCluster) ValidateCreate() (admission.Warnings, error) {
 	clusterlog.Info("validate create", "name", c.Name)
 	allErrs := field.ErrorList{}
 
@@ -58,14 +59,14 @@ func (c *PacketCluster) ValidateCreate() error {
 	}
 
 	if len(allErrs) > 0 {
-		return apierrors.NewInvalid(GroupVersion.WithKind("PacketCluster").GroupKind(), c.Name, allErrs)
+		return nil, apierrors.NewInvalid(GroupVersion.WithKind("PacketCluster").GroupKind(), c.Name, allErrs)
 	}
 
-	return nil
+	return nil, nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
-func (c *PacketCluster) ValidateUpdate(oldRaw runtime.Object) error {
+func (c *PacketCluster) ValidateUpdate(oldRaw runtime.Object) (admission.Warnings, error) {
 	clusterlog.Info("validate update", "name", c.Name)
 	var allErrs field.ErrorList
 	old, _ := oldRaw.(*PacketCluster)
@@ -101,15 +102,15 @@ func (c *PacketCluster) ValidateUpdate(oldRaw runtime.Object) error {
 	}
 
 	if len(allErrs) == 0 {
-		return nil
+		return nil, nil
 	}
 
-	return apierrors.NewInvalid(GroupVersion.WithKind("PacketCluster").GroupKind(), c.Name, allErrs)
+	return nil, apierrors.NewInvalid(GroupVersion.WithKind("PacketCluster").GroupKind(), c.Name, allErrs)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type.
-func (c *PacketCluster) ValidateDelete() error {
-	clusterlog.Info("validate delete", "name", c.Name)
+func (c *PacketCluster) ValidateDelete() (admission.Warnings, error) {
+	clusterlog.Info("PacketCluster.ValidateDelete called (not implemented)", "name", c.Name)
 
-	return nil
+	return nil, nil
 }

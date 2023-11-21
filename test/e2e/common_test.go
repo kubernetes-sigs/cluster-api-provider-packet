@@ -32,13 +32,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
-	clusterv1old "sigs.k8s.io/cluster-api/api/v1alpha3"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/test/infrastructure/container"
@@ -49,6 +49,14 @@ import (
 
 func logf(format string, a ...interface{}) {
 	fmt.Fprintf(GinkgoWriter, "INFO: "+format+"\n", a...)
+}
+
+func (wc *wrappedClient) GroupVersionKindFor(obj runtime.Object) (gvk schema.GroupVersionKind, err error) {
+	return wc.client.GroupVersionKindFor(obj)
+}
+
+func (wc *wrappedClient) IsObjectNamespaced(obj runtime.Object) (namespaced bool, err error) {
+	return wc.client.IsObjectNamespaced(obj)
 }
 
 // wrappedClusterProxy wraps framework.clusterProxy to add support for retrying if discovery times out
@@ -348,13 +356,7 @@ func (wc *wrappedClient) List(ctx context.Context, list client.ObjectList, opts 
 		return err
 	}
 
-	switch cl := list.(type) {
-	case *clusterv1.ClusterList:
-		for _, c := range cl.Items {
-			logf("Recording cluster %s for EIP Cleanup later", c.GetName())
-			wc.clusterProxy.clusterNames.Insert(c.GetName())
-		}
-	case *clusterv1old.ClusterList:
+	if cl, ok := list.(*clusterv1.ClusterList); ok {
 		for _, c := range cl.Items {
 			logf("Recording cluster %s for EIP Cleanup later", c.GetName())
 			wc.clusterProxy.clusterNames.Insert(c.GetName())

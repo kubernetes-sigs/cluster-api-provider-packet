@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // log is for logging in this package.
@@ -35,24 +36,24 @@ func (m *PacketMachineTemplate) SetupWebhookWithManager(mgr ctrl.Manager) error 
 // +kubebuilder:webhook:verbs=create;update,path=/mutate-infrastructure-cluster-x-k8s-io-v1beta1-packetmachinetemplate,mutating=true,failurePolicy=fail,matchPolicy=Equivalent,groups=infrastructure.cluster.x-k8s.io,resources=packetmachinetemplates,versions=v1beta1,name=default.packetmachinetemplate.infrastructure.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
-func (m *PacketMachineTemplate) ValidateCreate() error {
-	machineTemplateLog.Info("validate create", "name", m.Name)
+func (m *PacketMachineTemplate) ValidateCreate() (admission.Warnings, error) {
+	machineTemplateLog.Info("PacketMachineTemplate.ValidateCreate called (not implemented)", "name", m.Name)
 
-	return nil
+	return nil, nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
-func (m *PacketMachineTemplate) ValidateUpdate(_ runtime.Object) error {
-	machineTemplateLog.Info("validate update", "name", m.Name)
+func (m *PacketMachineTemplate) ValidateUpdate(_ runtime.Object) (admission.Warnings, error) {
+	machineTemplateLog.Info("PacketMachineTemplate.ValidateUpdate called (not implemented)", "name", m.Name)
 
-	return nil
+	return nil, nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type.
-func (m *PacketMachineTemplate) ValidateDelete() error {
-	machineTemplateLog.Info("validate delete", "name", m.Name)
+func (m *PacketMachineTemplate) ValidateDelete() (admission.Warnings, error) {
+	machineTemplateLog.Info("PacketMachineTemplate.ValidateDelete called (not implemented)", "name", m.Name)
 
-	return nil
+	return nil, nil
 }
 
 // Default implements webhookutil.defaulter so a webhook will be registered for the type.

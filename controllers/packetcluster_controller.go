@@ -32,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
@@ -180,7 +179,7 @@ func (r *PacketClusterReconciler) SetupWithManager(ctx context.Context, mgr ctrl
 		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(log, r.WatchFilterValue)).
 		WithEventFilter(predicates.ResourceIsNotExternallyManaged(log)).
 		Watches(
-			&source.Kind{Type: &clusterv1.Cluster{}},
+			&clusterv1.Cluster{},
 			handler.EnqueueRequestsFromMapFunc(util.ClusterToInfrastructureMapFunc(ctx, infrav1.GroupVersion.WithKind("PacketCluster"), mgr.GetClient(), &infrav1.PacketCluster{})),
 			builder.WithPredicates(predicates.ClusterUpdateUnpaused(log)),
 		).

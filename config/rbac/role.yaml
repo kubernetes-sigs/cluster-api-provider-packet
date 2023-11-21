@@ -33,8 +33,10 @@ rules:
 - apiGroups:
   - cluster.x-k8s.io
   resources:
+  - clusters
   - machines
   - machines/status
+  - machinesets
   verbs:
   - get
   - list

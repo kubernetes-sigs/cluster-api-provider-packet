@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // log is for logging in this package.
@@ -40,14 +41,14 @@ func (m *PacketMachine) SetupWebhookWithManager(mgr ctrl.Manager) error {
 // +kubebuilder:webhook:verbs=create;update,path=/mutate-infrastructure-cluster-x-k8s-io-v1beta1-packetmachine,mutating=true,failurePolicy=fail,matchPolicy=Equivalent,groups=infrastructure.cluster.x-k8s.io,resources=packetmachines,versions=v1beta1,name=default.packetmachine.infrastructure.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
-func (m *PacketMachine) ValidateCreate() error {
-	machineLog.Info("validate create", "name", m.Name)
+func (m *PacketMachine) ValidateCreate() (admission.Warnings, error) {
+	machineLog.Info("PacketMachine.ValidateCreate called (not implemented)", "name", m.Name)
 
-	return nil
+	return nil, nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
-func (m *PacketMachine) ValidateUpdate(old runtime.Object) error {
+func (m *PacketMachine) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	machineLog.Info("validate update", "name", m.Name)
 	var allErrs field.ErrorList
 
@@ -100,17 +101,17 @@ func (m *PacketMachine) ValidateUpdate(old runtime.Object) error {
 	}
 
 	if len(allErrs) == 0 {
-		return nil
+		return nil, nil
 	}
 
-	return apierrors.NewInvalid(GroupVersion.WithKind("PacketMachine").GroupKind(), m.Name, allErrs)
+	return nil, apierrors.NewInvalid(GroupVersion.WithKind("PacketMachine").GroupKind(), m.Name, allErrs)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type.
-func (m *PacketMachine) ValidateDelete() error {
-	machineLog.Info("validate delete", "name", m.Name)
+func (m *PacketMachine) ValidateDelete() (admission.Warnings, error) {
+	machineLog.Info("PacketMachine.ValidateDelete called (not implemented)", "name", m.Name)
 
-	return nil
+	return nil, nil
 }
 
 // Default implements webhookutil.defaulter so a webhook will be registered for the type.
