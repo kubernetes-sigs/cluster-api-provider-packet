@@ -170,5 +170,5 @@ func (m *PacketMachine) SetConditions(conditions clusterv1.Conditions) {
 }
 
 func init() {
-	SchemeBuilder.Register(&PacketMachine{}, &PacketMachineList{})
+	objectTypes = append(objectTypes, &PacketMachine{}, &PacketMachineList{})
 }

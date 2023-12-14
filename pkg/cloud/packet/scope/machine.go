@@ -20,12 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/controllers/noderefutil"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
@@ -33,6 +33,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
+)
+
+const (
+	// ProviderIDPrefix will be appended to the beginning of Equinix Metal resource IDs to form the Kubernetes Provider ID.
+	// NOTE: this format matches the 2 slashes format used in cloud-provider and cluster-autoscaler.
+	ProviderIDPrefix = "equinixmetal://"
 )
 
 var (
@@ -106,8 +112,8 @@ type MachineScope struct {
 }
 
 // Close the MachineScope by updating the machine spec, machine status.
-func (m *MachineScope) Close() error {
-	return m.PatchObject(context.TODO())
+func (m *MachineScope) Close(ctx context.Context) error {
+	return m.PatchObject(ctx)
 }
 
 // Name returns the PacketMachine name.
@@ -133,27 +139,20 @@ func (m *MachineScope) Role() string {
 	return infrav1.WorkerTag
 }
 
-// GetProviderID returns the DOMachine providerID from the spec.
-func (m *MachineScope) GetProviderID() string {
-	if m.PacketMachine.Spec.ProviderID != nil {
-		return *m.PacketMachine.Spec.ProviderID
-	}
-	return ""
+// GetDeviceID returns the PacketMachine device ID by parsing the scope's providerID.
+func (m *MachineScope) GetDeviceID() string {
+	return parseProviderID(m.ProviderID())
 }
 
-// SetProviderID sets the DOMachine providerID in spec from device id.
+// ProviderID returns the PacketMachine providerID from the spec.
+func (m *MachineScope) ProviderID() string {
+	return ptr.Deref(m.PacketMachine.Spec.ProviderID, "")
+}
+
+// SetProviderID sets the PacketMachine providerID in spec from device id.
 func (m *MachineScope) SetProviderID(deviceID string) {
-	pid := fmt.Sprintf("%s://%s", "equinixmetal", deviceID)
+	pid := fmt.Sprintf("%s%s", ProviderIDPrefix, deviceID)
 	m.PacketMachine.Spec.ProviderID = ptr.To(pid)
-}
-
-// GetInstanceID returns the DOMachine droplet instance id by parsing Spec.ProviderID.
-func (m *MachineScope) GetInstanceID() string {
-	parsed, err := noderefutil.NewProviderID(m.GetProviderID())
-	if err != nil {
-		return ""
-	}
-	return parsed.ID()
 }
 
 // GetInstanceStatus returns the PacketMachine device instance status from the status.
@@ -241,4 +240,9 @@ func (m *MachineScope) PatchObject(ctx context.Context) error {
 			clusterv1.ReadyCondition,
 			infrav1.DeviceReadyCondition,
 		}})
+}
+
+// ParseProviderID parses a string to a PacketMachine Provider ID, first removing the "equinixmetal://" prefix.
+func parseProviderID(id string) string {
+	return strings.TrimPrefix(id, ProviderIDPrefix)
 }

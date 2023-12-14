@@ -68,8 +68,8 @@ type ClusterScope struct {
 }
 
 // Close closes the current scope persisting the cluster configuration and status.
-func (s *ClusterScope) Close() error {
-	return s.patchHelper.Patch(context.TODO(), s.PacketCluster)
+func (s *ClusterScope) Close(ctx context.Context) error {
+	return s.patchHelper.Patch(ctx, s.PacketCluster)
 }
 
 // Name returns the cluster name.

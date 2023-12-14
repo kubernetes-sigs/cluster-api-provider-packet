@@ -94,7 +94,7 @@ func (r *PacketClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 	// Always close the scope when exiting this function so we can persist any PacketCluster changes.
 	defer func() {
-		if err := clusterScope.Close(); err != nil && reterr == nil {
+		if err := clusterScope.Close(ctx); err != nil && reterr == nil {
 			reterr = err
 		}
 	}()

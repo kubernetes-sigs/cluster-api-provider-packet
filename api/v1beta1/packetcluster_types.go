@@ -100,5 +100,5 @@ func (c *PacketCluster) SetConditions(conditions clusterv1.Conditions) {
 }
 
 func init() {
-	SchemeBuilder.Register(&PacketCluster{}, &PacketClusterList{})
+	objectTypes = append(objectTypes, &PacketCluster{}, &PacketClusterList{})
 }
