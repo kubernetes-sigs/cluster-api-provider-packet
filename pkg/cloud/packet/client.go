@@ -28,7 +28,7 @@ import (
 	"strings"
 	"text/template"
 
-	metal "github.com/equinix-labs/metal-go/metal/v1"
+	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 

@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	metal "github.com/equinix-labs/metal-go/metal/v1"
+	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"

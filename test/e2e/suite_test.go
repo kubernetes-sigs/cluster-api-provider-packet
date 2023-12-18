@@ -30,7 +30,7 @@ import (
 	"strings"
 	"testing"
 
-	metal "github.com/equinix-labs/metal-go/metal/v1"
+	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"golang.org/x/crypto/ssh"

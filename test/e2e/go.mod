@@ -8,7 +8,7 @@ replace (
 )
 
 require (
-	github.com/equinix-labs/metal-go v0.29.0
+	github.com/equinix/equinix-sdk-go v0.30.0
 	github.com/onsi/ginkgo/v2 v2.13.1
 	github.com/onsi/gomega v1.30.0
 	golang.org/x/crypto v0.15.0
