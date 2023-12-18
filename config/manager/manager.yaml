@@ -37,11 +37,10 @@ spec:
               port: healthz
           resources:
             limits:
-              cpu: 100m
-              memory: 50Mi
+              memory: 200Mi
             requests:
               cpu: 100m
-              memory: 35Mi
+              memory: 200Mi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

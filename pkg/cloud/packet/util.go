@@ -21,9 +21,9 @@ import (
 )
 
 const (
-	machineUIDTag = "cluster-api-provider-packet:machine-uid"
-	clusterIDTag  = "cluster-api-provider-packet:cluster-id"
-	namespaceTag  = "cluster-api-provider-packet:namespace"
+	machineUIDTag = "capp:machine-uid"
+	clusterIDTag  = "capp:cluster-id"
+	namespaceTag  = "capp:namespace"
 )
 
 // GenerateMachineNameTag generates a tag for a machine.

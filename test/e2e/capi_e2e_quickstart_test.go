@@ -23,7 +23,7 @@ import (
 	"context"
 
 	. "github.com/onsi/ginkgo/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
 )
 
@@ -50,7 +50,7 @@ var _ = Describe("[QuickStart] Running the Cluster API E2E QuickStart tests", fu
 				BootstrapClusterProxy: bootstrapClusterProxy,
 				ArtifactFolder:        artifactFolder,
 				SkipCleanup:           skipCleanup,
-				Flavor:                pointer.String("kube-vip"),
+				Flavor:                ptr.To[string]("kube-vip"),
 			}
 		})
 	})

@@ -35,22 +35,24 @@ import (
 	. "github.com/onsi/gomega"
 	"golang.org/x/crypto/ssh"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/klog/v2"
 	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/test/framework/bootstrap"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 	"sigs.k8s.io/cluster-api/util"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	"sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 )
 
 const (
-	AuthTokenEnvVar = "PACKET_API_KEY"
+	AuthTokenEnvVar = "PACKET_API_KEY" //nolint:gosec
 	ProjectIDEnvVar = "PROJECT_ID"
 )
 
-// Test suite flags
+// Test suite flags.
 var (
 	// configPath is the path to the e2e config file.
 	configPath string
@@ -65,7 +67,7 @@ var (
 	skipCleanup bool
 )
 
-// Test suite global vars
+// Test suite global vars.
 var (
 	// e2eConfig to be used for this test, read from configPath.
 	e2eConfig *clusterctl.E2EConfig
@@ -74,7 +76,7 @@ var (
 	// with the providers specified in the configPath.
 	clusterctlConfigPath string
 
-	// bootstrapClusterProvider manages provisioning of the the bootstrap cluster to be used for the e2e tests.
+	// bootstrapClusterProvider manages provisioning of the bootstrap cluster to be used for the e2e tests.
 	// Please note that provisioning will be skipped if e2e.use-existing-cluster is provided.
 	bootstrapClusterProvider bootstrap.ClusterProvider
 
@@ -82,7 +84,7 @@ var (
 	bootstrapClusterProxy framework.ClusterProxy
 
 	// sshKeyID is the id for the generated ssh key, this is used
-	// to cleanup the ssh key in SynchronizedAfterSuite
+	// to cleanup the ssh key in SynchronizedAfterSuite.
 	sshKeyID string
 )
 
@@ -95,6 +97,8 @@ func init() {
 
 func TestE2E(t *testing.T) {
 	g := NewWithT(t)
+
+	ctrl.SetLogger(klog.Background())
 
 	// ensure the artifacts folder exists
 	g.Expect(os.MkdirAll(artifactFolder, 0755)).To(Succeed(), "Invalid test suite argument. Can't create e2e.artifacts-folder %q", artifactFolder) //nolint:gosec
@@ -115,7 +119,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	Expect(os.Getenv("WORKER_NODE_TYPE")).NotTo(BeEmpty())
 
 	Expect(configPath).To(BeAnExistingFile(), "Invalid test suite argument. e2e.config should be an existing file.")
-	Expect(os.MkdirAll(artifactFolder, 0755)).To(Succeed(), "Invalid test suite argument. Can't create e2e.artifacts-folder %q", artifactFolder)
+	Expect(os.MkdirAll(artifactFolder, 0755)).To(Succeed(), "Invalid test suite argument. Can't create e2e.artifacts-folder %q", artifactFolder) //nolint:gosec
 
 	By("Initializing a runtime.Scheme with all the GVK relevant for this test")
 	scheme := initScheme()
@@ -182,7 +186,7 @@ var _ = SynchronizedAfterSuite(func() {
 		if metalAuthToken != "" && sshKeyID != "" {
 			By("Cleaning up the generated SSH Key")
 			metalClient := packet.NewClient(metalAuthToken)
-			_, err := metalClient.SSHKeysApi.DeleteSSHKey(nil, sshKeyID).Execute()
+			_, err := metalClient.SSHKeysApi.DeleteSSHKey(context.TODO(), sshKeyID).Execute()
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
@@ -292,7 +296,7 @@ func generateSSHKey() (string, string) {
 	metalClient := packet.NewClient(metalAuthToken)
 	label := fmt.Sprintf("capp-e2e-%s", util.RandomString(6))
 	key := string(ssh.MarshalAuthorizedKey(pub))
-	res, _, err := metalClient.SSHKeysApi.CreateSSHKey(nil).SSHKeyCreateInput(
+	res, _, err := metalClient.SSHKeysApi.CreateSSHKey(context.TODO()).SSHKeyCreateInput(
 		metal.SSHKeyCreateInput{
 			Label: &label,
 			Key:   &key,
