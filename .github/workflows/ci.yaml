@@ -165,7 +165,7 @@ jobs:
         run: make release
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: release-manifests
           path: out/release
@@ -210,7 +210,7 @@ jobs:
         run: ./scripts/ci-e2e-capi-quickstart.sh
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: ${{ always() }}
         with:
           name: e2e-quickstart
@@ -256,7 +256,7 @@ jobs:
         run: ./scripts/ci-e2e-capi.sh
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: ${{ always() }}
         with:
           name: e2e
@@ -302,7 +302,7 @@ jobs:
         run: ./scripts/ci-e2e-capi-conformance.sh
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: ${{ always() }}
         with:
           name: e2e-conformance
@@ -348,7 +348,7 @@ jobs:
         run: ./scripts/ci-e2e-capi-workload-upgrade.sh
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: ${{ always() }}
         with:
           name: e2e-workload-upgrade
