@@ -13,8 +13,8 @@ spec:
     matchLabels:
       cni: ${CLUSTER_NAME}-crs-cni
   resources:
-    - kind: ConfigMap
-      name: ${CLUSTER_NAME}-crs-cni
+  - kind: ConfigMap
+    name: ${CLUSTER_NAME}-crs-cni
   strategy: ApplyOnce
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
@@ -30,46 +30,46 @@ spec:
             cloud-provider: external
             provider-id: equinixmetal://{{ `{{ v1.instance_id }}` }}
       preKubeadmCommands:
-        - |-
-          sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
-          swapoff -a
-          mount -a
-          cat <<EOF > /etc/modules-load.d/containerd.conf
-          overlay
-          br_netfilter
-          EOF
-          modprobe overlay
-          modprobe br_netfilter
-          cat <<EOF > /etc/sysctl.d/99-kubernetes-cri.conf
-          net.bridge.bridge-nf-call-iptables  = 1
-          net.ipv4.ip_forward                 = 1
-          net.bridge.bridge-nf-call-ip6tables = 1
-          EOF
-          sysctl --system
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update -y
-          apt-get remove -y docker docker-engine containerd runc
-          apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
-          install -m 0755 -d /etc/apt/keyrings
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-          MINOR_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | cut -d. -f1-2 )
-          curl -fsSL https://pkgs.k8s.io/core:/stable:/$${MINOR_KUBERNETES_VERSION}/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-          chmod a+r /etc/apt/keyrings/docker.gpg
-          chmod a+r /etc/apt/keyrings/kubernetes-archive-keyring.gpg
-          echo "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" > /etc/apt/sources.list.d/docker.list
-          echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/$${MINOR_KUBERNETES_VERSION}/deb/ /" > /etc/apt/sources.list.d/kubernetes.list
-          apt-get update -y
-          TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\\\./g' | sed 's/^v//')
-          RESOLVED_KUBERNETES_VERSION=$(apt-cache madison kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$3~ VERSION { print $3 }' | head -n1)
-          apt-get install -y containerd.io kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
-          cat  <<EOF > /etc/crictl.yaml
-          runtime-endpoint: unix:///run/containerd/containerd.sock
-          image-endpoint: unix:///run/containerd/containerd.sock
-          EOF
-          containerd config default > /etc/containerd/config.toml
-          sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-          sed -i "s,sandbox_image.*$,sandbox_image = \"$(kubeadm config images list | grep pause | sort -r | head -n1)\"," /etc/containerd/config.toml
-          systemctl restart containerd
+      - |-
+        sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
+        swapoff -a
+        mount -a
+        cat <<EOF > /etc/modules-load.d/containerd.conf
+        overlay
+        br_netfilter
+        EOF
+        modprobe overlay
+        modprobe br_netfilter
+        cat <<EOF > /etc/sysctl.d/99-kubernetes-cri.conf
+        net.bridge.bridge-nf-call-iptables  = 1
+        net.ipv4.ip_forward                 = 1
+        net.bridge.bridge-nf-call-ip6tables = 1
+        EOF
+        sysctl --system
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -y
+        apt-get remove -y docker docker-engine containerd runc
+        apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        MINOR_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | cut -d. -f1-2 )
+        curl -fsSL https://pkgs.k8s.io/core:/stable:/$${MINOR_KUBERNETES_VERSION}/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+        chmod a+r /etc/apt/keyrings/docker.gpg
+        chmod a+r /etc/apt/keyrings/kubernetes-archive-keyring.gpg
+        echo "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" > /etc/apt/sources.list.d/docker.list
+        echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/$${MINOR_KUBERNETES_VERSION}/deb/ /" > /etc/apt/sources.list.d/kubernetes.list
+        apt-get update -y
+        TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\\\./g' | sed 's/^v//')
+        RESOLVED_KUBERNETES_VERSION=$(apt-cache madison kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$3~ VERSION { print $3 }' | head -n1)
+        apt-get install -y containerd.io kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
+        cat  <<EOF > /etc/crictl.yaml
+        runtime-endpoint: unix:///run/containerd/containerd.sock
+        image-endpoint: unix:///run/containerd/containerd.sock
+        EOF
+        containerd config default > /etc/containerd/config.toml
+        sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+        sed -i "s,sandbox_image.*$,sandbox_image = \"$(kubeadm config images list | grep pause | sort -r | head -n1)\"," /etc/containerd/config.toml
+        systemctl restart containerd
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
@@ -81,10 +81,10 @@ spec:
   clusterNetwork:
     pods:
       cidrBlocks:
-        - ${POD_CIDR:=192.168.0.0/16}
+      - ${POD_CIDR:=192.168.0.0/16}
     services:
       cidrBlocks:
-        - ${SERVICE_CIDR:=172.26.0.0/16}
+      - ${SERVICE_CIDR:=172.26.0.0/16}
   controlPlaneRef:
     apiVersion: controlplane.cluster.x-k8s.io/v1beta1
     kind: KubeadmControlPlane
@@ -147,96 +147,96 @@ spec:
     joinConfiguration:
       nodeRegistration:
         ignorePreflightErrors:
-          - DirAvailable--etc-kubernetes-manifests
+        - DirAvailable--etc-kubernetes-manifests
         kubeletExtraArgs:
           cloud-provider: external
           provider-id: equinixmetal://{{ `{{ v1.instance_id }}` }}
     postKubeadmCommands:
-      - |-
-        mkdir -p $HOME/.kube
-        cp /etc/kubernetes/admin.conf $HOME/.kube/config
-        echo "source <(kubectl completion bash)" >> $HOME/.bashrc
-        echo "alias k=kubectl" >> $HOME/.bashrc
-        echo "complete -o default -F __start_kubectl k" >> $HOME/.bashrc
-        if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
-          export KUBECONFIG=/etc/kubernetes/admin.conf
-          export CPEM_YAML=https://github.com/equinix/cloud-provider-equinix-metal/releases/download/${CPEM_VERSION:=v3.7.0}/deployment.yaml
-          export SECRET_DATA='cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}"}'''
-          kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}" || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}") || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}")
-          kubectl apply -f $${CPEM_YAML} || (sleep 1 && kubectl apply -f $${CPEM_YAML}) || (sleep 1 && kubectl apply -f $${CPEM_YAML})
-        else
-          KVVERSION="${KUBE_VIP_VERSION:=v0.6.4}"
-          ctr image pull ghcr.io/kube-vip/kube-vip:$${KVVERSION}
-          ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$KVVERSION vip /kube-vip manifest pod \
-          --interface "lo" \
-          --vip "{{ .controlPlaneEndpoint }}" \
-          --controlplane \
-          --bgp \
-          --peerAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_as') \
-          --peerAddress $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[0]') \
-          --localAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_as') \
-          --bgpRouterID $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_ip') > /etc/kubernetes/manifests/vip.yaml
-        fi
-        rm /run/metadata.json
+    - |-
+      mkdir -p $HOME/.kube
+      cp /etc/kubernetes/admin.conf $HOME/.kube/config
+      echo "source <(kubectl completion bash)" >> $HOME/.bashrc
+      echo "alias k=kubectl" >> $HOME/.bashrc
+      echo "complete -o default -F __start_kubectl k" >> $HOME/.bashrc
+      if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
+        export KUBECONFIG=/etc/kubernetes/admin.conf
+        export CPEM_YAML=https://github.com/equinix/cloud-provider-equinix-metal/releases/download/${CPEM_VERSION:=v3.7.0}/deployment.yaml
+        export SECRET_DATA='cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "${PROJECT_ID}"}'''
+        kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}" || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}") || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="$${SECRET_DATA}")
+        kubectl apply -f $${CPEM_YAML} || (sleep 1 && kubectl apply -f $${CPEM_YAML}) || (sleep 1 && kubectl apply -f $${CPEM_YAML})
+      else
+        KVVERSION="${KUBE_VIP_VERSION:=v0.6.4}"
+        ctr image pull ghcr.io/kube-vip/kube-vip:$${KVVERSION}
+        ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$KVVERSION vip /kube-vip manifest pod \
+        --interface "lo" \
+        --vip "{{ .controlPlaneEndpoint }}" \
+        --controlplane \
+        --bgp \
+        --peerAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_as') \
+        --peerAddress $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[0]') \
+        --localAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_as') \
+        --bgpRouterID $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_ip') > /etc/kubernetes/manifests/vip.yaml
+      fi
+      rm /run/metadata.json
     preKubeadmCommands:
-      - |
-        sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
-        swapoff -a
-        mount -a
-        cat <<EOF > /etc/modules-load.d/containerd.conf
-        overlay
-        br_netfilter
-        EOF
-        modprobe overlay
-        modprobe br_netfilter
-        cat <<EOF > /etc/sysctl.d/99-kubernetes-cri.conf
-        net.bridge.bridge-nf-call-iptables  = 1
-        net.ipv4.ip_forward                 = 1
-        net.bridge.bridge-nf-call-ip6tables = 1
-        EOF
-        sysctl --system
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -y
-        apt-get remove -y docker docker-engine containerd runc
-        apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
-        install -m 0755 -d /etc/apt/keyrings
-        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-        MINOR_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | cut -d. -f1-2 )
-        curl -fsSL https://pkgs.k8s.io/core:/stable:/$${MINOR_KUBERNETES_VERSION}/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-        chmod a+r /etc/apt/keyrings/docker.gpg
-        chmod a+r /etc/apt/keyrings/kubernetes-archive-keyring.gpg
-        echo "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" > /etc/apt/sources.list.d/docker.list
-        echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/$${MINOR_KUBERNETES_VERSION}/deb/ /" > /etc/apt/sources.list.d/kubernetes.list
-        apt-get update -y
-        TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\\\./g' | sed 's/^v//')
-        RESOLVED_KUBERNETES_VERSION=$(apt-cache madison kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$3~ VERSION { print $3 }' | head -n1)
-        apt-get install -y containerd.io kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
-        cat  <<EOF > /etc/crictl.yaml
-        runtime-endpoint: unix:///run/containerd/containerd.sock
-        image-endpoint: unix:///run/containerd/containerd.sock
-        EOF
-        containerd config default > /etc/containerd/config.toml
-        sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-        sed -i "s,sandbox_image.*$,sandbox_image = \"$(kubeadm config images list | grep pause | sort -r | head -n1)\"," /etc/containerd/config.toml
-        systemctl restart containerd
-        curl -o /run/metadata.json -fsSL https://metadata.platformequinix.com/metadata
-        for i in $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[]'); do
-          ip route add $i via $(cat /run/metadata.json | jq -r '.network.addresses[] | select(.public == false and .address_family == 4) | .gateway')
-        done
-        if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
-          ip addr add {{ .controlPlaneEndpoint }} dev lo
-          KVVERSION="${KUBE_VIP_VERSION:=v0.6.4}"
-          ctr image pull ghcr.io/kube-vip/kube-vip:$${KVVERSION}
-          ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$KVVERSION vip /kube-vip manifest pod \
-          --interface "lo" \
-          --vip "{{ .controlPlaneEndpoint }}" \
-          --controlplane \
-          --bgp \
-          --peerAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_as') \
-          --peerAddress $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[0]') \
-          --localAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_as') \
-          --bgpRouterID $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_ip') > /etc/kubernetes/manifests/vip.yaml
-        fi
+    - |
+      sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
+      swapoff -a
+      mount -a
+      cat <<EOF > /etc/modules-load.d/containerd.conf
+      overlay
+      br_netfilter
+      EOF
+      modprobe overlay
+      modprobe br_netfilter
+      cat <<EOF > /etc/sysctl.d/99-kubernetes-cri.conf
+      net.bridge.bridge-nf-call-iptables  = 1
+      net.ipv4.ip_forward                 = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      EOF
+      sysctl --system
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -y
+      apt-get remove -y docker docker-engine containerd runc
+      apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
+      install -m 0755 -d /etc/apt/keyrings
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+      MINOR_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | cut -d. -f1-2 )
+      curl -fsSL https://pkgs.k8s.io/core:/stable:/$${MINOR_KUBERNETES_VERSION}/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      chmod a+r /etc/apt/keyrings/docker.gpg
+      chmod a+r /etc/apt/keyrings/kubernetes-archive-keyring.gpg
+      echo "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" > /etc/apt/sources.list.d/docker.list
+      echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/$${MINOR_KUBERNETES_VERSION}/deb/ /" > /etc/apt/sources.list.d/kubernetes.list
+      apt-get update -y
+      TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\\\./g' | sed 's/^v//')
+      RESOLVED_KUBERNETES_VERSION=$(apt-cache madison kubelet | awk -v VERSION=$${TRIMMED_KUBERNETES_VERSION} '$3~ VERSION { print $3 }' | head -n1)
+      apt-get install -y containerd.io kubelet=$${RESOLVED_KUBERNETES_VERSION} kubeadm=$${RESOLVED_KUBERNETES_VERSION} kubectl=$${RESOLVED_KUBERNETES_VERSION}
+      cat  <<EOF > /etc/crictl.yaml
+      runtime-endpoint: unix:///run/containerd/containerd.sock
+      image-endpoint: unix:///run/containerd/containerd.sock
+      EOF
+      containerd config default > /etc/containerd/config.toml
+      sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+      sed -i "s,sandbox_image.*$,sandbox_image = \"$(kubeadm config images list | grep pause | sort -r | head -n1)\"," /etc/containerd/config.toml
+      systemctl restart containerd
+      curl -o /run/metadata.json -fsSL https://metadata.platformequinix.com/metadata
+      for i in $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[]'); do
+        ip route add $i via $(cat /run/metadata.json | jq -r '.network.addresses[] | select(.public == false and .address_family == 4) | .gateway')
+      done
+      if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
+        ip addr add {{ .controlPlaneEndpoint }} dev lo
+        KVVERSION="${KUBE_VIP_VERSION:=v0.6.4}"
+        ctr image pull ghcr.io/kube-vip/kube-vip:$${KVVERSION}
+        ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$KVVERSION vip /kube-vip manifest pod \
+        --interface "lo" \
+        --vip "{{ .controlPlaneEndpoint }}" \
+        --controlplane \
+        --bgp \
+        --peerAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_as') \
+        --peerAddress $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].peer_ips[0]') \
+        --localAS $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_as') \
+        --bgpRouterID $(cat /run/metadata.json | jq -r '.bgp_neighbors[0].customer_ip') > /etc/kubernetes/manifests/vip.yaml
+      fi
   machineTemplate:
     infrastructureRef:
       apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
@@ -265,7 +265,7 @@ spec:
       machineType: ${CONTROLPLANE_NODE_TYPE}
       os: ${NODE_OS:=ubuntu_20_04}
       sshKeys:
-        - ${SSH_KEY}
+      - ${SSH_KEY}
       tags: []
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
@@ -279,5 +279,5 @@ spec:
       machineType: ${WORKER_NODE_TYPE}
       os: ${NODE_OS:=ubuntu_20_04}
       sshKeys:
-        - ${SSH_KEY}
+      - ${SSH_KEY}
       tags: []
