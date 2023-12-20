@@ -14,6 +14,7 @@ This is the official [cluster-api](https://github.com/kubernetes-sigs/cluster-ap
 
 **IMPORTANT** We removed support for the _very_ old packet-ccm cloud provider in this release, please migrate to [Cloud Provider Equinix Metal](https://github.com/kubernetes-sigs/cloud-provider-equinix-metal) before upgrading.
 
+- Now based on CAPI 1.6, please see [Cluster API release notes](https://github.com/kubernetes-sigs/cluster-api/releases/tag/v1.6.0) for kubernetes version compatibility and relevant upgrade notes.
 - The API version v1alpha3 has been completely removed in this release. Realistically, this was not used by anyone, but if you were using it, at this point it's likely easier to deploy a fresh cluster than to try to upgrade.
 - We're deprecating --metrics-bind-addr and defaulting to secure communications for the metric server. Please see more info on the [upstream Cluster API PR](https://github.com/kubernetes-sigs/cluster-api/pull/9264).
 - We've changed the tags applied to devices in the Equinix Metal API to start with "capp" instead of "cluster-api-provider-packet". This was done to enable longer cluster and machine names within the 80 character limit of the Equinix Metal API. If you have any automation that relies on the old tags, you'll need to update it.
