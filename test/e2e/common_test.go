@@ -145,7 +145,7 @@ func (w *wrappedClusterProxy) Apply(ctx context.Context, resources []byte, args 
 }
 
 // GetWorkloadCluster returns ClusterProxy for the workload cluster.
-func (w *wrappedClusterProxy) GetWorkloadCluster(ctx context.Context, namespace, name string) framework.ClusterProxy {
+func (w *wrappedClusterProxy) GetWorkloadCluster(ctx context.Context, namespace, name string, _ ...framework.Option) framework.ClusterProxy {
 	Expect(ctx).NotTo(BeNil(), "ctx is required for GetWorkloadCluster")
 	Expect(namespace).NotTo(BeEmpty(), "namespace is required for GetWorkloadCluster")
 	Expect(name).NotTo(BeEmpty(), "name is required for GetWorkloadCluster")

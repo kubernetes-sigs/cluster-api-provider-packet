@@ -155,7 +155,7 @@ func (r *PacketMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Always close the scope when exiting this function so we can persist any PacketMachine changes.
 	defer func() {
-		if err := machineScope.Close(); err != nil && rerr == nil {
+		if err := machineScope.Close(ctx); err != nil && rerr == nil {
 			log.Error(err, "failed to patch packetmachine")
 			if rerr == nil {
 				rerr = err
@@ -280,7 +280,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		return ctrl.Result{}, nil
 	}
 
-	providerID := machineScope.GetInstanceID()
+	deviceID := machineScope.GetDeviceID()
 	var (
 		dev                  *metal.Device
 		addrs                []corev1.NodeAddress
@@ -289,11 +289,11 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		resp                 *http.Response
 	)
 
-	if providerID != "" {
-		// If we already have a providerID, then retrieve the device using the
-		// providerID. This means that the Machine has already been created
-		// and we successfully recorded the providerID.
-		dev, resp, err = r.PacketClient.GetDevice(ctx, providerID) //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
+	if deviceID != "" {
+		// If we already have a device ID, then retrieve the device using the
+		// device ID. This means that the Machine has already been created
+		// and we successfully recorded the device ID.
+		dev, resp, err = r.PacketClient.GetDevice(ctx, deviceID) //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 		if err != nil {
 			if resp != nil {
 				if resp.StatusCode == http.StatusNotFound {
@@ -314,7 +314,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	}
 
 	if dev == nil {
-		// We don't yet have a providerID, check to see if we've already
+		// We don't yet have a device ID, check to see if we've already
 		// created a device by using the tags that we assign to devices
 		// on creation.
 		dev, err = r.PacketClient.GetDeviceByTags(
@@ -328,7 +328,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	}
 
 	if dev == nil {
-		// We weren't able to find a device by either providerID or by tags,
+		// We weren't able to find a device by either device ID or by tags,
 		// so we need to create a new device.
 
 		// Avoid a flickering condition between InstanceProvisionStarted and InstanceProvisionFailed if there's a persistent failure with createInstance
@@ -407,11 +407,11 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 
 	switch infrav1.PacketResourceStatus(dev.GetState()) {
 	case infrav1.PacketResourceStatusNew, infrav1.PacketResourceStatusQueued, infrav1.PacketResourceStatusProvisioning:
-		log.Info("Machine instance is pending", "instance-id", machineScope.GetInstanceID())
+		log.Info("Machine instance is pending", "instance-id", machineScope.ProviderID())
 		machineScope.SetNotReady()
 		result = ctrl.Result{RequeueAfter: 10 * time.Second}
 	case infrav1.PacketResourceStatusRunning:
-		log.Info("Machine instance is active", "instance-id", machineScope.GetInstanceID())
+		log.Info("Machine instance is active", "instance-id", machineScope.ProviderID())
 
 		if machineScope.PacketCluster.Spec.VIPManager == "CPEM" {
 			controlPlaneEndpoint, _ = r.PacketClient.GetIPByClusterIdentifier(
@@ -436,7 +436,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		result = ctrl.Result{}
 	default:
 		machineScope.SetNotReady()
-		log.Info("Equinix Metal device state is undefined", "state", dev.GetState(), "device-id", machineScope.GetInstanceID())
+		log.Info("Equinix Metal device state is undefined", "state", dev.GetState(), "device-id", machineScope.ProviderID())
 		machineScope.SetFailureReason(capierrors.UpdateMachineError)
 		machineScope.SetFailureMessage(fmt.Errorf("instance status %q is unexpected", dev.GetState())) //nolint:goerr113
 		conditions.MarkUnknown(machineScope.PacketMachine, infrav1.DeviceReadyCondition, "", "")
@@ -464,12 +464,12 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 	log.Info("Reconciling Delete PacketMachine")
 
 	packetmachine := machineScope.PacketMachine
-	providerID := machineScope.GetInstanceID()
+	deviceID := machineScope.GetDeviceID()
 
 	var device *metal.Device
 
-	if providerID == "" {
-		// If no providerID was recorded, check to see if there are any instances
+	if deviceID == "" {
+		// If no device ID was recorded, check to see if there are any instances
 		// that match by tags
 		dev, err := r.PacketClient.GetDeviceByTags(
 			ctx,
@@ -490,7 +490,7 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 	} else {
 		var resp *http.Response
 		// Otherwise, try to retrieve the device by the providerID
-		dev, resp, err := r.PacketClient.GetDevice(ctx, providerID) //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
+		dev, resp, err := r.PacketClient.GetDevice(ctx, deviceID) //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 		if err != nil {
 			if resp != nil {
 				if resp.StatusCode == http.StatusNotFound {

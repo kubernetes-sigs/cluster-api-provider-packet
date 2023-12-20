@@ -143,6 +143,124 @@ status:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: (devel)
+  creationTimestamp: null
+  name: bgpfilters.crd.projectcalico.org
+spec:
+  group: crd.projectcalico.org
+  names:
+    kind: BGPFilter
+    listKind: BGPFilterList
+    plural: bgpfilters
+    singular: bgpfilter
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: BGPFilterSpec contains the IPv4 and IPv6 filter rules of the BGP Filter.
+            properties:
+              exportV4:
+                description: The ordered set of IPv4 BGPFilter rules acting on exporting routes to a peer.
+                items:
+                  description: BGPFilterRuleV4 defines a BGP filter rule consisting a single IPv4 CIDR block and a filter action for this CIDR.
+                  properties:
+                    action:
+                      type: string
+                    cidr:
+                      type: string
+                    interface:
+                      type: string
+                    matchOperator:
+                      type: string
+                    source:
+                      type: string
+                  required:
+                  - action
+                  type: object
+                type: array
+              exportV6:
+                description: The ordered set of IPv6 BGPFilter rules acting on exporting routes to a peer.
+                items:
+                  description: BGPFilterRuleV6 defines a BGP filter rule consisting a single IPv6 CIDR block and a filter action for this CIDR.
+                  properties:
+                    action:
+                      type: string
+                    cidr:
+                      type: string
+                    interface:
+                      type: string
+                    matchOperator:
+                      type: string
+                    source:
+                      type: string
+                  required:
+                  - action
+                  type: object
+                type: array
+              importV4:
+                description: The ordered set of IPv4 BGPFilter rules acting on importing routes from a peer.
+                items:
+                  description: BGPFilterRuleV4 defines a BGP filter rule consisting a single IPv4 CIDR block and a filter action for this CIDR.
+                  properties:
+                    action:
+                      type: string
+                    cidr:
+                      type: string
+                    interface:
+                      type: string
+                    matchOperator:
+                      type: string
+                    source:
+                      type: string
+                  required:
+                  - action
+                  type: object
+                type: array
+              importV6:
+                description: The ordered set of IPv6 BGPFilter rules acting on importing routes from a peer.
+                items:
+                  description: BGPFilterRuleV6 defines a BGP filter rule consisting a single IPv6 CIDR block and a filter action for this CIDR.
+                  properties:
+                    action:
+                      type: string
+                    cidr:
+                      type: string
+                    interface:
+                      type: string
+                    matchOperator:
+                      type: string
+                    source:
+                      type: string
+                  required:
+                  - action
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
   name: bgppeers.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -173,6 +291,11 @@ spec:
                 description: The AS Number of the peer.
                 format: int32
                 type: integer
+              filters:
+                description: The ordered set of BGPFilters applied on this BGP peer.
+                items:
+                  type: string
+                type: array
               keepOriginalNextHop:
                 description: Option to keep the original nexthop field when routes are sent to a BGP Peer. Setting "true" configures the selected BGP Peers node to use the "next hop keep;" instead of "next hop self;"(default) in the specific branch of the Node on "bird.cfg".
                 type: boolean
@@ -614,11 +737,29 @@ spec:
                 - Enable
                 - Disable
                 type: string
+              bpfCTLBLogFilter:
+                description: 'BPFCTLBLogFilter specifies, what is logged by connect time load balancer when BPFLogLevel is debug. Currently has to be specified as ''all'' when BPFLogFilters is set to see CTLB logs. [Default: unset - means logs are emitted when BPFLogLevel id debug and BPFLogFilters not set.]'
+                type: string
+              bpfConnectTimeLoadBalancing:
+                description: 'BPFConnectTimeLoadBalancing when in BPF mode, controls whether Felix installs the connect-time load balancer. The connect-time load balancer is required for the host to be able to reach Kubernetes services and it improves the performance of pod-to-service connections.When set to TCP, connect time load balancing is available only for services with TCP ports. [Default: TCP]'
+                enum:
+                - TCP
+                - Enabled
+                - Disabled
+                type: string
               bpfConnectTimeLoadBalancingEnabled:
-                description: 'BPFConnectTimeLoadBalancingEnabled when in BPF mode, controls whether Felix installs the connection-time load balancer.  The connect-time load balancer is required for the host to be able to reach Kubernetes services and it improves the performance of pod-to-service connections.  The only reason to disable it is for debugging purposes.  [Default: true]'
+                description: 'BPFConnectTimeLoadBalancingEnabled when in BPF mode, controls whether Felix installs the connection-time load balancer.  The connect-time load balancer is required for the host to be able to reach Kubernetes services and it improves the performance of pod-to-service connections.  The only reason to disable it is for debugging purposes. This will be deprecated. Use BPFConnectTimeLoadBalancing [Default: true]'
                 type: boolean
+              bpfDSROptoutCIDRs:
+                description: BPFDSROptoutCIDRs is a list of CIDRs which are excluded from DSR. That is, clients in those CIDRs will accesses nodeports as if BPFExternalServiceMode was set to Tunnel.
+                items:
+                  type: string
+                type: array
               bpfDataIfacePattern:
                 description: BPFDataIfacePattern is a regular expression that controls which interfaces Felix should attach BPF programs to in order to catch traffic to/from the network.  This needs to match the interfaces that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the cluster.  It should not match the workload interfaces (usually named cali...).
+                type: string
+              bpfDisableGROForIfaces:
+                description: BPFDisableGROForIfaces is a regular expression that controls which interfaces Felix should disable the Generic Receive Offload [GRO] option.  It should not match the workload interfaces (usually named cali...).
                 type: string
               bpfDisableUnprivileged:
                 description: 'BPFDisableUnprivileged, if enabled, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable unprivileged use of BPF.  This ensures that unprivileged users cannot access Calico''s BPF maps and cannot insert their own BPF programs to interfere with Calico''s. [Default: true]'
@@ -627,17 +768,30 @@ spec:
                 description: 'BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]'
                 type: boolean
               bpfEnforceRPF:
-                description: 'BPFEnforceRPF enforce strict RPF on all host interfaces with BPF programs regardless of what is the per-interfaces or global setting. Possible values are Disabled, Strict or Loose. [Default: Strict]'
+                description: 'BPFEnforceRPF enforce strict RPF on all host interfaces with BPF programs regardless of what is the per-interfaces or global setting. Possible values are Disabled, Strict or Loose. [Default: Loose]'
+                pattern: ^(?i)(Disabled|Strict|Loose)?$
                 type: string
               bpfExtToServiceConnmark:
                 description: 'BPFExtToServiceConnmark in BPF mode, control a 32bit mark that is set on connections from an external client to a local service. This mark allows us to control how packets of that connection are routed within the host and how is routing interpreted by RPF check. [Default: 0]'
                 type: integer
               bpfExternalServiceMode:
                 description: 'BPFExternalServiceMode in BPF mode, controls how connections from outside the cluster to services (node ports and cluster IPs) are forwarded to remote workloads.  If set to "Tunnel" then both request and response traffic is tunneled to the remote node.  If set to "DSR", the request traffic is tunneled but the response traffic is sent directly from the remote node.  In "DSR" mode, the remote node appears to use the IP of the ingress node; this requires a permissive L2 network.  [Default: Tunnel]'
+                pattern: ^(?i)(Tunnel|DSR)?$
                 type: string
+              bpfForceTrackPacketsFromIfaces:
+                description: 'BPFForceTrackPacketsFromIfaces in BPF mode, forces traffic from these interfaces to skip Calico''s iptables NOTRACK rule, allowing traffic from those interfaces to be tracked by Linux conntrack.  Should only be used for interfaces that are not used for the Calico fabric.  For example, a docker bridge device for non-Calico-networked containers. [Default: docker+]'
+                items:
+                  type: string
+                type: array
               bpfHostConntrackBypass:
                 description: 'BPFHostConntrackBypass Controls whether to bypass Linux conntrack in BPF mode for workloads and services. [Default: true - bypass Linux conntrack]'
                 type: boolean
+              bpfHostNetworkedNATWithoutCTLB:
+                description: 'BPFHostNetworkedNATWithoutCTLB when in BPF mode, controls whether Felix does a NAT without CTLB. This along with BPFConnectTimeLoadBalancing determines the CTLB behavior. [Default: Enabled]'
+                enum:
+                - Enabled
+                - Disabled
+                type: string
               bpfKubeProxyEndpointSlicesEnabled:
                 description: BPFKubeProxyEndpointSlicesEnabled in BPF mode, controls whether Felix's embedded kube-proxy accepts EndpointSlices or not.
                 type: boolean
@@ -646,12 +800,19 @@ spec:
                 type: boolean
               bpfKubeProxyMinSyncPeriod:
                 description: 'BPFKubeProxyMinSyncPeriod, in BPF mode, controls the minimum time between updates to the dataplane for Felix''s embedded kube-proxy.  Lower values give reduced set-up latency.  Higher values reduce Felix CPU usage by batching up more work.  [Default: 1s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               bpfL3IfacePattern:
                 description: BPFL3IfacePattern is a regular expression that allows to list tunnel devices like wireguard or vxlan (i.e., L3 devices) in addition to BPFDataIfacePattern. That is, tunnel interfaces not created by Calico, that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the cluster.
                 type: string
+              bpfLogFilters:
+                additionalProperties:
+                  type: string
+                description: "BPFLogFilters is a map of key=values where the value is a pcap filter expression and the key is an interface name with 'all' denoting all interfaces, 'weps' all workload endpoints and 'heps' all host endpoints. \n When specified as an env var, it accepts a comma-separated list of key=values. [Default: unset - means all debug logs are emitted]"
+                type: object
               bpfLogLevel:
                 description: 'BPFLogLevel controls the log level of the BPF programs when in BPF dataplane mode.  One of "Off", "Info", or "Debug".  The logs are emitted to the BPF trace pipe, accessible with the command `tc exec bpf debug`. [Default: Off].'
+                pattern: ^(?i)(Off|Info|Debug)?$
                 type: string
               bpfMapSizeConntrack:
                 description: 'BPFMapSizeConntrack sets the size for the conntrack map.  This map must be large enough to hold an entry for each active connection.  Warning: changing the size of the conntrack map can cause disruption.'
@@ -685,6 +846,7 @@ spec:
                 type: boolean
               chainInsertMode:
                 description: 'ChainInsertMode controls whether Felix hooks the kernel''s top-level iptables chains by inserting a rule at the top of the chain or by appending a rule at the bottom. insert is the safe default since it prevents Calico''s rules from being bypassed. If you switch to append mode, be sure that the other rules in the chains signal acceptance by falling through to the Calico rules, otherwise the Calico policy will be bypassed. [Default: insert]'
+                pattern: ^(?i)(insert|append)?$
                 type: string
               dataplaneDriver:
                 description: DataplaneDriver filename of the external dataplane driver to use.  Only used if UseInternalDataplaneDriver is set to false.
@@ -697,11 +859,14 @@ spec:
               debugMemoryProfilePath:
                 type: string
               debugSimulateCalcGraphHangAfter:
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               debugSimulateDataplaneHangAfter:
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               defaultEndpointToHostAction:
                 description: 'DefaultEndpointToHostAction controls what happens to traffic that goes from a workload endpoint to the host itself (after the traffic hits the endpoint egress policy). By default Calico blocks traffic from workload endpoints to the host itself with an iptables "DROP" action. If you want to allow some or all traffic from endpoint to host, set this parameter to RETURN or ACCEPT. Use RETURN if you have your own rules in the iptables "INPUT" chain; Calico will insert its rules at the top of that chain, then "RETURN" packets to the "INPUT" chain once it has completed processing workload endpoint egress policy. Use ACCEPT to unconditionally accept packets from workloads after processing workload endpoint egress policy. [Default: Drop]'
+                pattern: ^(?i)(Drop|Accept|Return)?$
                 type: string
               deviceRouteProtocol:
                 description: This defines the route protocol added to programmed device routes, by default this will be RTPROT_BOOT when left blank.
@@ -715,6 +880,7 @@ spec:
               disableConntrackInvalidCheck:
                 type: boolean
               endpointReportingDelay:
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               endpointReportingEnabled:
                 type: boolean
@@ -757,9 +923,11 @@ spec:
                 type: array
               featureDetectOverride:
                 description: FeatureDetectOverride is used to override feature detection based on auto-detected platform capabilities.  Values are specified in a comma separated list with no spaces, example; "SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=".  "true" or "false" will force the feature, empty or omitted values are auto-detected.
+                pattern: ^([a-zA-Z0-9-_]+=(true|false|),)*([a-zA-Z0-9-_]+=(true|false|))?$
                 type: string
               featureGates:
                 description: FeatureGates is used to enable or disable tech-preview Calico features. Values are specified in a comma separated list with no spaces, example; "BPFConnectTimeLoadBalancingWorkaround=enabled,XyZ=false". This is used to enable features that are not fully production ready.
+                pattern: ^([a-zA-Z0-9-_]+=([^=]+),)*([a-zA-Z0-9-_]+=([^=]+))?$
                 type: string
               floatingIPs:
                 description: FloatingIPs configures whether or not Felix will program non-OpenStack floating IP addresses.  (OpenStack-derived floating IPs are always programmed, regardless of this setting.)
@@ -777,7 +945,7 @@ spec:
               healthPort:
                 type: integer
               healthTimeoutOverrides:
-                description: HealthTimeoutOverrides allows the internal watchdog timeouts of individual subcomponents to be overriden.  This is useful for working around "false positive" liveness timeouts that can occur in particularly stressful workloads or if CPU is constrained.  For a list of active subcomponents, see Felix's logs.
+                description: HealthTimeoutOverrides allows the internal watchdog timeouts of individual subcomponents to be overridden.  This is useful for working around "false positive" liveness timeouts that can occur in particularly stressful workloads or if CPU is constrained.  For a list of active subcomponents, see Felix's logs.
                 items:
                   properties:
                     name:
@@ -797,6 +965,7 @@ spec:
                 type: string
               interfaceRefreshInterval:
                 description: InterfaceRefreshInterval is the period at which Felix rescans local interfaces to verify their state. The rescan can be disabled by setting the interval to 0.
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               ipipEnabled:
                 description: 'IPIPEnabled overrides whether Felix should configure an IPIP interface on the host. Optional as Felix determines this based on the existing IP pools. [Default: nil (unset)]'
@@ -806,22 +975,32 @@ spec:
                 type: integer
               ipsetsRefreshInterval:
                 description: 'IpsetsRefreshInterval is the period at which Felix re-checks all iptables state to ensure that no other process has accidentally broken Calico''s rules. Set to 0 to disable iptables refresh. [Default: 90s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               iptablesBackend:
                 description: IptablesBackend specifies which backend of iptables will be used. The default is Auto.
+                pattern: ^(?i)(Auto|FelixConfiguration|FelixConfigurationList|Legacy|NFT)?$
                 type: string
               iptablesFilterAllowAction:
+                pattern: ^(?i)(Accept|Return)?$
+                type: string
+              iptablesFilterDenyAction:
+                description: IptablesFilterDenyAction controls what happens to traffic that is denied by network policy. By default Calico blocks traffic with an iptables "DROP" action. If you want to use "REJECT" action instead you can configure it in here.
+                pattern: ^(?i)(Drop|Reject)?$
                 type: string
               iptablesLockFilePath:
                 description: 'IptablesLockFilePath is the location of the iptables lock file. You may need to change this if the lock file is not in its standard location (for example if you have mapped it into Felix''s container at a different path). [Default: /run/xtables.lock]'
                 type: string
               iptablesLockProbeInterval:
                 description: 'IptablesLockProbeInterval is the time that Felix will wait between attempts to acquire the iptables lock if it is not available. Lower values make Felix more responsive when the lock is contended, but use more CPU. [Default: 50ms]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               iptablesLockTimeout:
                 description: 'IptablesLockTimeout is the time that Felix will wait for the iptables lock, or 0, to disable. To use this feature, Felix must share the iptables lock file with all other processes that also take the lock. When running Felix inside a container, this requires the /run directory of the host to be mounted into the calico/node or calico/felix container. [Default: 0s disabled]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               iptablesMangleAllowAction:
+                pattern: ^(?i)(Accept|Return)?$
                 type: string
               iptablesMarkMask:
                 description: 'IptablesMarkMask is the mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal number with at least 8 bits set, none of which clash with any other mark bits in use on the system. [Default: 0xff000000]'
@@ -831,9 +1010,11 @@ spec:
                 type: string
               iptablesPostWriteCheckInterval:
                 description: 'IptablesPostWriteCheckInterval is the period after Felix has done a write to the dataplane that it schedules an extra read back in order to check the write was not clobbered by another process. This should only occur if another application on the system doesn''t respect the iptables lock. [Default: 1s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               iptablesRefreshInterval:
                 description: 'IptablesRefreshInterval is the period at which Felix re-checks the IP sets in the dataplane to ensure that no other process has accidentally broken Calico''s rules. Set to 0 to disable IP sets refresh. Note: the default for this value is lower than the other refresh intervals as a workaround for a Linux kernel bug that was fixed in kernel version 4.11. If you are using v4.11 or greater you may want to set this to, a higher value to reduce Felix CPU usage. [Default: 10s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               ipv6Support:
                 description: IPv6Support controls whether Felix enables support for IPv6 (if supported by the in-use dataplane).
@@ -858,12 +1039,15 @@ spec:
                 type: string
               logSeverityFile:
                 description: 'LogSeverityFile is the log severity above which logs are sent to the log file. [Default: Info]'
+                pattern: ^(?i)(Debug|Info|Warning|Error|Fatal)?$
                 type: string
               logSeverityScreen:
                 description: 'LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]'
+                pattern: ^(?i)(Debug|Info|Warning|Error|Fatal)?$
                 type: string
               logSeveritySys:
                 description: 'LogSeveritySys is the log severity above which logs are sent to the syslog. Set to None for no logging to syslog. [Default: Info]'
+                pattern: ^(?i)(Debug|Info|Warning|Error|Fatal)?$
                 type: string
               maxIpsetSize:
                 type: integer
@@ -887,6 +1071,7 @@ spec:
                 pattern: ^.*
                 x-kubernetes-int-or-string: true
               netlinkTimeout:
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               openstackRegion:
                 description: 'OpenstackRegion is the name of the region that a particular Felix belongs to. In a multi-region Calico/OpenStack deployment, this must be configured somehow for each Felix (here in the datamodel, or in felix.cfg or the environment on each compute node), and must match the [calico] openstack_region value configured in neutron.conf on each node. [Default: Empty]'
@@ -917,15 +1102,19 @@ spec:
                 type: boolean
               reportingInterval:
                 description: 'ReportingInterval is the interval at which Felix reports its status into the datastore or 0 to disable. Must be non-zero in OpenStack deployments. [Default: 30s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               reportingTTL:
                 description: 'ReportingTTL is the time-to-live setting for process-wide status reports. [Default: 90s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               routeRefreshInterval:
                 description: 'RouteRefreshInterval is the period at which Felix re-checks the routes in the dataplane to ensure that no other process has accidentally broken Calico''s rules. Set to 0 to disable route refresh. [Default: 90s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               routeSource:
                 description: 'RouteSource configures where Felix gets its routing information. - WorkloadIPs: use workload endpoints to construct routes. - CalicoIPAM: the default - use IPAM data to construct routes.'
+                pattern: ^(?i)(WorkloadIPs|CalicoIPAM)?$
                 type: string
               routeSyncDisabled:
                 description: RouteSyncDisabled will disable all operations performed on the route table. Set to true to run in network-policy mode only.
@@ -956,6 +1145,7 @@ spec:
                 type: array
               serviceLoopPrevention:
                 description: 'When service IP advertisement is enabled, prevent routing loops to service IPs that are not in use, by dropping or rejecting packets that do not get DNAT''d by kube-proxy. Unless set to "Disabled", in which case such routing loops continue to be allowed. [Default: Drop]'
+                pattern: ^(?i)(Drop|Reject|Disabled)?$
                 type: string
               sidecarAccelerationEnabled:
                 description: 'SidecarAccelerationEnabled enables experimental sidecar acceleration [Default: false]'
@@ -965,9 +1155,11 @@ spec:
                 type: boolean
               usageReportingInitialDelay:
                 description: 'UsageReportingInitialDelay controls the minimum delay before Felix makes a report. [Default: 300s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               usageReportingInterval:
                 description: 'UsageReportingInterval controls the interval at which Felix makes reports. [Default: 86400s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               useInternalDataplaneDriver:
                 description: UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it will launch an external dataplane driver and communicate with it over protobuf.
@@ -985,6 +1177,12 @@ spec:
                 type: integer
               vxlanVNI:
                 type: integer
+              windowsManageFirewallRules:
+                description: 'WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules. (to allow inbound access to its own metrics ports) [Default: Disabled]'
+                enum:
+                - Enabled
+                - Disabled
+                type: string
               wireguardEnabled:
                 description: 'WireguardEnabled controls whether Wireguard is enabled for IPv4 (encapsulating IPv4 traffic over an IPv4 underlay network). [Default: false]'
                 type: boolean
@@ -1002,6 +1200,7 @@ spec:
                 type: string
               wireguardKeepAlive:
                 description: 'WireguardKeepAlive controls Wireguard PersistentKeepalive option. Set 0 to disable. [Default: 0]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               wireguardListeningPort:
                 description: 'WireguardListeningPort controls the listening port used by IPv4 Wireguard. [Default: 51820]'
@@ -1020,12 +1219,14 @@ spec:
                 type: integer
               workloadSourceSpoofing:
                 description: WorkloadSourceSpoofing controls whether pods can use the allowedSourcePrefixes annotation to send traffic with a source IP address that is not theirs. This is disabled by default. When set to "Any", pods can request any prefix.
+                pattern: ^(?i)(Disabled|Any)?$
                 type: string
               xdpEnabled:
                 description: 'XDPEnabled enables XDP acceleration for suitable untracked incoming deny rules. [Default: true]'
                 type: boolean
               xdpRefreshInterval:
                 description: 'XDPRefreshInterval is the period at which Felix re-checks all XDP state to ensure that no other process has accidentally broken Calico''s BPF maps or attached programs. Set to 0 to disable XDP refresh. [Default: 90s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
             type: object
         type: object
@@ -1484,6 +1685,11 @@ spec:
               order:
                 description: Order is an optional field that specifies the order in which the policy is applied. Policies with higher "order" are applied after those with lower order.  If the order is omitted, it may be considered to be "infinite" - i.e. the policy will be applied last.  Policies with identical order will be applied in alphanumerical order based on the Policy "Name".
                 type: number
+              performanceHints:
+                description: "PerformanceHints contains a list of hints to Calico's policy engine to help process the policy more efficiently.  Hints never change the enforcement behaviour of the policy. \n Currently, the only available hint is \"AssumeNeededOnEveryNode\".  When that hint is set on a policy, Felix will act as if the policy matches a local endpoint even if it does not. This is useful for \"preloading\" any large static policies that are known to be used on every node. If the policy is _not_ used on a particular node then the work done to preload the policy (and to maintain it) is wasted."
+                items:
+                  type: string
+                type: array
               preDNAT:
                 description: PreDNAT indicates to apply the rules in this policy before any DNAT.
                 type: boolean
@@ -2589,6 +2795,11 @@ spec:
               order:
                 description: Order is an optional field that specifies the order in which the policy is applied. Policies with higher "order" are applied after those with lower order.  If the order is omitted, it may be considered to be "infinite" - i.e. the policy will be applied last.  Policies with identical order will be applied in alphanumerical order based on the Policy "Name".
                 type: number
+              performanceHints:
+                description: "PerformanceHints contains a list of hints to Calico's policy engine to help process the policy more efficiently.  Hints never change the enforcement behaviour of the policy. \n Currently, the only available hint is \"AssumeNeededOnEveryNode\".  When that hint is set on a policy, Felix will act as if the policy matches a local endpoint even if it does not. This is useful for \"preloading\" any large static policies that are known to be used on every node. If the policy is _not_ used on a particular node then the work done to preload the policy (and to maintain it) is wasted."
+                items:
+                  type: string
+                type: array
               selector:
                 description: "The selector is an expression used to pick pick out the endpoints that the policy should be applied to. \n Selector expressions follow this syntax: \n \tlabel == \"string_literal\"  ->  comparison, e.g. my_label == \"foo bar\" \tlabel != \"string_literal\"   ->  not equal; also matches if label is not present \tlabel in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is one of \"a\", \"b\", \"c\" \tlabel not in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is not one of \"a\", \"b\", \"c\" \thas(label_name)  -> True if that label is present \t! expr -> negation of expr \texpr && expr  -> Short-circuit and \texpr || expr  -> Short-circuit or \t( expr ) -> parens for grouping \tall() or the empty selector -> matches all endpoints. \n Label names are allowed to contain alphanumerics, -, _ and /. String literals are more permissive but they do not support escape characters. \n Examples (with made-up labels): \n \ttype == \"webserver\" && deployment == \"prod\" \ttype in {\"frontend\", \"backend\"} \tdeployment != \"dev\" \t! has(label_name)"
                 type: string
@@ -2661,6 +2872,12 @@ status:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
+  name: calico-cni-plugin
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
   name: calico-kube-controllers
   namespace: kube-system
 ---
@@ -2669,6 +2886,42 @@ kind: ServiceAccount
 metadata:
   name: calico-node
   namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: calico-cni-plugin
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - nodes
+  - namespaces
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - pods/status
+  verbs:
+  - patch
+- apiGroups:
+  - crd.projectcalico.org
+  resources:
+  - blockaffinities
+  - ipamblocks
+  - ipamhandles
+  - clusterinformations
+  - ippools
+  - ipreservations
+  - ipamconfigs
+  verbs:
+  - get
+  - list
+  - create
+  - update
+  - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -2755,7 +3008,7 @@ rules:
 - apiGroups:
   - ""
   resourceNames:
-  - calico-node
+  - calico-cni-plugin
   resources:
   - serviceaccounts/token
   verbs:
@@ -2825,6 +3078,7 @@ rules:
   - globalfelixconfigs
   - felixconfigurations
   - bgppeers
+  - bgpfilters
   - globalbgpconfigs
   - bgpconfigurations
   - ippools
@@ -2904,6 +3158,19 @@ rules:
   - daemonsets
   verbs:
   - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-cni-plugin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-cni-plugin
+subjects:
+- kind: ServiceAccount
+  name: calico-cni-plugin
+  namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -3001,7 +3268,7 @@ spec:
           value: node
         - name: DATASTORE_TYPE
           value: kubernetes
-        image: quay.io/calico/kube-controllers:v3.25.0
+        image: quay.io/calico/kube-controllers:v3.27.0
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
@@ -3112,7 +3379,7 @@ spec:
         - configMapRef:
             name: kubernetes-services-endpoint
             optional: true
-        image: quay.io/calico/node:v3.25.0
+        image: quay.io/calico/node:v3.27.0
         imagePullPolicy: IfNotPresent
         lifecycle:
           preStop:
@@ -3186,7 +3453,7 @@ spec:
         - configMapRef:
             name: kubernetes-services-endpoint
             optional: true
-        image: quay.io/calico/cni:v3.25.0
+        image: quay.io/calico/cni:v3.27.0
         imagePullPolicy: IfNotPresent
         name: upgrade-ipam
         securityContext:
@@ -3221,7 +3488,7 @@ spec:
         - configMapRef:
             name: kubernetes-services-endpoint
             optional: true
-        image: quay.io/calico/cni:v3.25.0
+        image: quay.io/calico/cni:v3.27.0
         imagePullPolicy: IfNotPresent
         name: install-cni
         securityContext:
@@ -3235,7 +3502,7 @@ spec:
         - calico-node
         - -init
         - -best-effort
-        image: quay.io/calico/node:v3.25.0
+        image: quay.io/calico/node:v3.27.0
         imagePullPolicy: IfNotPresent
         name: mount-bpffs
         securityContext:

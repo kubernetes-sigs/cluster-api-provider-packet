@@ -47,5 +47,5 @@ type PacketMachineTemplateList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&PacketMachineTemplate{}, &PacketMachineTemplateList{})
+	objectTypes = append(objectTypes, &PacketMachineTemplate{}, &PacketMachineTemplateList{})
 }
