@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	metal "github.com/equinix-labs/metal-go/metal/v1"
+	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	"github.com/spf13/cobra"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 

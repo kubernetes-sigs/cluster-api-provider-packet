@@ -26,7 +26,7 @@ import (
 	"os"
 	goruntime "runtime"
 
-	metal "github.com/equinix-labs/metal-go/metal/v1"
+	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
