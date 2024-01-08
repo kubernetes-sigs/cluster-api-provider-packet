@@ -52,7 +52,7 @@ providers:
   - name: packet
     type: InfrastructureProvider
     versions:
-      - name: v0.7.2
+      - name: v0.8.0
         value: "${MANIFEST_PATH:=..}/infrastructure-components.yaml"
         type: "url"
         contract: v1beta1
@@ -63,7 +63,7 @@ providers:
           - sourcePath: "../data/v1beta1/cluster-template-node-drain.yaml"
           - sourcePath: "../data/v1beta1/cluster-template-md-remediation.yaml"
           - sourcePath: "../data/v1beta1/cluster-template-kcp-remediation.yaml"
-      - name: v0.7.99 # next; use manifest from source files
+      - name: v0.8.99 # next; use manifest from source files
         value: "${MANIFEST_PATH:=..}/infrastructure-components.yaml"
         type: "url"
         contract: v1beta1

@@ -52,7 +52,7 @@ providers:
   - name: packet
     type: InfrastructureProvider
     versions:
-      - name: v0.7.2 #latest in the v1beta1 series
+      - name: v0.8.0 #latest in the v1beta1 series
         value: "../../../config/default"
         replacements:
           - old: "image: .*/cluster-api-provider-packet:.*"
@@ -65,7 +65,7 @@ providers:
           - sourcePath: "../data/v1beta1/cluster-template-node-drain.yaml"
           - sourcePath: "../data/v1beta1/cluster-template-md-remediation.yaml"
           - sourcePath: "../data/v1beta1/cluster-template-kcp-remediation.yaml"
-      - name: v0.7.99 # next; use manifest from source files
+      - name: v0.8.99 # next; use manifest from source files
         value: "../../../config/default"
         replacements:
           - old: "image: .*/cluster-api-provider-packet:.*"
