@@ -43,6 +43,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-packet/internal/emlb"
 	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
 	clog "sigs.k8s.io/cluster-api/util/log"
@@ -348,12 +349,16 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		// when a node is a control plane node we need the elastic IP
 		// to template out the kube-vip deployment
 		if machineScope.IsControlPlane() {
-			controlPlaneEndpoint, _ = r.PacketClient.GetIPByClusterIdentifier(
-				ctx,
-				machineScope.Cluster.Namespace,
-				machineScope.Cluster.Name,
-				machineScope.PacketCluster.Spec.ProjectID)
-			if machineScope.PacketCluster.Spec.VIPManager == "CPEM" {
+			var controlPlaneEndpointAddress string
+			var cpemLBConfig string
+			var emlbID string
+			switch {
+			case machineScope.PacketCluster.Spec.VIPManager == "CPEM":
+				controlPlaneEndpoint, _ = r.PacketClient.GetIPByClusterIdentifier(
+					ctx,
+					machineScope.Cluster.Namespace,
+					machineScope.Cluster.Name,
+					machineScope.PacketCluster.Spec.ProjectID)
 				if len(controlPlaneEndpoint.Assignments) == 0 {
 					a := corev1.NodeAddress{
 						Type:    corev1.NodeExternalIP,
@@ -361,10 +366,16 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 					}
 					addrs = append(addrs, a)
 				}
+				controlPlaneEndpointAddress = controlPlaneEndpoint.GetAddress()
+			case machineScope.PacketCluster.Spec.VIPManager == "EMLB":
+				controlPlaneEndpointAddress = machineScope.Cluster.Spec.ControlPlaneEndpoint.Host
+				cpemLBConfig = "emlb:///" + machineScope.PacketCluster.Spec.Metro
+				emlbID = machineScope.PacketCluster.Annotations["equinix.com/loadbalancerID"]
 			}
-			createDeviceReq.ControlPlaneEndpoint = controlPlaneEndpoint.GetAddress()
+			createDeviceReq.ControlPlaneEndpoint = controlPlaneEndpointAddress
+			createDeviceReq.CPEMLBConfig = cpemLBConfig
+			createDeviceReq.EMLBID = emlbID
 		}
-
 		dev, err = r.PacketClient.NewDevice(ctx, createDeviceReq)
 
 		switch {
@@ -413,7 +424,8 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	case infrav1.PacketResourceStatusRunning:
 		log.Info("Machine instance is active", "instance-id", machineScope.ProviderID())
 
-		if machineScope.PacketCluster.Spec.VIPManager == "CPEM" {
+		switch {
+		case machineScope.PacketCluster.Spec.VIPManager == "CPEM":
 			controlPlaneEndpoint, _ = r.PacketClient.GetIPByClusterIdentifier(
 				ctx,
 				machineScope.Cluster.Namespace,
@@ -426,6 +438,15 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 				if _, _, err := apiRequest.Execute(); err != nil { //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 					log.Error(err, "err assigining elastic ip to control plane. retrying...")
 					return ctrl.Result{RequeueAfter: time.Second * 20}, nil
+				}
+			}
+		case machineScope.PacketCluster.Spec.VIPManager == "EMLB":
+			if machineScope.IsControlPlane() {
+				// Create new EMLB object
+				lb := emlb.NewEMLB(r.PacketClient.GetConfig().DefaultHeader["X-Auth-Token"], machineScope.PacketCluster.Spec.ProjectID, machineScope.PacketCluster.Spec.Metro)
+
+				if err := lb.ReconcileVIPOrigin(ctx, machineScope, deviceAddr); err != nil {
+					return ctrl.Result{}, err
 				}
 			}
 		}
