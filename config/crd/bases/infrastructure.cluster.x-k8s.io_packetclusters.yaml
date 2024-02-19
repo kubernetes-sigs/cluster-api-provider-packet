@@ -75,10 +75,12 @@ spec:
               vipManager:
                 default: CPEM
                 description: VIPManager represents whether this cluster uses CPEM
-                  or kube-vip to manage its vip for the api server IP
+                  or kube-vip or Equinix Metal Load Balancer to manage its vip for
+                  the api server IP
                 enum:
                 - CPEM
                 - KUBE_VIP
+                - EMLB
                 type: string
             required:
             - projectID

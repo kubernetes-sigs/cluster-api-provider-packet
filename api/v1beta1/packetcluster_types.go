@@ -26,7 +26,7 @@ const (
 	NetworkInfrastructureReadyCondition clusterv1.ConditionType = "NetworkInfrastructureReady"
 )
 
-// VIPManagerType describes if the VIP will be managed by CPEM or kube-vip.
+// VIPManagerType describes if the VIP will be managed by CPEM or kube-vip or Equinix Metal Load Balancer.
 type VIPManagerType string
 
 // PacketClusterSpec defines the desired state of PacketCluster.
@@ -46,9 +46,9 @@ type PacketClusterSpec struct {
 	// +optional
 	ControlPlaneEndpoint clusterv1.APIEndpoint `json:"controlPlaneEndpoint"`
 
-	// VIPManager represents whether this cluster uses CPEM or kube-vip to
+	// VIPManager represents whether this cluster uses CPEM or kube-vip or Equinix Metal Load Balancer to
 	// manage its vip for the api server IP
-	// +kubebuilder:validation:Enum=CPEM;KUBE_VIP
+	// +kubebuilder:validation:Enum=CPEM;KUBE_VIP;EMLB
 	// +kubebuilder:default:=CPEM
 	VIPManager VIPManagerType `json:"vipManager"`
 }
