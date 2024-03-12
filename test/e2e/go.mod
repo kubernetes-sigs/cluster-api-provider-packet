@@ -19,8 +19,8 @@ require (
 	k8s.io/utils v0.0.0-20231127182322-b307cd553661
 	sigs.k8s.io/cluster-api v1.6.0
 	sigs.k8s.io/cluster-api-provider-packet v0.0.0-00010101000000-000000000000
-	sigs.k8s.io/cluster-api/test v1.6.1
-	sigs.k8s.io/controller-runtime v0.16.3
+	sigs.k8s.io/cluster-api/test v1.6.2
+	sigs.k8s.io/controller-runtime v0.16.5
 )
 
 require (
