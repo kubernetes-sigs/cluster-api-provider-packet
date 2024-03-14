@@ -79,6 +79,20 @@ providers:
           - sourcePath: "../data/v1beta1/cluster-template-node-drain.yaml"
           - sourcePath: "../data/v1beta1/cluster-template-md-remediation.yaml"
           - sourcePath: "../data/v1beta1/cluster-template-kcp-remediation.yaml"
+      - name: v1.7.99 # next; use manifest from source files
+        value: "../../../config/default"
+        replacements:
+          - old: "image: .*/cluster-api-provider-packet:.*"
+            new: "image: ${REGISTRY:=quay.io}/${IMAGE_NAME:=kubernetes-sigs/cluster-api-provider-packet}:${TAG:=e2e}"
+        contract: v1beta1
+        files:
+          - sourcePath: "../../../metadata.yaml"
+          - sourcePath: "../data/v1beta1/cluster-template.yaml"
+          - sourcePath: "../data/v1beta1/cluster-template-kube-vip.yaml"
+          - sourcePath: "../data/v1beta1/cluster-template-kcp-scale-in.yaml"
+          - sourcePath: "../data/v1beta1/cluster-template-node-drain.yaml"
+          - sourcePath: "../data/v1beta1/cluster-template-md-remediation.yaml"
+          - sourcePath: "../data/v1beta1/cluster-template-kcp-remediation.yaml"
 
 variables:
   # Update to versions matching https://github.com/kubernetes-sigs/cluster-api/blob/v{VERSION}/test/e2e/config/docker.yaml
