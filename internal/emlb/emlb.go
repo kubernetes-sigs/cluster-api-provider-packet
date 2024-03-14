@@ -369,9 +369,9 @@ func (e *EMLB) createPool(ctx context.Context, name string) (*lbaas.ResourceCrea
 	return e.client.ProjectsApi.CreatePool(ctx, e.projectID).LoadBalancerPoolCreate(createPoolRequest).Execute()
 }
 
-func (e *EMLB) createOrigin(ctx context.Context, poolID, poolName string, target *Target) (*lbaas.ResourceCreatedResponse, *http.Response, error) {
+func (e *EMLB) createOrigin(ctx context.Context, poolID, originName string, target *Target) (*lbaas.ResourceCreatedResponse, *http.Response, error) {
 	createOriginRequest := lbaas.LoadBalancerPoolOriginCreate{
-		Name:       getResourceName(poolName, "origin"),
+		Name:       originName,
 		Target:     target.IP,
 		PortNumber: lbaas.Int32AsLoadBalancerPoolOriginPortNumber(&target.Port),
 		Active:     true,
