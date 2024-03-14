@@ -75,16 +75,11 @@ spec:
         sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
         sed -i "s,sandbox_image.*$,sandbox_image = \"$(kubeadm config images list | grep pause | sort -r | head -n1)\"," /etc/containerd/config.toml
         systemctl restart containerd
-        ping -c 3 -q {{ .controlPlaneEndpoint }} && echo OK || ip addr add {{ .controlPlaneEndpoint }} dev lo
+        if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
+          ip addr add {{ .controlPlaneEndpoint }} dev lo
+        fi
     postKubeadmCommands:
       - |
-        cat <<EOF >> /etc/network/interfaces
-        auto lo:0
-        iface lo:0 inet static
-          address {{ .controlPlaneEndpoint }}
-          netmask 255.255.255.255
-        EOF
-        systemctl restart networking
         mkdir -p $HOME/.kube
         cp /etc/kubernetes/admin.conf $HOME/.kube/config
         echo "source <(kubectl completion bash)" >> $HOME/.bashrc
