@@ -330,7 +330,7 @@ func (p *Client) EnableProjectBGP(ctx context.Context, projectID string) error {
 	useCase := "kubernetes-load-balancer"
 	apiRequest := p.BGPApi.RequestBgpConfig(ctx, projectID)
 	_, err = apiRequest.BgpConfigRequestInput(metal.BgpConfigRequestInput{
-		Asn:            int32(outLocalASN),
+		Asn:            int64(outLocalASN),
 		Md5:            &outBGPPass,
 		DeploymentType: "local",
 		UseCase:        &useCase,

@@ -15,7 +15,7 @@
 # limitations under the License.
 
 # Build the manager binary
-ARG GOVER=1.20.11
+ARG GOVER=1.21.9
 FROM golang:${GOVER} as builder
 
 WORKDIR /workspace
