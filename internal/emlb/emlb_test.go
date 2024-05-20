@@ -18,11 +18,108 @@ limitations under the License.
 package emlb
 
 import (
+	"os"
 	"reflect"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
 )
+
+func Test_getResourceName(t *testing.T) {
+	loadBalancerName := "my-loadbalancer"
+	resourceType := "pool"
+	want := "my-loadbalancer-pool"
+
+	got := getResourceName(loadBalancerName, resourceType)
+
+	if got != want {
+		t.Errorf("getResourceName() = %v, want %v", got, want)
+	}
+}
+
+func Test_checkDebugEnabled(t *testing.T) {
+	// Set the PACKNGO_DEBUG environment variable to enable debug mode
+	if err := os.Setenv("PACKNGO_DEBUG", "true"); err != nil {
+		t.Errorf("Error testing checkDebugEnabled: %v", err)
+	}
+
+	// Call the checkDebugEnabled function
+	debugEnabled := checkDebugEnabled()
+
+	// Check if debugEnabled is true
+	if !debugEnabled {
+		t.Errorf("checkDebugEnabled() = %v, want %v", debugEnabled, true)
+	}
+
+	// Unset the PACKNGO_DEBUG environment variable
+	os.Unsetenv("PACKNGO_DEBUG")
+
+	// Call the checkDebugEnabled function again
+	debugEnabled = checkDebugEnabled()
+
+	// Check if debugEnabled is false
+	if debugEnabled {
+		t.Errorf("checkDebugEnabled() = %v, want %v", debugEnabled, false)
+	}
+}
+
+func Test_convertToTarget(t *testing.T) {
+	type args struct {
+		devaddr corev1.NodeAddress
+	}
+	tests := []struct {
+		name string
+		args args
+		want *Target
+	}{
+		{
+			name: "Internal IP",
+			args: args{
+				corev1.NodeAddress{
+					Type:    "InternalIP",
+					Address: "10.2.1.5",
+				},
+			},
+			want: &Target{
+				IP:   "10.2.1.5",
+				Port: loadBalancerVIPPort,
+			},
+		},
+		{
+			name: "External IP",
+			args: args{
+				corev1.NodeAddress{
+					Type:    "ExternalIP",
+					Address: "1.2.3.4",
+				},
+			},
+			want: &Target{
+				IP:   "1.2.3.4",
+				Port: loadBalancerVIPPort,
+			},
+		},
+		{
+			name: "Empty IP",
+			args: args{
+				corev1.NodeAddress{
+					Type:    "ExternalIP",
+					Address: "",
+				},
+			},
+			want: &Target{
+				IP:   "",
+				Port: loadBalancerVIPPort,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := convertToTarget(tt.args.devaddr); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("convertToTarget() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
 
 func Test_getExternalIPv4Target(t *testing.T) {
 	type args struct {
