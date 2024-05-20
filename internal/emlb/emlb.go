@@ -49,6 +49,8 @@ const (
 	loadBalancerPoolIDAnnotation = "equinix.com/loadbalancerpoolID"
 	// loadBalancerPoolOriginIDAnnotation is the anotation key representing the origin ID of a PacketMachine.
 	loadBalancerOriginIDAnnotation = "equinix.com/loadbalanceroriginID"
+	// EMLBVIPID is the stringused to refer to the EMLB load balancer and VIP Manager type.
+	EMLBVIPID = "EMLB"
 )
 
 var lbMetros = map[string]string{

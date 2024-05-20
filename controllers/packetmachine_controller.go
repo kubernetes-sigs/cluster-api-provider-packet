@@ -367,7 +367,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 					addrs = append(addrs, a)
 				}
 				controlPlaneEndpointAddress = controlPlaneEndpoint.GetAddress()
-			case machineScope.PacketCluster.Spec.VIPManager == "EMLB":
+			case machineScope.PacketCluster.Spec.VIPManager == emlb.EMLBVIPID:
 				controlPlaneEndpointAddress = machineScope.Cluster.Spec.ControlPlaneEndpoint.Host
 				cpemLBConfig = "emlb:///" + machineScope.PacketCluster.Spec.Metro
 				emlbID = machineScope.PacketCluster.Annotations["equinix.com/loadbalancerID"]
@@ -440,7 +440,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 					return ctrl.Result{RequeueAfter: time.Second * 20}, nil
 				}
 			}
-		case machineScope.PacketCluster.Spec.VIPManager == "EMLB":
+		case machineScope.PacketCluster.Spec.VIPManager == emlb.EMLBVIPID:
 			if machineScope.IsControlPlane() {
 				// Create new EMLB object
 				lb := emlb.NewEMLB(r.PacketClient.GetConfig().DefaultHeader["X-Auth-Token"], machineScope.PacketCluster.Spec.ProjectID, machineScope.PacketCluster.Spec.Metro)

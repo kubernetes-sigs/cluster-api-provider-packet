@@ -116,7 +116,7 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 	packetCluster := clusterScope.PacketCluster
 
 	switch {
-	case packetCluster.Spec.VIPManager == "EMLB":
+	case packetCluster.Spec.VIPManager == emlb.EMLBVIPID:
 		if !packetCluster.Spec.ControlPlaneEndpoint.IsValid() {
 			// Create new EMLB object
 			lb := emlb.NewEMLB(r.PacketClient.GetConfig().DefaultHeader["X-Auth-Token"], packetCluster.Spec.ProjectID, packetCluster.Spec.Metro)
@@ -134,7 +134,7 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 		}
 	}
 
-	if packetCluster.Spec.VIPManager != "EMLB" {
+	if packetCluster.Spec.VIPManager != emlb.EMLBVIPID {
 		ipReserv, err := r.PacketClient.GetIPByClusterIdentifier(ctx, clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID)
 		switch {
 		case errors.Is(err, packet.ErrControlPlanEndpointNotFound):

@@ -43,7 +43,7 @@ func main() {
 	rootCmd := &cobra.Command{ //nolint:exhaustivestruct
 		Use:   "ci-clean",
 		Short: "Clean up any stray resources in CI",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			metalAuthToken := os.Getenv(authTokenEnvVar)
 			if metalAuthToken == "" {
 				return fmt.Errorf("%s: %w", authTokenEnvVar, errMissingRequiredEnvVar)
