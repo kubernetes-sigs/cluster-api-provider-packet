@@ -28,14 +28,14 @@ import (
 
 // TokenExchanger is an client for authenticating to the Load Balancer API.
 type TokenExchanger struct {
-	metalAPIKey string
-	client      *http.Client
+	metalAPIKey      string
+	tokenExchangeURL string
+	client           *http.Client
 }
 
 // Token creates a Token object to authenticate with the Load Balancer API.
 func (m *TokenExchanger) Token() (*oauth2.Token, error) {
-	tokenExchangeURL := "https://iam.metalctrl.io/api-keys/exchange"                             //nolint:gosec
-	tokenExchangeRequest, err := http.NewRequest(http.MethodPost, tokenExchangeURL, http.NoBody) //nolint:noctx // we can't find a way to get the ctx into here yet and just using context.Background adds no value that we can tell
+	tokenExchangeRequest, err := http.NewRequest(http.MethodPost, m.tokenExchangeURL, http.NoBody) //nolint:noctx // we can't find a way to get the ctx into here yet and just using context.Background adds no value that we can tell
 	if err != nil {
 		return nil, err
 	}

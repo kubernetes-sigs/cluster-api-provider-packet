@@ -51,6 +51,8 @@ const (
 	loadBalancerOriginIDAnnotation = "equinix.com/loadbalanceroriginID"
 	// EMLBVIPID is the stringused to refer to the EMLB load balancer and VIP Manager type.
 	EMLBVIPID = "EMLB"
+	// loadbalancerTokenExchangeURL is the default URL to use for Token Exchange to talk to the Equinix Metal Load Balancer API
+	loadbalancerTokenExchnageURL = "https://iam.metalctrl.io/api-keys/exchange" //nolint:gosec
 )
 
 var lbMetros = map[string]string{
@@ -87,8 +89,9 @@ func NewEMLB(metalAPIKey, projectID, metro string) *EMLB {
 
 	manager.client = lbaas.NewAPIClient(emlbConfig)
 	manager.tokenExchanger = &TokenExchanger{
-		metalAPIKey: metalAPIKey,
-		client:      manager.client.GetConfig().HTTPClient,
+		metalAPIKey:      metalAPIKey,
+		tokenExchangeURL: loadbalancerTokenExchnageURL,
+		client:           manager.client.GetConfig().HTTPClient,
 	}
 	manager.projectID = projectID
 	manager.metro = metro
