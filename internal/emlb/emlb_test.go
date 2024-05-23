@@ -178,3 +178,23 @@ func Test_getExternalIPv4Target(t *testing.T) {
 		})
 	}
 }
+func TestNewEMLB(t *testing.T) {
+	metalAPIKey := "metal-api-key" //nolint:gosec
+	projectID := "project-id"
+	metro := "am"
+
+	emlb := NewEMLB(metalAPIKey, projectID, metro)
+
+	if emlb.client == nil {
+		t.Error("NewEMLB() client is nil")
+	}
+	if emlb.tokenExchanger == nil {
+		t.Error("NewEMLB() tokenExchanger is nil")
+	}
+	if emlb.projectID != projectID {
+		t.Errorf("NewEMLB() projectID = %s, want %s", emlb.projectID, projectID)
+	}
+	if emlb.metro != metro {
+		t.Errorf("NewEMLB() metro = %s, want %s", emlb.metro, metro)
+	}
+}
