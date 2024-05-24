@@ -33,6 +33,12 @@ type TokenExchanger struct {
 	client           *http.Client
 }
 
+// TokenResponse adds ExpiresIn to the OauthResponse struct.
+type TokenResponse struct {
+	oauth2.Token
+	ExpiresIn int64 `json:"expires_in,omitempty"`
+}
+
 // Token creates a Token object to authenticate with the Load Balancer API.
 func (m *TokenExchanger) Token() (*oauth2.Token, error) {
 	tokenExchangeRequest, err := http.NewRequest(http.MethodPost, m.tokenExchangeURL, http.NoBody) //nolint:noctx // we can't find a way to get the ctx into here yet and just using context.Background adds no value that we can tell
@@ -55,20 +61,17 @@ func (m *TokenExchanger) Token() (*oauth2.Token, error) {
 		return nil, fmt.Errorf("token exchange request failed with status %v, body %v", resp.StatusCode, string(body))
 	}
 
-	token := oauth2.Token{}
-	err = json.Unmarshal(body, &token)
+	var tokenResp TokenResponse
+	err = json.Unmarshal(body, &tokenResp)
 	if err != nil {
-		fmt.Println(len(body))
-		fmt.Println(token)
-		fmt.Println(err)
 		return nil, err
 	}
 
-	expiresIn := token.Extra("expires_in")
-	if expiresIn != nil {
-		expiresInSeconds := expiresIn.(int)
-		token.Expiry = time.Now().Add(time.Second * time.Duration(expiresInSeconds))
+	fmt.Println(tokenResp.ExpiresIn)
+
+	if tokenResp.Expiry.IsZero() && tokenResp.ExpiresIn != 0 {
+		tokenResp.Expiry = time.Now().Add(time.Second * time.Duration(tokenResp.ExpiresIn))
 	}
 
-	return &token, nil
+	return &tokenResp.Token, nil
 }
