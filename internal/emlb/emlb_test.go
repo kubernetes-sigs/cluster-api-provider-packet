@@ -167,11 +167,12 @@ func Test_getExternalIPv4Target(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 			got, err := getExternalIPv4Target(tt.args.deviceAddr)
-			if (err != nil) != tt.wantErr {
-				g.Expect(err).To(Equal(tt.wantErr))
-				return
+			if tt.wantErr {
+				g.Expect(err).To(HaveOccurred())
+			} else {
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(got).To(Equal(tt.want))
 			}
-			g.Expect(got).To(Equal(tt.want))
 		})
 	}
 }
