@@ -27,11 +27,18 @@ import (
 
 func TestTokenExchanger_Token(t *testing.T) {
 	// Create a mock server to handle the token exchange request
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Return a sample token response
-		response := `{"access_token": "sample_token", "expires_in": 3600}`
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(response))
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// Set content type
+		w.Header().Set("Content-Type", "application/json")
+		// Write out oauth2 json response
+		_, err := w.Write([]byte(`{
+			"access_token": "sample_token",
+			"token_type": "Bearer",
+			"expires_in": 3600
+		}`))
+		if err != nil {
+			t.Fatalf("failed to write json response, err = %v", err)
+		}
 	}))
 	defer mockServer.Close()
 
