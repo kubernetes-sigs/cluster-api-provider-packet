@@ -19,25 +19,27 @@ package emlb
 
 import (
 	"os"
-	"reflect"
 	"testing"
+
+	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
 )
 
 func Test_getResourceName(t *testing.T) {
+	g := NewWithT(t)
 	loadBalancerName := "my-loadbalancer"
 	resourceType := "pool"
 	want := "my-loadbalancer-pool"
 
 	got := getResourceName(loadBalancerName, resourceType)
 
-	if got != want {
-		t.Errorf("getResourceName() = %v, want %v", got, want)
-	}
+	// assert name is correct
+	g.Expect(got).To(Equal(want))
 }
 
 func Test_checkDebugEnabled(t *testing.T) {
+	g := NewWithT(t)
 	// Set the PACKNGO_DEBUG environment variable to enable debug mode
 	if err := os.Setenv("PACKNGO_DEBUG", "true"); err != nil {
 		t.Errorf("Error testing checkDebugEnabled: %v", err)
@@ -47,9 +49,7 @@ func Test_checkDebugEnabled(t *testing.T) {
 	debugEnabled := checkDebugEnabled()
 
 	// Check if debugEnabled is true
-	if !debugEnabled {
-		t.Errorf("checkDebugEnabled() = %v, want %v", debugEnabled, true)
-	}
+	g.Expect(debugEnabled).To(BeTrue())
 
 	// Unset the PACKNGO_DEBUG environment variable
 	os.Unsetenv("PACKNGO_DEBUG")
@@ -58,9 +58,7 @@ func Test_checkDebugEnabled(t *testing.T) {
 	debugEnabled = checkDebugEnabled()
 
 	// Check if debugEnabled is false
-	if debugEnabled {
-		t.Errorf("checkDebugEnabled() = %v, want %v", debugEnabled, false)
-	}
+	g.Expect(debugEnabled).To(BeFalse())
 }
 
 func Test_convertToTarget(t *testing.T) {
@@ -114,9 +112,9 @@ func Test_convertToTarget(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := convertToTarget(tt.args.devaddr); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("convertToTarget() = %v, want %v", got, tt.want)
-			}
+			g := NewWithT(t)
+			got := convertToTarget(tt.args.devaddr)
+			g.Expect(got).To(Equal(tt.want))
 		})
 	}
 }
@@ -167,34 +165,33 @@ func Test_getExternalIPv4Target(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
 			got, err := getExternalIPv4Target(tt.args.deviceAddr)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("getExternalIPv4Target() error = %v, wantErr %v", err, tt.wantErr)
+				g.Expect(err).To(Equal(tt.wantErr))
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getExternalIPv4Target() = %v, want %v", got, tt.want)
-			}
+			g.Expect(got).To(Equal(tt.want))
 		})
 	}
 }
 func TestNewEMLB(t *testing.T) {
+	g := NewWithT(t)
 	metalAPIKey := "metal-api-key" //nolint:gosec
 	projectID := "project-id"
 	metro := "am"
 
 	emlb := NewEMLB(metalAPIKey, projectID, metro)
 
-	if emlb.client == nil {
-		t.Error("NewEMLB() client is nil")
-	}
-	if emlb.tokenExchanger == nil {
-		t.Error("NewEMLB() tokenExchanger is nil")
-	}
-	if emlb.projectID != projectID {
-		t.Errorf("NewEMLB() projectID = %s, want %s", emlb.projectID, projectID)
-	}
-	if emlb.metro != metro {
-		t.Errorf("NewEMLB() metro = %s, want %s", emlb.metro, metro)
-	}
+	// assert client is not nil
+	g.Expect(emlb.client).To(Not(BeNil()))
+
+	// assert tokenExchanger is not nil
+	g.Expect(emlb.tokenExchanger).To(Not(BeNil()))
+
+	// assert project ID is correct
+	g.Expect(emlb.projectID).To(Equal(projectID))
+
+	// assert metro is correct
+	g.Expect(emlb.metro).To(Equal(metro))
 }
