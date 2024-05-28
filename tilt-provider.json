@@ -3,7 +3,7 @@
     "config": {
         "image": "quay.io/equinix-oss/cluster-api-provider-packet",
         "live_reload_deps": [
-            "main.go", "go.mod", "go.sum", "api", "controllers", "pkg"
+            "main.go", "go.mod", "go.sum", "api", "controllers", "pkg", "internal"
         ],
         "label": "packet",
         "manager_name": "cluster-api-provider-packet-controller-manager"

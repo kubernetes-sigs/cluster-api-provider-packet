@@ -53,7 +53,7 @@ func (m *PacketMachine) ValidateUpdate(old runtime.Object) (admission.Warnings, 
 	var allErrs field.ErrorList
 
 	// Must have only one of Metro or Facility specified
-	if len(m.Spec.Facility) > 0 && len(m.Spec.Metro) > 0 {
+	if m.Spec.Facility != "" && m.Spec.Metro != "" {
 		allErrs = append(allErrs,
 			field.Invalid(field.NewPath("spec", "Facility"),
 				m.Spec.Facility, "Metro and Facility field are mutually exclusive"),

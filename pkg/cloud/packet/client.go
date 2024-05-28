@@ -104,6 +104,8 @@ type CreateDeviceRequest struct {
 	ExtraTags            []string
 	MachineScope         *scope.MachineScope
 	ControlPlaneEndpoint string
+	CPEMLBConfig         string
+	EMLBID               string
 }
 
 // NewDevice creates a new device.
@@ -143,6 +145,14 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*metal
 
 		if req.ControlPlaneEndpoint != "" {
 			userDataValues["controlPlaneEndpoint"] = req.ControlPlaneEndpoint
+		}
+
+		if req.CPEMLBConfig != "" {
+			userDataValues["cpemConfig"] = req.CPEMLBConfig
+		}
+
+		if req.EMLBID != "" {
+			userDataValues["emlbID"] = req.EMLBID
 		}
 
 		tags = append(tags, infrav1.ControlPlaneTag)

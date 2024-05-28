@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-packet/internal/emlb"
 	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
 )
@@ -114,49 +115,63 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 
 	packetCluster := clusterScope.PacketCluster
 
-	ipReserv, err := r.PacketClient.GetIPByClusterIdentifier(ctx, clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID)
 	switch {
-	case errors.Is(err, packet.ErrControlPlanEndpointNotFound):
-		// Parse metro and facility from the cluster spec
-		var metro, facility string
+	case packetCluster.Spec.VIPManager == emlb.EMLBVIPID:
+		if !packetCluster.Spec.ControlPlaneEndpoint.IsValid() {
+			// Create new EMLB object
+			lb := emlb.NewEMLB(r.PacketClient.GetConfig().DefaultHeader["X-Auth-Token"], packetCluster.Spec.ProjectID, packetCluster.Spec.Metro)
 
-		facility = packetCluster.Spec.Facility
-		metro = packetCluster.Spec.Metro
-
-		// If both specified, metro takes precedence over facility
-		if metro != "" {
-			facility = ""
+			if err := lb.ReconcileLoadBalancer(ctx, clusterScope); err != nil {
+				log.Error(err, "Error Reconciling EMLB")
+				return err
+			}
 		}
-
-		// There is not an ElasticIP with the right tags, at this point we can create one
-		ip, err := r.PacketClient.CreateIP(ctx, clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID, facility, metro)
-		if err != nil {
-			log.Error(err, "error reserving an ip")
-			return err
-		}
-		clusterScope.PacketCluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
-			Host: ip.To4().String(),
-			Port: 6443,
-		}
-	case err != nil:
-		log.Error(err, "error getting cluster IP")
-		return err
-	default:
-		// If there is an ElasticIP with the right tag just use it again
-		clusterScope.PacketCluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
-			Host: ipReserv.GetAddress(),
-			Port: 6443,
-		}
-	}
-
-	if clusterScope.PacketCluster.Spec.VIPManager == "KUBE_VIP" {
+	case packetCluster.Spec.VIPManager == "KUBE_VIP":
+		log.Info("KUBE_VIP VIPManager Detected")
 		if err := r.PacketClient.EnableProjectBGP(ctx, packetCluster.Spec.ProjectID); err != nil {
 			log.Error(err, "error enabling bgp for project")
 			return err
 		}
 	}
 
-	clusterScope.PacketCluster.Status.Ready = true
+	if packetCluster.Spec.VIPManager != emlb.EMLBVIPID {
+		ipReserv, err := r.PacketClient.GetIPByClusterIdentifier(ctx, clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID)
+		switch {
+		case errors.Is(err, packet.ErrControlPlanEndpointNotFound):
+			// Parse metro and facility from the cluster spec
+			var metro, facility string
+
+			facility = packetCluster.Spec.Facility
+			metro = packetCluster.Spec.Metro
+
+			// If both specified, metro takes precedence over facility
+			if metro != "" {
+				facility = ""
+			}
+
+			// There is not an ElasticIP with the right tags, at this point we can create one
+			ip, err := r.PacketClient.CreateIP(ctx, clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID, facility, metro)
+			if err != nil {
+				log.Error(err, "error reserving an ip")
+				return err
+			}
+			packetCluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
+				Host: ip.To4().String(),
+				Port: 6443,
+			}
+		case err != nil:
+			log.Error(err, "error getting cluster IP")
+			return err
+		default:
+			// If there is an ElasticIP with the right tag just use it again
+			packetCluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
+				Host: ipReserv.GetAddress(),
+				Port: 6443,
+			}
+		}
+	}
+
+	packetCluster.Status.Ready = true
 	conditions.MarkTrue(packetCluster, infrav1.NetworkInfrastructureReadyCondition)
 
 	return nil
