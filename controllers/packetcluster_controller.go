@@ -20,6 +20,7 @@ package controllers
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -177,11 +178,26 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 	return nil
 }
 
-func (r *PacketClusterReconciler) reconcileDelete(_ context.Context, _ *scope.ClusterScope) (ctrl.Result, error) {
+func (r *PacketClusterReconciler) reconcileDelete(ctx context.Context, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
+	log := ctrl.LoggerFrom(ctx).WithValues("cluster", clusterScope.Cluster.Name)
+	log.Info("Reconciling PacketCluster Deletion")
+
+	packetCluster := clusterScope.PacketCluster
+
+	switch {
+	case packetCluster.Spec.VIPManager == emlb.EMLBVIPID:
+		// Create new EMLB object
+		lb := emlb.NewEMLB(r.PacketClient.GetConfig().DefaultHeader["X-Auth-Token"], packetCluster.Spec.ProjectID, packetCluster.Spec.Metro)
+
+		if err := lb.DeleteLoadBalancer(ctx, clusterScope); err != nil {
+			fmt.Println("It's ok!")
+		}
+	}
 	// Initially I created this handler to remove an elastic IP when a cluster
 	// gets delete, but it does not sound like a good idea.  It is better to
 	// leave to the users the ability to decide if they want to keep and resign
 	// the IP or if they do not need it anymore
+
 	return ctrl.Result{}, nil
 }
 
