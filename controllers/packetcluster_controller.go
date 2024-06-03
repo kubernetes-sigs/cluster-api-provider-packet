@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
@@ -103,7 +104,14 @@ func (r *PacketClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Handle deleted clusters
 	if !cluster.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, clusterScope)
+		return ctrl.Result{}, r.reconcileDelete(ctx, clusterScope)
+	}
+
+	// Add finalizer first if not set to avoid the race condition between init and delete.
+	// Note: Finalizers in general can only be added when the deletionTimestamp is not set.
+	if !controllerutil.ContainsFinalizer(packetcluster, infrav1.ClusterFinalizer) {
+		controllerutil.AddFinalizer(packetcluster, infrav1.ClusterFinalizer)
+		return ctrl.Result{}, nil
 	}
 
 	err = r.reconcileNormal(ctx, clusterScope)
@@ -178,7 +186,7 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 	return nil
 }
 
-func (r *PacketClusterReconciler) reconcileDelete(ctx context.Context, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
+func (r *PacketClusterReconciler) reconcileDelete(ctx context.Context, clusterScope *scope.ClusterScope) error {
 	log := ctrl.LoggerFrom(ctx).WithValues("cluster", clusterScope.Cluster.Name)
 	log.Info("Reconciling PacketCluster Deletion")
 
@@ -190,7 +198,7 @@ func (r *PacketClusterReconciler) reconcileDelete(ctx context.Context, clusterSc
 		lb := emlb.NewEMLB(r.PacketClient.GetConfig().DefaultHeader["X-Auth-Token"], packetCluster.Spec.ProjectID, packetCluster.Spec.Metro)
 
 		if err := lb.DeleteLoadBalancer(ctx, clusterScope); err != nil {
-			fmt.Println("It's ok!")
+			return fmt.Errorf("failed to delete load balancer: %w", err)
 		}
 	}
 	// Initially I created this handler to remove an elastic IP when a cluster
@@ -198,7 +206,9 @@ func (r *PacketClusterReconciler) reconcileDelete(ctx context.Context, clusterSc
 	// leave to the users the ability to decide if they want to keep and resign
 	// the IP or if they do not need it anymore
 
-	return ctrl.Result{}, nil
+	// Cluster is deleted so remove the finalizer.
+	controllerutil.RemoveFinalizer(packetCluster, infrav1.ClusterFinalizer)
+	return nil
 }
 
 func (r *PacketClusterReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, options controller.Options) error {
