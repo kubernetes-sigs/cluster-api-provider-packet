@@ -537,10 +537,19 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 		device = dev
 	}
 
-	// We should never get there but this is a safetly check
+	// We should never get there but this is a safety check
 	if device == nil {
 		controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
 		return fmt.Errorf("%w: %s", errMissingDevice, packetmachine.Name)
+	}
+
+	if machineScope.PacketCluster.Spec.VIPManager == emlb.EMLBVIPID {
+		// Create new EMLB object
+		lb := emlb.NewEMLB(r.PacketClient.GetConfig().DefaultHeader["X-Auth-Token"], machineScope.PacketCluster.Spec.ProjectID, packetmachine.Spec.Metro)
+
+		if err := lb.DeleteLoadBalancerOrigin(ctx, machineScope); err != nil {
+			return fmt.Errorf("failed to delete load balancer origin: %w", err)
+		}
 	}
 
 	apiRequest := r.PacketClient.DevicesApi.DeleteDevice(ctx, device.GetId()).ForceDelete(force)
