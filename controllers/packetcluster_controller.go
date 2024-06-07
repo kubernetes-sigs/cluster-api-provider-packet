@@ -192,8 +192,7 @@ func (r *PacketClusterReconciler) reconcileDelete(ctx context.Context, clusterSc
 
 	packetCluster := clusterScope.PacketCluster
 
-	switch {
-	case packetCluster.Spec.VIPManager == emlb.EMLBVIPID:
+	if packetCluster.Spec.VIPManager == emlb.EMLBVIPID {
 		// Create new EMLB object
 		lb := emlb.NewEMLB(r.PacketClient.GetConfig().DefaultHeader["X-Auth-Token"], packetCluster.Spec.ProjectID, packetCluster.Spec.Metro)
 
