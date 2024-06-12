@@ -156,7 +156,7 @@ func (e *EMLB) ReconcileVIPOrigin(ctx context.Context, machineScope *scope.Machi
 	}
 
 	// Fetch the Load Balancer object.
-	lb, err := e.getLoadBalancer(ctx, lbID)
+	lb, _, err := e.getLoadBalancer(ctx, lbID)
 	if err != nil {
 		return err
 	}
@@ -247,18 +247,18 @@ func (e *EMLB) DeleteLoadBalancer(ctx context.Context, clusterScope *scope.Clust
 		return nil
 	}
 
-	log.Info("Deleting EMLB", "Cluster Metro", e.metro, "Cluster Name", clusterName, "Project ID", e.projectID, "Load Balancer ID", lbID)
-
 	// Fetch the Load Balancer object.
 	// Skip if 404, otherwise error
-	lb, err := e.getLoadBalancer(ctx, lbID)
-	if err != nil {
-		log.Error(err, "failed to load the loadbalancer object, cannot proceed with deletion")
+	lb, resp, err := e.getLoadBalancer(ctx, lbID)
+	if err != nil && (resp.StatusCode != http.StatusNotFound) {
+		log.Error(err, "unexpected error while loading the loadbalancer object, cannot proceed with deletion")
 		return err
 	}
 
-	resp, err := e.deleteLoadBalancer(ctx, lb.GetId())
-	if err != nil {
+	log.Info("Deleting EMLB", "Cluster Metro", e.metro, "Cluster Name", clusterName, "Project ID", e.projectID, "Load Balancer ID", lbID)
+
+	resp, err = e.deleteLoadBalancer(ctx, lb.GetId())
+	if err != nil && (resp.StatusCode != http.StatusNotFound) {
 		log.Error(err, "LB Delete Failed", "EMLB ID", lb.GetId(), "Response Body", resp.Body)
 		return err
 	}
@@ -279,19 +279,17 @@ func (e *EMLB) DeleteLoadBalancerOrigin(ctx context.Context, machineScope *scope
 		return fmt.Errorf("no Equinix Metal Load Balancer Pool found in machine's annotations")
 	}
 
-	log.Info("Deleting EMLB Origin from Pool", "Cluster Metro", e.metro, "Cluster Name", clusterName, "Project ID", e.projectID, "Pool ID", lbPoolID)
-
 	// Fetch the Load Balancer Pool object.
-	lbPool, err := e.getLoadBalancerPool(ctx, lbPoolID)
-	if err != nil {
-		log.Error(err, "failed to load the loadbalancer pool object, cannot proceed with deletion")
+	lbPool, resp, err := e.getLoadBalancerPool(ctx, lbPoolID)
+	if err != nil && (resp.StatusCode != http.StatusNotFound) {
+		log.Error(err, "unexpected error while loading the loadbalancer pool object, cannot proceed with deletion")
 		return err
 	}
 
 	log.Info("Deleting EMLB Pool", "Cluster Metro", e.metro, "Cluster Name", clusterName, "Project ID", e.projectID, "Pool ID", lbPoolID)
 
-	resp, err := e.deletePool(ctx, lbPool.GetId())
-	if err != nil {
+	resp, err = e.deletePool(ctx, lbPool.GetId())
+	if err != nil && (resp.StatusCode != http.StatusNotFound) {
 		log.Error(err, "LB Pool Delete Failed", "Pool ID", lbPool.GetId(), "Response Body", resp.Body)
 		return err
 	}
@@ -300,11 +298,11 @@ func (e *EMLB) DeleteLoadBalancerOrigin(ctx context.Context, machineScope *scope
 }
 
 // getLoadBalancer Returns a Load Balancer object given an id.
-func (e *EMLB) getLoadBalancer(ctx context.Context, id string) (*lbaas.LoadBalancer, error) {
+func (e *EMLB) getLoadBalancer(ctx context.Context, id string) (*lbaas.LoadBalancer, *http.Response, error) {
 	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
 
-	LoadBalancer, _, err := e.client.LoadBalancersApi.GetLoadBalancer(ctx, id).Execute()
-	return LoadBalancer, err
+	LoadBalancer, resp, err := e.client.LoadBalancersApi.GetLoadBalancer(ctx, id).Execute()
+	return LoadBalancer, resp, err
 }
 
 // getLoadBalancerPort Returns a Load Balancer Port object given an id.
@@ -316,11 +314,11 @@ func (e *EMLB) getLoadBalancerPort(ctx context.Context, id string, portNumber in
 }
 
 // getLoadBalancerPool Returns a Load Balancer Pool object given an id.
-func (e *EMLB) getLoadBalancerPool(ctx context.Context, id string) (*lbaas.LoadBalancerPool, error) {
+func (e *EMLB) getLoadBalancerPool(ctx context.Context, id string) (*lbaas.LoadBalancerPool, *http.Response, error) {
 	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
 
-	LoadBalancerPool, _, err := e.client.PoolsApi.GetLoadBalancerPool(ctx, id).Execute()
-	return LoadBalancerPool, err
+	LoadBalancerPool, resp, err := e.client.PoolsApi.GetLoadBalancerPool(ctx, id).Execute()
+	return LoadBalancerPool, resp, err
 }
 
 // EnsureLoadBalancerOrigin takes the devices list of IP addresses in a Load Balancer Origin Pool and ensures an origin
@@ -424,7 +422,7 @@ func (e *EMLB) ensureLoadBalancer(ctx context.Context, lbID, lbname string, port
 	}
 
 	// Regardless of whether we just created it, fetch the loadbalancer object.
-	lb, err := e.getLoadBalancer(ctx, lbID)
+	lb, _, err := e.getLoadBalancer(ctx, lbID)
 	if err != nil {
 		return nil, nil, err
 	}
