@@ -13,8 +13,8 @@ providers:
   - name: cluster-api
     type: CoreProvider
     versions:
-      - name: v1.6.0 # latest published release in the v1beta1 series
-        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.6.0/core-components.yaml"
+      - name: v1.7.3 # latest published release in the v1beta1 series
+        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.7.3/core-components.yaml"
         type: "url"
         contract: v1beta1
         replacements:
@@ -26,8 +26,8 @@ providers:
   - name: kubeadm
     type: BootstrapProvider
     versions:
-      - name: v1.6.0 # latest published release in the v1beta1 series
-        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.6.0/bootstrap-components.yaml"
+      - name: v1.7.3 # latest published release in the v1beta1 series
+        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.7.3/bootstrap-components.yaml"
         type: "url"
         contract: v1beta1
         replacements:
@@ -39,8 +39,8 @@ providers:
   - name: kubeadm
     type: ControlPlaneProvider
     versions:
-      - name: v1.6.0 # latest published release in the v1beta1 series; this is used for v1beta1 --> main clusterctl upgrades test only.
-        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.6.0/control-plane-components.yaml"
+      - name: v1.7.3 # latest published release in the v1beta1 series; this is used for v1beta1 --> main clusterctl upgrades test only.
+        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.7.3/control-plane-components.yaml"
         type: "url"
         contract: v1beta1
         replacements:
