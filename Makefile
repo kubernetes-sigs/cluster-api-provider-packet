@@ -225,6 +225,7 @@ e2e-test-templates-v1beta1: $(KUSTOMIZE) ## Generate cluster templates for v1bet
 	mkdir -p $(TEST_TEMPLATES_TARGET_DIR)/v1beta1/
 	$(KUSTOMIZE) build $(REPO_ROOT)/templates/experimental-crs-cni --load-restrictor LoadRestrictionsNone > $(TEST_TEMPLATES_TARGET_DIR)/v1beta1/cluster-template.yaml
 	$(KUSTOMIZE) build $(REPO_ROOT)/templates/experimental-kube-vip-crs-cni --load-restrictor LoadRestrictionsNone > $(TEST_TEMPLATES_TARGET_DIR)/v1beta1/cluster-template-kube-vip.yaml
+	$(KUSTOMIZE) build $(REPO_ROOT)/templates/experimental-emlb-crs-cni --load-restrictor LoadRestrictionsNone > $(TEST_TEMPLATES_TARGET_DIR)/v1beta1/cluster-template-emlb.yaml
 	$(KUSTOMIZE) build $(REPO_ROOT)/test/e2e/data/v1beta1/cluster-template-kcp-scale-in --load-restrictor LoadRestrictionsNone > $(TEST_TEMPLATES_TARGET_DIR)/v1beta1/cluster-template-kcp-scale-in.yaml
 	$(KUSTOMIZE) build $(REPO_ROOT)/test/e2e/data/v1beta1/cluster-template-node-drain --load-restrictor LoadRestrictionsNone > $(TEST_TEMPLATES_TARGET_DIR)/v1beta1/cluster-template-node-drain.yaml
 	$(KUSTOMIZE) build $(REPO_ROOT)/test/e2e/data/v1beta1/cluster-template-md-remediation --load-restrictor LoadRestrictionsNone > $(TEST_TEMPLATES_TARGET_DIR)/v1beta1/cluster-template-md-remediation.yaml
@@ -282,6 +283,8 @@ generate: ## Generate code
 
 .PHONY: generate-templates
 generate-templates: $(KUSTOMIZE) ## Generate cluster templates
+	$(KUSTOMIZE) build templates/experimental-emlb --load-restrictor LoadRestrictionsNone > templates/cluster-template-emlb.yaml
+	$(KUSTOMIZE) build templates/experimental-emlb-crs-cni --load-restrictor LoadRestrictionsNone > templates/cluster-template-emlb-crs-cni.yaml
 	$(KUSTOMIZE) build templates/experimental-kube-vip-crs-cni --load-restrictor LoadRestrictionsNone > templates/cluster-template-kube-vip-crs-cni.yaml
 	$(KUSTOMIZE) build templates/experimental-kube-vip --load-restrictor LoadRestrictionsNone > templates/cluster-template-kube-vip.yaml
 	$(KUSTOMIZE) build templates/experimental-crs-cni --load-restrictor LoadRestrictionsNone > templates/cluster-template-crs-cni.yaml
