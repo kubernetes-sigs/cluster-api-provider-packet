@@ -255,10 +255,9 @@ func (e *EMLB) DeleteLoadBalancer(ctx context.Context, clusterScope *scope.Clust
 			return nil
 		}
 		log.Error(err, "LB Delete Failed", "EMLB ID", lbID, "Response Body", resp.Body)
-		return err
 	}
 
-	return nil
+	return err
 }
 
 // DeleteLoadBalancerOrigin deletes the Equinix Metal Load Balancer associated with a given ClusterScope.
@@ -282,10 +281,9 @@ func (e *EMLB) DeleteLoadBalancerOrigin(ctx context.Context, machineScope *scope
 			return nil
 		}
 		log.Error(err, "LB Pool Delete Failed", "Pool ID", lbPoolID, "Response Body", resp.Body)
-		return err
 	}
 
-	return nil
+	return err
 }
 
 // getLoadBalancer Returns a Load Balancer object given an id.
