@@ -247,20 +247,16 @@ func (e *EMLB) DeleteLoadBalancer(ctx context.Context, clusterScope *scope.Clust
 		return nil
 	}
 
-	// Fetch the Load Balancer object.
-	// Skip if 404, otherwise error
-	lb, resp, err := e.getLoadBalancer(ctx, lbID)
-	if err != nil && (resp.StatusCode != http.StatusNotFound) {
-		log.Error(err, "unexpected error while loading the loadbalancer object, cannot proceed with deletion")
-		return err
-	}
-
 	log.Info("Deleting EMLB", "Cluster Metro", e.metro, "Cluster Name", clusterName, "Project ID", e.projectID, "Load Balancer ID", lbID)
 
-	resp, err = e.deleteLoadBalancer(ctx, lb.GetId())
-	if err != nil && (resp.StatusCode != http.StatusNotFound) {
-		log.Error(err, "LB Delete Failed", "EMLB ID", lb.GetId(), "Response Body", resp.Body)
-		return err
+	resp, err := e.deleteLoadBalancer(ctx, lbID)
+	if err != nil {
+		if resp.StatusCode == http.StatusNotFound {
+			return nil
+		} else {
+			log.Error(err, "LB Delete Failed", "EMLB ID", lbID, "Response Body", resp.Body)
+			return err
+		}
 	}
 
 	return nil
@@ -279,19 +275,16 @@ func (e *EMLB) DeleteLoadBalancerOrigin(ctx context.Context, machineScope *scope
 		return fmt.Errorf("no Equinix Metal Load Balancer Pool found in machine's annotations")
 	}
 
-	// Fetch the Load Balancer Pool object.
-	lbPool, resp, err := e.getLoadBalancerPool(ctx, lbPoolID)
-	if err != nil && (resp.StatusCode != http.StatusNotFound) {
-		log.Error(err, "unexpected error while loading the loadbalancer pool object, cannot proceed with deletion")
-		return err
-	}
-
 	log.Info("Deleting EMLB Pool", "Cluster Metro", e.metro, "Cluster Name", clusterName, "Project ID", e.projectID, "Pool ID", lbPoolID)
 
-	resp, err = e.deletePool(ctx, lbPool.GetId())
-	if err != nil && (resp.StatusCode != http.StatusNotFound) {
-		log.Error(err, "LB Pool Delete Failed", "Pool ID", lbPool.GetId(), "Response Body", resp.Body)
-		return err
+	resp, err := e.deletePool(ctx, lbPoolID)
+	if err != nil {
+		if resp.StatusCode != http.StatusNotFound {
+			return nil
+		} else {
+			log.Error(err, "LB Pool Delete Failed", "Pool ID", lbPoolID, "Response Body", resp.Body)
+			return err
+		}
 	}
 
 	return nil
