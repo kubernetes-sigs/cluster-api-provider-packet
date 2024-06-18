@@ -99,7 +99,7 @@ func NewEMLB(metalAPIKey, projectID, metro string) *EMLB {
 	return manager
 }
 
-// ReconcileLoadBalancer creates a new Equinix Metal Load Balancer.
+// ReconcileLoadBalancer creates a new Equinix Metal Load Balancer and associates it with the given ClusterScope.
 func (e *EMLB) ReconcileLoadBalancer(ctx context.Context, clusterScope *scope.ClusterScope) error {
 	log := ctrl.LoggerFrom(ctx)
 
@@ -156,7 +156,7 @@ func (e *EMLB) ReconcileVIPOrigin(ctx context.Context, machineScope *scope.Machi
 	}
 
 	// Fetch the Load Balancer object.
-	lb, err := e.getLoadBalancer(ctx, lbID)
+	lb, _, err := e.getLoadBalancer(ctx, lbID)
 	if err != nil {
 		return err
 	}
@@ -233,12 +233,65 @@ func (e *EMLB) ReconcileVIPOrigin(ctx context.Context, machineScope *scope.Machi
 	return nil
 }
 
+// DeleteLoadBalancer deletes the Equinix Metal Load Balancer associated with a given ClusterScope.
+func (e *EMLB) DeleteLoadBalancer(ctx context.Context, clusterScope *scope.ClusterScope) error {
+	log := ctrl.LoggerFrom(ctx)
+
+	packetCluster := clusterScope.PacketCluster
+	clusterName := packetCluster.Name
+
+	// Make sure the cluster already has an EMLB ID in its packetCluster annotations, otherwise abort.
+	lbID, exists := packetCluster.Annotations[loadBalancerIDAnnotation]
+	if !exists || (lbID == "") {
+		log.Info("no Equinix Metal Load Balancer found in cluster's annotations, skipping EMLB delete")
+		return nil
+	}
+
+	log.Info("Deleting EMLB", "Cluster Metro", e.metro, "Cluster Name", clusterName, "Project ID", e.projectID, "Load Balancer ID", lbID)
+
+	resp, err := e.deleteLoadBalancer(ctx, lbID)
+	if err != nil {
+		if resp.StatusCode == http.StatusNotFound {
+			return nil
+		}
+		log.Error(err, "LB Delete Failed", "EMLB ID", lbID, "Response Body", resp.Body)
+	}
+
+	return err
+}
+
+// DeleteLoadBalancerOrigin deletes the Equinix Metal Load Balancer associated with a given ClusterScope.
+func (e *EMLB) DeleteLoadBalancerOrigin(ctx context.Context, machineScope *scope.MachineScope) error {
+	// Initially, we're creating a single pool per origin, logic below needs to be updated if we move to a shared load balancer pool model.
+	log := ctrl.LoggerFrom(ctx)
+
+	clusterName := machineScope.Cluster.Name
+
+	// Make sure the machine has an EMLB Pool ID in its packetMachine annotations, otherwise abort.
+	lbPoolID, exists := machineScope.PacketMachine.Annotations[loadBalancerPoolIDAnnotation]
+	if !exists || (lbPoolID == "") {
+		return fmt.Errorf("no Equinix Metal Load Balancer Pool found in machine's annotations")
+	}
+
+	log.Info("Deleting EMLB Pool", "Cluster Metro", e.metro, "Cluster Name", clusterName, "Project ID", e.projectID, "Pool ID", lbPoolID)
+
+	resp, err := e.deletePool(ctx, lbPoolID)
+	if err != nil {
+		if resp.StatusCode != http.StatusNotFound {
+			return nil
+		}
+		log.Error(err, "LB Pool Delete Failed", "Pool ID", lbPoolID, "Response Body", resp.Body)
+	}
+
+	return err
+}
+
 // getLoadBalancer Returns a Load Balancer object given an id.
-func (e *EMLB) getLoadBalancer(ctx context.Context, id string) (*lbaas.LoadBalancer, error) {
+func (e *EMLB) getLoadBalancer(ctx context.Context, id string) (*lbaas.LoadBalancer, *http.Response, error) {
 	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
 
-	LoadBalancer, _, err := e.client.LoadBalancersApi.GetLoadBalancer(ctx, id).Execute()
-	return LoadBalancer, err
+	LoadBalancer, resp, err := e.client.LoadBalancersApi.GetLoadBalancer(ctx, id).Execute()
+	return LoadBalancer, resp, err
 }
 
 // getLoadBalancerPort Returns a Load Balancer Port object given an id.
@@ -350,7 +403,7 @@ func (e *EMLB) ensureLoadBalancer(ctx context.Context, lbID, lbname string, port
 	}
 
 	// Regardless of whether we just created it, fetch the loadbalancer object.
-	lb, err := e.getLoadBalancer(ctx, lbID)
+	lb, _, err := e.getLoadBalancer(ctx, lbID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -399,6 +452,16 @@ func (e *EMLB) createOrigin(ctx context.Context, poolID, originName string, targ
 		PoolId:     poolID,
 	}
 	return e.client.PoolsApi.CreateLoadBalancerPoolOrigin(ctx, poolID).LoadBalancerPoolOriginCreate(createOriginRequest).Execute()
+}
+
+func (e *EMLB) deleteLoadBalancer(ctx context.Context, lbID string) (*http.Response, error) {
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
+	return e.client.LoadBalancersApi.DeleteLoadBalancer(ctx, lbID).Execute()
+}
+
+func (e *EMLB) deletePool(ctx context.Context, poolID string) (*http.Response, error) {
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
+	return e.client.PoolsApi.DeleteLoadBalancerPool(ctx, poolID).Execute()
 }
 
 func (e *EMLB) updateListenerPort(ctx context.Context, poolID, lbPortID string) (*lbaas.LoadBalancerPort, error) {

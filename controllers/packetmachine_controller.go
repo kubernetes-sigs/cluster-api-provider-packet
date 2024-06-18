@@ -164,6 +164,13 @@ func (r *PacketMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}()
 
+	// Add finalizer first if not set to avoid the race condition between init and delete.
+	// Note: Finalizers in general can only be added when the deletionTimestamp is not set.
+	if packetmachine.ObjectMeta.DeletionTimestamp.IsZero() && !controllerutil.ContainsFinalizer(packetmachine, infrav1.MachineFinalizer) {
+		controllerutil.AddFinalizer(packetmachine, infrav1.MachineFinalizer)
+		return ctrl.Result{}, nil
+	}
+
 	// Handle deleted machines
 	if !packetmachine.ObjectMeta.DeletionTimestamp.IsZero() {
 		err = r.reconcileDelete(ctx, machineScope)
@@ -260,12 +267,6 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	if packetmachine.Status.FailureReason != nil || packetmachine.Status.FailureMessage != nil {
 		log.Info("Error state detected, skipping reconciliation")
 		return ctrl.Result{}, nil
-	}
-
-	// If the PacketMachine doesn't have our finalizer, add it.
-	controllerutil.AddFinalizer(packetmachine, infrav1.MachineFinalizer)
-	if err := machineScope.PatchObject(ctx); err != nil {
-		log.Error(err, "unable to patch object")
 	}
 
 	if !machineScope.Cluster.Status.InfrastructureReady {
@@ -536,10 +537,19 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 		device = dev
 	}
 
-	// We should never get there but this is a safetly check
+	// We should never get there but this is a safety check
 	if device == nil {
 		controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
 		return fmt.Errorf("%w: %s", errMissingDevice, packetmachine.Name)
+	}
+
+	if machineScope.PacketCluster.Spec.VIPManager == emlb.EMLBVIPID {
+		// Create new EMLB object
+		lb := emlb.NewEMLB(r.PacketClient.GetConfig().DefaultHeader["X-Auth-Token"], machineScope.PacketCluster.Spec.ProjectID, packetmachine.Spec.Metro)
+
+		if err := lb.DeleteLoadBalancerOrigin(ctx, machineScope); err != nil {
+			return fmt.Errorf("failed to delete load balancer origin: %w", err)
+		}
 	}
 
 	apiRequest := r.PacketClient.DevicesApi.DeleteDevice(ctx, device.GetId()).ForceDelete(force)

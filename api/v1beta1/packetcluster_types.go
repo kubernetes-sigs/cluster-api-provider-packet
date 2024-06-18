@@ -22,6 +22,9 @@ import (
 )
 
 const (
+	// ClusterFinalizer allows DockerClusterReconciler to clean up resources associated with DockerCluster before
+	// removing it from the apiserver.
+	ClusterFinalizer = "packetcluster.infrastructure.cluster.x-k8s.io"
 	// NetworkInfrastructureReadyCondition reports of current status of cluster infrastructure.
 	NetworkInfrastructureReadyCondition clusterv1.ConditionType = "NetworkInfrastructureReady"
 )
