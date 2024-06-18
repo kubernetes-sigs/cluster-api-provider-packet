@@ -368,6 +368,8 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 					addrs = append(addrs, a)
 				}
 				controlPlaneEndpointAddress = controlPlaneEndpoint.GetAddress()
+			case machineScope.PacketCluster.Spec.VIPManager == "KUBE_VIP":
+				controlPlaneEndpointAddress = controlPlaneEndpoint.GetAddress()
 			case machineScope.PacketCluster.Spec.VIPManager == emlb.EMLBVIPID:
 				controlPlaneEndpointAddress = machineScope.Cluster.Spec.ControlPlaneEndpoint.Host
 				cpemLBConfig = "emlb:///" + machineScope.PacketCluster.Spec.Metro
