@@ -54,4 +54,17 @@ var _ = Describe("[QuickStart] Running the Cluster API E2E QuickStart tests", fu
 			}
 		})
 	})
+
+	Context("Running the [EMLB] quickstart spec", func() {
+		capi_e2e.QuickStartSpec(ctx, func() capi_e2e.QuickStartSpecInput {
+			return capi_e2e.QuickStartSpecInput{
+				E2EConfig:             e2eConfig,
+				ClusterctlConfigPath:  clusterctlConfigPath,
+				BootstrapClusterProxy: bootstrapClusterProxy,
+				ArtifactFolder:        artifactFolder,
+				SkipCleanup:           skipCleanup,
+				Flavor:                ptr.To[string]("emlb"),
+			}
+		})
+	})
 })
