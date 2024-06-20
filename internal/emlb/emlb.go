@@ -49,8 +49,6 @@ const (
 	loadBalancerPoolIDAnnotation = "equinix.com/loadbalancerpoolID"
 	// loadBalancerPoolOriginIDAnnotation is the anotation key representing the origin ID of a PacketMachine.
 	loadBalancerOriginIDAnnotation = "equinix.com/loadbalanceroriginID"
-	// EMLBVIPID is the stringused to refer to the EMLB load balancer and VIP Manager type.
-	EMLBVIPID = "EMLB"
 	// loadbalancerTokenExchangeURL is the default URL to use for Token Exchange to talk to the Equinix Metal Load Balancer API.
 	loadbalancerTokenExchnageURL = "https://iam.metalctrl.io/api-keys/exchange" //nolint:gosec
 )

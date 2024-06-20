@@ -353,8 +353,8 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 			var controlPlaneEndpointAddress string
 			var cpemLBConfig string
 			var emlbID string
-			switch {
-			case machineScope.PacketCluster.Spec.VIPManager == "CPEM":
+			switch machineScope.PacketCluster.Spec.VIPManager {
+			case infrav1.CPEMID, infrav1.KUBEVIPID:
 				controlPlaneEndpoint, _ = r.PacketClient.GetIPByClusterIdentifier(
 					ctx,
 					machineScope.Cluster.Namespace,
@@ -368,9 +368,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 					addrs = append(addrs, a)
 				}
 				controlPlaneEndpointAddress = controlPlaneEndpoint.GetAddress()
-			case machineScope.PacketCluster.Spec.VIPManager == "KUBE_VIP":
-				controlPlaneEndpointAddress = controlPlaneEndpoint.GetAddress()
-			case machineScope.PacketCluster.Spec.VIPManager == emlb.EMLBVIPID:
+			case infrav1.EMLBVIPID:
 				controlPlaneEndpointAddress = machineScope.Cluster.Spec.ControlPlaneEndpoint.Host
 				cpemLBConfig = "emlb:///" + machineScope.PacketCluster.Spec.Metro
 				emlbID = machineScope.PacketCluster.Annotations["equinix.com/loadbalancerID"]
@@ -406,7 +404,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	machineScope.SetProviderID(dev.GetId())
 	machineScope.SetInstanceStatus(infrav1.PacketResourceStatus(dev.GetState()))
 
-	if machineScope.PacketCluster.Spec.VIPManager == "KUBE_VIP" {
+	if machineScope.PacketCluster.Spec.VIPManager == infrav1.KUBEVIPID {
 		if err := r.PacketClient.EnsureNodeBGPEnabled(ctx, dev.GetId()); err != nil {
 			// Do not treat an error enabling bgp on machine as fatal
 			return ctrl.Result{RequeueAfter: time.Second * 20}, fmt.Errorf("failed to enable bgp on machine %s: %w", machineScope.Name(), err)
@@ -428,7 +426,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		log.Info("Machine instance is active", "instance-id", machineScope.ProviderID())
 
 		switch {
-		case machineScope.PacketCluster.Spec.VIPManager == "CPEM":
+		case machineScope.PacketCluster.Spec.VIPManager == infrav1.CPEMID:
 			controlPlaneEndpoint, _ = r.PacketClient.GetIPByClusterIdentifier(
 				ctx,
 				machineScope.Cluster.Namespace,
@@ -443,7 +441,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 					return ctrl.Result{RequeueAfter: time.Second * 20}, nil
 				}
 			}
-		case machineScope.PacketCluster.Spec.VIPManager == emlb.EMLBVIPID:
+		case machineScope.PacketCluster.Spec.VIPManager == infrav1.EMLBVIPID:
 			if machineScope.IsControlPlane() {
 				// Create new EMLB object
 				lb := emlb.NewEMLB(r.PacketClient.GetConfig().DefaultHeader["X-Auth-Token"], machineScope.PacketCluster.Spec.ProjectID, machineScope.PacketCluster.Spec.Metro)
@@ -545,7 +543,7 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 		return fmt.Errorf("%w: %s", errMissingDevice, packetmachine.Name)
 	}
 
-	if machineScope.PacketCluster.Spec.VIPManager == emlb.EMLBVIPID {
+	if machineScope.PacketCluster.Spec.VIPManager == infrav1.EMLBVIPID {
 		// Create new EMLB object
 		lb := emlb.NewEMLB(r.PacketClient.GetConfig().DefaultHeader["X-Auth-Token"], machineScope.PacketCluster.Spec.ProjectID, packetmachine.Spec.Metro)
 

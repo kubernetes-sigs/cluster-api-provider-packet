@@ -27,6 +27,12 @@ const (
 	ClusterFinalizer = "packetcluster.infrastructure.cluster.x-k8s.io"
 	// NetworkInfrastructureReadyCondition reports of current status of cluster infrastructure.
 	NetworkInfrastructureReadyCondition clusterv1.ConditionType = "NetworkInfrastructureReady"
+	// EMLBVIPID is the string used to refer to the EMLB load balancer and VIP Manager type.
+	EMLBVIPID = "EMLB"
+	// CPEMID is the string used to refer to the CPEM load balancer and VIP Manager type.
+	CPEMID = "CPEM"
+	// KUBEVIPID is the string used to refer to the Kube VIP load balancer and VIP Manager type.
+	KUBEVIPID = "KUBE_VIP"
 )
 
 // VIPManagerType describes if the VIP will be managed by CPEM or kube-vip or Equinix Metal Load Balancer.
