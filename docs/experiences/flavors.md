@@ -4,15 +4,29 @@
 
 ### API Server VIP Management Choice
 
-By default CPEM will be used to manage the EIP that serves as the VIP for the api-server. As of v0.6.0 you can choose to use kube-vip to manage the api-server VIP instead of CPEM.
+By default CPEM will be used to manage the EIP that serves as the VIP for the api-server. Other flavors include kube-vip and Equinix Metal Load Balancer.
 
-### Choosing Kube-VIP
+### Choosing Equinix Metal Load Balancer
 
- To use kube-vip, when generating the template with `clusterctl`, pass in the `--flavor kube-vip` flag. For example, your `clusterctl generate` command might look like the following:
+To use Equinix Metal Load Balancer, when generating the template with `clusterctl`, pass in the `--flavor emlb` flag. For example, your `clusterctl generate` command might look like the following:
 
 ```sh
 clusterctl generate cluster capi-quickstart \
-  --kubernetes-version v1.24.0 \
+  --kubernetes-version v1.31.0 \
+  --control-plane-machine-count=3 \
+  --worker-machine-count=3 \
+  --infrastructure packet \
+  --flavor emlb
+  > capi-quickstart.yaml
+```
+
+### Choosing Kube-VIP
+
+To use kube-vip, when generating the template with `clusterctl`, pass in the `--flavor kube-vip` flag. For example, your `clusterctl generate` command might look like the following:
+
+```sh
+clusterctl generate cluster capi-quickstart \
+  --kubernetes-version v1.31.0 \
   --control-plane-machine-count=3 \
   --worker-machine-count=3 \
   --infrastructure packet \
