@@ -544,11 +544,13 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 	}
 
 	if machineScope.PacketCluster.Spec.VIPManager == infrav1.EMLBVIPID {
-		// Create new EMLB object
-		lb := emlb.NewEMLB(r.PacketClient.GetConfig().DefaultHeader["X-Auth-Token"], machineScope.PacketCluster.Spec.ProjectID, packetmachine.Spec.Metro)
+		if machineScope.IsControlPlane() {
+			// Create new EMLB object
+			lb := emlb.NewEMLB(r.PacketClient.GetConfig().DefaultHeader["X-Auth-Token"], machineScope.PacketCluster.Spec.ProjectID, packetmachine.Spec.Metro)
 
-		if err := lb.DeleteLoadBalancerOrigin(ctx, machineScope); err != nil {
-			return fmt.Errorf("failed to delete load balancer origin: %w", err)
+			if err := lb.DeleteLoadBalancerOrigin(ctx, machineScope); err != nil {
+				return fmt.Errorf("failed to delete load balancer origin: %w", err)
+			}
 		}
 	}
 
