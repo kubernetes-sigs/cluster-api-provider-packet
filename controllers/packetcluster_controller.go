@@ -196,7 +196,7 @@ func (r *PacketClusterReconciler) reconcileDelete(ctx context.Context, clusterSc
 		// Create new EMLB object
 		lb := emlb.NewEMLB(r.PacketClient.GetConfig().DefaultHeader["X-Auth-Token"], packetCluster.Spec.ProjectID, packetCluster.Spec.Metro)
 
-		if err := lb.DeleteLoadBalancer(ctx, clusterScope); err != nil {
+		if err := lb.DeleteClusterLoadBalancer(ctx, clusterScope); err != nil {
 			return fmt.Errorf("failed to delete load balancer: %w", err)
 		}
 	}
