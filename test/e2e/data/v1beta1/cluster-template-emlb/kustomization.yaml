@@ -1,0 +1,3 @@
+resources:
+  - ../../../../../templates/experimental-emlb
+  - ../bases/kcp-mhc.yaml

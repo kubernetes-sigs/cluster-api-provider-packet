@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../experimental-emlb
+  - ../bases/crs-cni.yaml
+patches:
+  - patch: |-
+      kind: Cluster
+      apiVersion: cluster.x-k8s.io/v1beta1
+      metadata:
+        name: not-used
+        labels:
+          cni: "${CLUSTER_NAME}-crs-cni"
+    target:
+      kind: Cluster

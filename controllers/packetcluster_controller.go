@@ -125,7 +125,7 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 	packetCluster := clusterScope.PacketCluster
 
 	switch {
-	case packetCluster.Spec.VIPManager == emlb.EMLBVIPID:
+	case packetCluster.Spec.VIPManager == infrav1.EMLBVIPID:
 		if !packetCluster.Spec.ControlPlaneEndpoint.IsValid() {
 			// Create new EMLB object
 			lb := emlb.NewEMLB(r.PacketClient.GetConfig().DefaultHeader["X-Auth-Token"], packetCluster.Spec.ProjectID, packetCluster.Spec.Metro)
@@ -135,7 +135,7 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 				return err
 			}
 		}
-	case packetCluster.Spec.VIPManager == "KUBE_VIP":
+	case packetCluster.Spec.VIPManager == infrav1.KUBEVIPID:
 		log.Info("KUBE_VIP VIPManager Detected")
 		if err := r.PacketClient.EnableProjectBGP(ctx, packetCluster.Spec.ProjectID); err != nil {
 			log.Error(err, "error enabling bgp for project")
@@ -143,7 +143,7 @@ func (r *PacketClusterReconciler) reconcileNormal(ctx context.Context, clusterSc
 		}
 	}
 
-	if packetCluster.Spec.VIPManager != emlb.EMLBVIPID {
+	if packetCluster.Spec.VIPManager != infrav1.EMLBVIPID {
 		ipReserv, err := r.PacketClient.GetIPByClusterIdentifier(ctx, clusterScope.Namespace(), clusterScope.Name(), packetCluster.Spec.ProjectID)
 		switch {
 		case errors.Is(err, packet.ErrControlPlanEndpointNotFound):
@@ -192,7 +192,7 @@ func (r *PacketClusterReconciler) reconcileDelete(ctx context.Context, clusterSc
 
 	packetCluster := clusterScope.PacketCluster
 
-	if packetCluster.Spec.VIPManager == emlb.EMLBVIPID {
+	if packetCluster.Spec.VIPManager == infrav1.EMLBVIPID {
 		// Create new EMLB object
 		lb := emlb.NewEMLB(r.PacketClient.GetConfig().DefaultHeader["X-Auth-Token"], packetCluster.Spec.ProjectID, packetCluster.Spec.Metro)
 
