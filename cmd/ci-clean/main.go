@@ -29,6 +29,8 @@ import (
 	"github.com/spf13/cobra"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 
+	"sigs.k8s.io/cluster-api-provider-packet/internal/emlb"
+	lbaas "sigs.k8s.io/cluster-api-provider-packet/internal/lbaas/v1"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 )
 
@@ -94,6 +96,26 @@ func cleanup(ctx context.Context, metalAuthToken, metalProjectID string) error {
 		errs = append(errs, err)
 	}
 
+	emlbClient := emlb.NewEMLB(metalAuthToken, metalProjectID, "da")
+
+	loadBalancerPools, _, err := emlbClient.GetLoadBalancerPools(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list load balancer pools: %w", err)
+	}
+
+	if err := deleteEMLBPools(ctx, emlbClient, loadBalancerPools); err != nil {
+		errs = append(errs, err)
+	}
+
+	loadBalancers, _, err := emlbClient.GetLoadBalancers(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list load balancers: %w", err)
+	}
+
+	if err := deleteEMLBs(ctx, emlbClient, loadBalancers); err != nil {
+		errs = append(errs, err)
+	}
+
 	return kerrors.NewAggregate(errs)
 }
 
@@ -149,6 +171,38 @@ func deleteKeys(ctx context.Context, metalClient *packet.Client, keys metal.SSHK
 			_, err := metalClient.SSHKeysApi.DeleteSSHKey(ctx, k.GetId()).Execute()
 			if err != nil {
 				errs = append(errs, fmt.Errorf("failed to delete SSH Key %q: %w", k.GetLabel(), err))
+			}
+		}
+	}
+
+	return kerrors.NewAggregate(errs)
+}
+
+func deleteEMLBPools(ctx context.Context, emlbClient *emlb.EMLB, pools *lbaas.LoadBalancerPoolCollection) error {
+	var errs []error
+
+	for _, pool := range pools.Pools {
+		if time.Since(pool.GetCreatedAt()) > 4*time.Hour {
+			fmt.Printf("Deleting Load Balancer: %s\n", pool.GetName())
+			_, err := emlbClient.DeleteLoadBalancerPool(ctx, pool.GetId())
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to delete Load Balancer %q: %w", pool.GetName(), err))
+			}
+		}
+	}
+
+	return kerrors.NewAggregate(errs)
+}
+
+func deleteEMLBs(ctx context.Context, emlbClient *emlb.EMLB, lbs *lbaas.LoadBalancerCollection) error {
+	var errs []error
+
+	for _, lb := range lbs.Loadbalancers {
+		if time.Since(lb.GetCreatedAt()) > 4*time.Hour {
+			fmt.Printf("Deleting Load Balancer: %s\n", lb.GetName())
+			_, err := emlbClient.DeleteLoadBalancer(ctx, lb.GetId())
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to delete Load Balancer %q: %w", lb.GetName(), err))
 			}
 		}
 	}

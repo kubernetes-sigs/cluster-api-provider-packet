@@ -231,8 +231,8 @@ func (e *EMLB) ReconcileVIPOrigin(ctx context.Context, machineScope *scope.Machi
 	return nil
 }
 
-// DeleteLoadBalancer deletes the Equinix Metal Load Balancer associated with a given ClusterScope.
-func (e *EMLB) DeleteLoadBalancer(ctx context.Context, clusterScope *scope.ClusterScope) error {
+// DeleteClusterLoadBalancer deletes the Equinix Metal Load Balancer associated with a given ClusterScope.
+func (e *EMLB) DeleteClusterLoadBalancer(ctx context.Context, clusterScope *scope.ClusterScope) error {
 	log := ctrl.LoggerFrom(ctx)
 
 	packetCluster := clusterScope.PacketCluster
@@ -247,7 +247,7 @@ func (e *EMLB) DeleteLoadBalancer(ctx context.Context, clusterScope *scope.Clust
 
 	log.Info("Deleting EMLB", "Cluster Metro", e.metro, "Cluster Name", clusterName, "Project ID", e.projectID, "Load Balancer ID", lbID)
 
-	resp, err := e.deleteLoadBalancer(ctx, lbID)
+	resp, err := e.DeleteLoadBalancer(ctx, lbID)
 	if err != nil {
 		if resp.StatusCode == http.StatusNotFound {
 			return nil
@@ -273,7 +273,7 @@ func (e *EMLB) DeleteLoadBalancerOrigin(ctx context.Context, machineScope *scope
 
 	log.Info("Deleting EMLB Pool", "Cluster Metro", e.metro, "Cluster Name", clusterName, "Project ID", e.projectID, "Pool ID", lbPoolID)
 
-	resp, err := e.deletePool(ctx, lbPoolID)
+	resp, err := e.DeleteLoadBalancerPool(ctx, lbPoolID)
 	if err != nil {
 		if resp.StatusCode != http.StatusNotFound {
 			return nil
@@ -282,6 +282,22 @@ func (e *EMLB) DeleteLoadBalancerOrigin(ctx context.Context, machineScope *scope
 	}
 
 	return err
+}
+
+// GetLoadBalancers returns a Load Balancer Collection of all the Equinix Metal Load Balancers in a project.
+func (e *EMLB) GetLoadBalancers(ctx context.Context) (*lbaas.LoadBalancerCollection, *http.Response, error) {
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
+
+	LoadBalancerCollection, resp, err := e.client.ProjectsApi.ListLoadBalancers(ctx, e.projectID).Execute()
+	return LoadBalancerCollection, resp, err
+}
+
+// GetLoadBalancerPools returns a Load Balancer Collection of all the Equinix Metal Load Balancers in a project.
+func (e *EMLB) GetLoadBalancerPools(ctx context.Context) (*lbaas.LoadBalancerPoolCollection, *http.Response, error) {
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
+
+	LoadBalancerPoolCollection, resp, err := e.client.ProjectsApi.ListPools(ctx, e.projectID).Execute()
+	return LoadBalancerPoolCollection, resp, err
 }
 
 // getLoadBalancer Returns a Load Balancer object given an id.
@@ -452,12 +468,14 @@ func (e *EMLB) createOrigin(ctx context.Context, poolID, originName string, targ
 	return e.client.PoolsApi.CreateLoadBalancerPoolOrigin(ctx, poolID).LoadBalancerPoolOriginCreate(createOriginRequest).Execute()
 }
 
-func (e *EMLB) deleteLoadBalancer(ctx context.Context, lbID string) (*http.Response, error) {
+// DeleteLoadBalancer deletes an Equinix Metal Load Balancer given an ID.
+func (e *EMLB) DeleteLoadBalancer(ctx context.Context, lbID string) (*http.Response, error) {
 	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
 	return e.client.LoadBalancersApi.DeleteLoadBalancer(ctx, lbID).Execute()
 }
 
-func (e *EMLB) deletePool(ctx context.Context, poolID string) (*http.Response, error) {
+// DeleteLoadBalancerPool deletes an Equinix Metal Load Balancer Origin Pool given an ID.
+func (e *EMLB) DeleteLoadBalancerPool(ctx context.Context, poolID string) (*http.Response, error) {
 	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
 	return e.client.PoolsApi.DeleteLoadBalancerPool(ctx, poolID).Execute()
 }
