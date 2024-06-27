@@ -179,7 +179,6 @@ func deleteKeys(ctx context.Context, metalClient *packet.Client, keys metal.SSHK
 }
 
 func deleteEMLBPools(ctx context.Context, emlbClient *emlb.EMLB, pools *lbaas.LoadBalancerPoolCollection) error {
-	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, emlbClient.TokenExchanger)
 	var errs []error
 
 	for _, pool := range pools.Pools {
@@ -196,7 +195,6 @@ func deleteEMLBPools(ctx context.Context, emlbClient *emlb.EMLB, pools *lbaas.Lo
 }
 
 func deleteEMLBs(ctx context.Context, emlbClient *emlb.EMLB, lbs *lbaas.LoadBalancerCollection) error {
-	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, emlbClient.TokenExchanger)
 	var errs []error
 
 	for _, lb := range lbs.Loadbalancers {
