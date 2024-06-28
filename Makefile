@@ -88,17 +88,22 @@ GOLANGCI_LINT_VER := v1.55.2
 GOLANGCI_LINT_BIN := golangci-lint
 GOLANGCI_LINT := $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER)
 
-# Keep at 4.0.4 until we figure out how to get later verisons to not mangle the calico yamls
-# HACK bump latest version once https://github.com/kubernetes-sigs/kustomize/issues/947 is fixed
-KUSTOMIZE_VER := v4.0.4
+# Sync to version in https://github.com/kubernetes-sigs/cluster-api/blob/v{VERSION}/Makefile
+KUSTOMIZE_VER := v4.5.2
 KUSTOMIZE_BIN := kustomize
-KUSTOMIZE := $(TOOLS_BIN_DIR)/$(KUSTOMIZE_BIN)-$(KUSTOMIZE_VER)
+KUSTOMIZE := $(abspath $(TOOLS_BIN_DIR)/$(KUSTOMIZE_BIN)-$(KUSTOMIZE_VER))
+KUSTOMIZE_PKG := sigs.k8s.io/kustomize/kustomize/v4
 
 # Sync to github.com/onsi/ginkgo verison in https://github.com/kubernetes-sigs/cluster-api/blob/v{VERSION}/go.mod
 GINKGO_VER := v2.17.1
 GINKGO_BIN := ginkgo
 GINKGO := $(abspath $(TOOLS_BIN_DIR)/$(GINKGO_BIN)-$(GINKGO_VER))
 GINKGO_PKG := github.com/onsi/ginkgo/v2/ginkgo
+
+YQ_VER := v4.35.2
+YQ_BIN := yq
+YQ :=  $(abspath $(TOOLS_BIN_DIR)/$(YQ_BIN)-$(YQ_VER))
+YQ_PKG := github.com/mikefarah/yq/v4
 
 TIMEOUT := $(shell command -v timeout || command -v gtimeout)
 
@@ -241,13 +246,8 @@ $(ENVSUBST): ## Build envsubst from tools folder.
 $(GOLANGCI_LINT): ## Build golangci-lint from tools folder.
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) github.com/golangci/golangci-lint/cmd/golangci-lint $(GOLANGCI_LINT_BIN) $(GOLANGCI_LINT_VER)
 
-## HACK replace with $(GO_INSTALL) once https://github.com/kubernetes-sigs/kustomize/issues/947 is fixed
-$(KUSTOMIZE): ## Put kustomize into tools folder.
-	mkdir -p $(TOOLS_BIN_DIR)
-	rm -f $(TOOLS_BIN_DIR)/$(KUSTOMIZE_BIN)*
-	curl -fsSL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash -s -- $(KUSTOMIZE_VER:v%=%) $(TOOLS_BIN_DIR)
-	mv "$(TOOLS_BIN_DIR)/$(KUSTOMIZE_BIN)" $(KUSTOMIZE)
-	ln -sf $(KUSTOMIZE) "$(TOOLS_BIN_DIR)/$(KUSTOMIZE_BIN)"
+$(KUSTOMIZE): # Build kustomize from tools folder.
+	CGO_ENABLED=0 GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(KUSTOMIZE_PKG) $(KUSTOMIZE_BIN) $(KUSTOMIZE_VER)
 
 $(CONTROLLER_GEN): ## Build controller-gen from tools folder.
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) sigs.k8s.io/controller-tools/cmd/controller-gen $(CONTROLLER_GEN_BIN) $(CONTROLLER_GEN_VER)
@@ -257,6 +257,9 @@ $(CONVERSION_GEN): ## Build conversion-gen.
 
 $(GINKGO): # Build ginkgo from tools folder.
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(GINKGO_PKG) $(GINKGO_BIN) $(GINKGO_VER)
+
+$(YQ): # Build yq.
+	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(YQ_PKG) $(YQ_BIN) ${YQ_VER}
 
 ## --------------------------------------
 ## Linting
@@ -288,7 +291,7 @@ generate-templates: $(KUSTOMIZE) ## Generate cluster templates
 	$(KUSTOMIZE) build templates/experimental-kube-vip-crs-cni --load-restrictor LoadRestrictionsNone > templates/cluster-template-kube-vip-crs-cni.yaml
 	$(KUSTOMIZE) build templates/experimental-kube-vip --load-restrictor LoadRestrictionsNone > templates/cluster-template-kube-vip.yaml
 	$(KUSTOMIZE) build templates/experimental-crs-cni --load-restrictor LoadRestrictionsNone > templates/cluster-template-crs-cni.yaml
-	$(KUSTOMIZE) build templates/addons/calico > templates/addons/calico.yaml
+	$(KUSTOMIZE) build templates/addons/calico | $(YQ) > templates/addons/calico.yaml
 
 .PHONY: generate-go
 generate-go: $(CONTROLLER_GEN) $(CONVERSION_GEN) ## Runs Go related generate targets
