@@ -283,6 +283,7 @@ generate: ## Generate code
 
 .PHONY: generate-templates
 generate-templates: $(KUSTOMIZE) ## Generate cluster templates
+	$(KUSTOMIZE) build templates/development --load-restrictor LoadRestrictionsNone > templates/cluster-template-development.yaml
 	$(KUSTOMIZE) build templates/experimental-emlb --load-restrictor LoadRestrictionsNone > templates/cluster-template-emlb.yaml
 	$(KUSTOMIZE) build templates/experimental-emlb-crs-cni --load-restrictor LoadRestrictionsNone > templates/cluster-template-emlb-crs-cni.yaml
 	$(KUSTOMIZE) build templates/experimental-kube-vip-crs-cni --load-restrictor LoadRestrictionsNone > templates/cluster-template-kube-vip-crs-cni.yaml
