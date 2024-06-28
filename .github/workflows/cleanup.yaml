@@ -2,18 +2,19 @@ name: Cleanup
 on:
   schedule:
     - cron: "0 */2 * * *" # TODO: Run every 4 hours to soak test, should be less frequent before merge (weekly/daily/???)
+  workflow_dispatch:
 jobs:
   cleanup:
     name: Cleanup any orphaned CI Resources
     runs-on: ubuntu-latest
     steps:
-    - name: checkout
-      uses: actions/checkout@v4
-    - uses: actions/setup-go@v5
-      with: 
-        go-version-file: './go.mod'
-    - name: Run the cleanup tool
-      run: go run ./cmd/ci-clean
-      env:
-        PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
-        PROJECT_ID: ${{ secrets.PROJECT_ID }}
+      - name: checkout
+        uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "./go.mod"
+      - name: Run the cleanup tool
+        run: go run ./cmd/ci-clean
+        env:
+          PACKET_API_KEY: ${{ secrets.PACKET_API_TOKEN }}
+          PROJECT_ID: ${{ secrets.PROJECT_ID }}

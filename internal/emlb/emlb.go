@@ -76,7 +76,7 @@ type EMLB struct {
 	client         *lbaas.APIClient
 	metro          string
 	projectID      string
-	tokenExchanger *TokenExchanger
+	TokenExchanger *TokenExchanger
 }
 
 // NewEMLB creates a new Equinix Metal Load Balancer API client object.
@@ -86,7 +86,7 @@ func NewEMLB(metalAPIKey, projectID, metro string) *EMLB {
 	emlbConfig.Debug = checkDebugEnabled()
 
 	manager.client = lbaas.NewAPIClient(emlbConfig)
-	manager.tokenExchanger = &TokenExchanger{
+	manager.TokenExchanger = &TokenExchanger{
 		metalAPIKey:      metalAPIKey,
 		tokenExchangeURL: loadbalancerTokenExchnageURL,
 		client:           manager.client.GetConfig().HTTPClient,
@@ -286,7 +286,7 @@ func (e *EMLB) DeleteLoadBalancerOrigin(ctx context.Context, machineScope *scope
 
 // GetLoadBalancers returns a Load Balancer Collection of all the Equinix Metal Load Balancers in a project.
 func (e *EMLB) GetLoadBalancers(ctx context.Context) (*lbaas.LoadBalancerCollection, *http.Response, error) {
-	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.TokenExchanger)
 
 	LoadBalancerCollection, resp, err := e.client.ProjectsApi.ListLoadBalancers(ctx, e.projectID).Execute()
 	return LoadBalancerCollection, resp, err
@@ -294,7 +294,7 @@ func (e *EMLB) GetLoadBalancers(ctx context.Context) (*lbaas.LoadBalancerCollect
 
 // GetLoadBalancerPools returns a Load Balancer Collection of all the Equinix Metal Load Balancers in a project.
 func (e *EMLB) GetLoadBalancerPools(ctx context.Context) (*lbaas.LoadBalancerPoolCollection, *http.Response, error) {
-	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.TokenExchanger)
 
 	LoadBalancerPoolCollection, resp, err := e.client.ProjectsApi.ListPools(ctx, e.projectID).Execute()
 	return LoadBalancerPoolCollection, resp, err
@@ -302,7 +302,7 @@ func (e *EMLB) GetLoadBalancerPools(ctx context.Context) (*lbaas.LoadBalancerPoo
 
 // getLoadBalancer Returns a Load Balancer object given an id.
 func (e *EMLB) getLoadBalancer(ctx context.Context, id string) (*lbaas.LoadBalancer, *http.Response, error) {
-	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.TokenExchanger)
 
 	LoadBalancer, resp, err := e.client.LoadBalancersApi.GetLoadBalancer(ctx, id).Execute()
 	return LoadBalancer, resp, err
@@ -310,7 +310,7 @@ func (e *EMLB) getLoadBalancer(ctx context.Context, id string) (*lbaas.LoadBalan
 
 // getLoadBalancerPort Returns a Load Balancer Port object given an id.
 func (e *EMLB) getLoadBalancerPort(ctx context.Context, id string, portNumber int32) (*lbaas.LoadBalancerPort, error) {
-	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.TokenExchanger)
 
 	LoadBalancerPort, _, err := e.client.PortsApi.GetLoadBalancerPort(ctx, id, portNumber).Execute()
 	return LoadBalancerPort, err
@@ -319,7 +319,7 @@ func (e *EMLB) getLoadBalancerPort(ctx context.Context, id string, portNumber in
 // EnsureLoadBalancerOrigin takes the devices list of IP addresses in a Load Balancer Origin Pool and ensures an origin
 // for the first IPv4 address in the list exists.
 func (e *EMLB) ensureLoadBalancerOrigin(ctx context.Context, originID, poolID, lbName string, deviceAddr []corev1.NodeAddress) (*lbaas.LoadBalancerPoolOrigin, error) {
-	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.TokenExchanger)
 	log := ctrl.LoggerFrom(ctx)
 
 	if originID == "" {
@@ -372,7 +372,7 @@ func (e *EMLB) ensureLoadBalancerOrigin(ctx context.Context, originID, poolID, l
 
 // ensureLoadBalancerPool checks if the poolID exists and if not, creates it.
 func (e *EMLB) ensureLoadBalancerPool(ctx context.Context, poolID, lbName string) (*lbaas.LoadBalancerPool, error) {
-	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.TokenExchanger)
 
 	// Pool doesn't exist, so let's create it.
 	if poolID == "" {
@@ -391,7 +391,7 @@ func (e *EMLB) ensureLoadBalancerPool(ctx context.Context, poolID, lbName string
 
 // ensureLoadBalancer Takes a  Load Balancer id and ensures those pools and ensures it exists.
 func (e *EMLB) ensureLoadBalancer(ctx context.Context, lbID, lbname string, portNumber int32) (*lbaas.LoadBalancer, *lbaas.LoadBalancerPort, error) {
-	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.TokenExchanger)
 
 	// EMLB doesn't exist, so let's create it.
 	if lbID == "" {
@@ -470,18 +470,18 @@ func (e *EMLB) createOrigin(ctx context.Context, poolID, originName string, targ
 
 // DeleteLoadBalancer deletes an Equinix Metal Load Balancer given an ID.
 func (e *EMLB) DeleteLoadBalancer(ctx context.Context, lbID string) (*http.Response, error) {
-	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.TokenExchanger)
 	return e.client.LoadBalancersApi.DeleteLoadBalancer(ctx, lbID).Execute()
 }
 
 // DeleteLoadBalancerPool deletes an Equinix Metal Load Balancer Origin Pool given an ID.
 func (e *EMLB) DeleteLoadBalancerPool(ctx context.Context, poolID string) (*http.Response, error) {
-	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.TokenExchanger)
 	return e.client.PoolsApi.DeleteLoadBalancerPool(ctx, poolID).Execute()
 }
 
 func (e *EMLB) updateListenerPort(ctx context.Context, poolID, lbPortID string) (*lbaas.LoadBalancerPort, error) {
-	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.tokenExchanger)
+	ctx = context.WithValue(ctx, lbaas.ContextOAuth2, e.TokenExchanger)
 
 	// Create a listener port update request that adds the provided load balancer origin pool to the listener port.
 	portUpdateRequest := lbaas.LoadBalancerPortUpdate{

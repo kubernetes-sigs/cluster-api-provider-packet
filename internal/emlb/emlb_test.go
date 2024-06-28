@@ -188,7 +188,7 @@ func TestNewEMLB(t *testing.T) {
 	g.Expect(emlb.client).To(Not(BeNil()))
 
 	// assert tokenExchanger is not nil
-	g.Expect(emlb.tokenExchanger).To(Not(BeNil()))
+	g.Expect(emlb.TokenExchanger).To(Not(BeNil()))
 
 	// assert project ID is correct
 	g.Expect(emlb.projectID).To(Equal(projectID))
