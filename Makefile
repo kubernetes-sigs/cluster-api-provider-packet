@@ -285,7 +285,7 @@ generate: ## Generate code
 	$(MAKE) generate-templates
 
 .PHONY: generate-templates
-generate-templates: $(KUSTOMIZE) ## Generate cluster templates
+generate-templates: $(KUSTOMIZE) $(YQ) ## Generate cluster templates
 	$(KUSTOMIZE) build templates/development --load-restrictor LoadRestrictionsNone > templates/cluster-template-development.yaml
 	$(KUSTOMIZE) build templates/experimental-emlb --load-restrictor LoadRestrictionsNone > templates/cluster-template-emlb.yaml
 	$(KUSTOMIZE) build templates/experimental-emlb-crs-cni --load-restrictor LoadRestrictionsNone > templates/cluster-template-emlb-crs-cni.yaml
