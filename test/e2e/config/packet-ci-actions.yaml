@@ -13,8 +13,8 @@ providers:
   - name: cluster-api
     type: CoreProvider
     versions:
-      - name: v1.7.3 # latest published release in the v1beta1 series
-        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.7.3/core-components.yaml"
+      - name: v1.7.4 # latest published release in the v1beta1 series
+        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.7.4/core-components.yaml"
         type: "url"
         contract: v1beta1
         replacements:
@@ -26,8 +26,8 @@ providers:
   - name: kubeadm
     type: BootstrapProvider
     versions:
-      - name: v1.7.3 # latest published release in the v1beta1 series
-        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.7.3/bootstrap-components.yaml"
+      - name: v1.7.4 # latest published release in the v1beta1 series
+        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.7.4/bootstrap-components.yaml"
         type: "url"
         contract: v1beta1
         replacements:
@@ -39,8 +39,8 @@ providers:
   - name: kubeadm
     type: ControlPlaneProvider
     versions:
-      - name: v1.7.3 # latest published release in the v1beta1 series; this is used for v1beta1 --> main clusterctl upgrades test only.
-        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.7.3/control-plane-components.yaml"
+      - name: v1.7.4 # latest published release in the v1beta1 series; this is used for v1beta1 --> main clusterctl upgrades test only.
+        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.7.4/control-plane-components.yaml"
         type: "url"
         contract: v1beta1
         replacements:
@@ -52,18 +52,20 @@ providers:
   - name: packet
     type: InfrastructureProvider
     versions:
-      - name: v0.8.0
+      - name: v0.9.0 #latest in the v1beta1 series
         value: "${MANIFEST_PATH:=..}/infrastructure-components.yaml"
         type: "url"
         contract: v1beta1
         files:
           - sourcePath: "${MANIFEST_PATH:=..}/metadata.yaml"
           - sourcePath: "../data/v1beta1/cluster-template.yaml"
+          - sourcePath: "../data/v1beta1/cluster-template-emlb.yaml"
+          - sourcePath: "../data/v1beta1/cluster-template-kube-vip.yaml"
           - sourcePath: "../data/v1beta1/cluster-template-kcp-scale-in.yaml"
           - sourcePath: "../data/v1beta1/cluster-template-node-drain.yaml"
           - sourcePath: "../data/v1beta1/cluster-template-md-remediation.yaml"
           - sourcePath: "../data/v1beta1/cluster-template-kcp-remediation.yaml"
-      - name: v0.8.99 # next; use manifest from source files
+      - name: v0.9.99 # next; use manifest from source files
         value: "${MANIFEST_PATH:=..}/infrastructure-components.yaml"
         type: "url"
         contract: v1beta1
@@ -78,12 +80,13 @@ providers:
           - sourcePath: "../data/v1beta1/cluster-template-kcp-remediation.yaml"
 
 variables:
-  KUBERNETES_VERSION_MANAGEMENT: "v1.28.0"
-  KUBERNETES_VERSION: "${KUBERNETES_VERSION:-v1.28.0}"
-  KUBERNETES_VERSION_UPGRADE_FROM: "v1.27.3"
-  KUBERNETES_VERSION_UPGRADE_TO: "v1.28.0"
-  ETCD_VERSION_UPGRADE_TO: "3.5.9-0"
-  COREDNS_VERSION_UPGRADE_TO: "v1.10.1"
+  # Update to versions matching https://github.com/kubernetes-sigs/cluster-api/blob/v{VERSION}/test/e2e/config/docker.yaml
+  KUBERNETES_VERSION_MANAGEMENT: "v1.30.0"
+  KUBERNETES_VERSION: "${KUBERNETES_VERSION:-v1.30.0}"
+  KUBERNETES_VERSION_UPGRADE_FROM: "v1.29.4"
+  KUBERNETES_VERSION_UPGRADE_TO: "v1.30.0"
+  ETCD_VERSION_UPGRADE_TO: "3.5.12-0"
+  COREDNS_VERSION_UPGRADE_TO: "v1.11.1"
 
   # Infra provider specific variables
   NODE_OS: "ubuntu_20_04"
