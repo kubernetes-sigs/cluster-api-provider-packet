@@ -185,10 +185,10 @@ func TestNewEMLB(t *testing.T) {
 	emlb := NewEMLB(metalAPIKey, projectID, metro)
 
 	// assert client is not nil
-	g.Expect(emlb.client).To(Not(BeNil()))
+	g.Expect(emlb.client).ToNot(BeNil())
 
 	// assert tokenExchanger is not nil
-	g.Expect(emlb.TokenExchanger).To(Not(BeNil()))
+	g.Expect(emlb.TokenExchanger).ToNot(BeNil())
 
 	// assert project ID is correct
 	g.Expect(emlb.projectID).To(Equal(projectID))
