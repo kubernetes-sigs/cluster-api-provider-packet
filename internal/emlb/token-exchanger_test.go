@@ -22,10 +22,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	. "github.com/onsi/gomega"
 )
 
 func TestTokenExchanger_Token(t *testing.T) {
+	g := NewWithT(t)
 	// Create a mock server to handle the token exchange request
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// Set content type
@@ -53,12 +54,12 @@ func TestTokenExchanger_Token(t *testing.T) {
 	token, err := exchanger.Token()
 
 	// Assert that no error occurred
-	assert.NoError(t, err)
+	g.Expect(err).ToNot(HaveOccurred())
 
 	// Assert that the token is not nil
-	assert.NotNil(t, token)
+	g.Expect(token).ToNot(BeNil())
 
 	// Assert the token values
-	assert.Equal(t, "sample_token", token.AccessToken)
-	assert.Equal(t, time.Now().Add(time.Hour).Round(time.Second), token.Expiry.Round(time.Second))
+	g.Expect(token.AccessToken).To(Equal("sample_token"))
+	g.Expect(token.Expiry.Round(time.Second)).To(Equal(time.Now().Add(time.Hour).Round(time.Second)))
 }
