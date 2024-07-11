@@ -358,7 +358,7 @@ func (p *Client) EnsureNodeBGPEnabled(ctx context.Context, id string) error {
 	_, response, err := p.DevicesApi.CreateBgpSession(ctx, id).BGPSessionInput(req).Execute() //nolint:bodyclose // see https://github.com/timakin/bodyclose/issues/42
 	// if we already had one, then we can ignore the error
 	// this really should be a 409, but 422 is what is returned
-	if response != nil && response.StatusCode == 422 && strings.Contains(err.Error(), "already has session") {
+	if response != nil && response.StatusCode == http.StatusUnprocessableEntity && strings.Contains(err.Error(), "already has session") {
 		err = nil
 	}
 	return err
