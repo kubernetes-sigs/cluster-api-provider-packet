@@ -38,6 +38,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
+	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/test/framework"
@@ -189,6 +190,19 @@ func (w *wrappedClusterProxy) isDockerCluster(ctx context.Context, namespace str
 	Expect(cl.Get(ctx, key, cluster)).To(Succeed(), "Failed to get %s", key)
 
 	return cluster.Spec.InfrastructureRef.Kind == "DockerCluster"
+}
+
+func (w *wrappedClusterProxy) isEMLBCluster(ctx context.Context, namespace string, name string) bool {
+	cl := w.GetClient()
+
+	packetCluster := &infrav1.PacketCluster{}
+	key := client.ObjectKey{
+		Name:      name,
+		Namespace: namespace,
+	}
+	Expect(cl.Get(ctx, key, packetCluster)).To(Succeed(), "Failed to get %s", key)
+
+	return packetCluster.Spec.VIPManager == "EMLB"
 }
 
 func (w *wrappedClusterProxy) getKubeconfig(ctx context.Context, namespace string, name string) *api.Config {
@@ -358,8 +372,10 @@ func (wc *wrappedClient) List(ctx context.Context, list client.ObjectList, opts 
 
 	if cl, ok := list.(*clusterv1.ClusterList); ok {
 		for _, c := range cl.Items {
-			logf("Recording cluster %s for EIP Cleanup later", c.GetName())
-			wc.clusterProxy.clusterNames.Insert(c.GetName())
+			if !wc.clusterProxy.isEMLBCluster(ctx, c.Namespace, c.GetName()) {
+				logf("Recording cluster %s for EIP Cleanup later", c.GetName())
+				wc.clusterProxy.clusterNames.Insert(c.GetName())
+			}
 		}
 	}
 
