@@ -65,13 +65,13 @@ func (wc *wrappedClient) IsObjectNamespaced(obj runtime.Object) (namespaced bool
 type wrappedClusterProxy struct {
 	clusterProxy framework.ClusterProxy
 
-	clusterNames sets.String
+	clusterNames sets.Set[string]
 }
 
 func NewWrappedClusterProxy(name string, kubeconfigPath string, scheme *runtime.Scheme, options ...framework.Option) *wrappedClusterProxy {
 	return &wrappedClusterProxy{
 		clusterProxy: framework.NewClusterProxy(name, kubeconfigPath, scheme, options...),
-		clusterNames: sets.NewString(),
+		clusterNames: sets.New[string](),
 	}
 }
 
