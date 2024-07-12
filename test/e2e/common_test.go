@@ -66,13 +66,14 @@ func (wc *wrappedClient) IsObjectNamespaced(obj runtime.Object) (namespaced bool
 type wrappedClusterProxy struct {
 	clusterProxy framework.ClusterProxy
 
-	clusterNames sets.Set[string]
+	// This is a list of cluster names that have EIPs that need to be disposed of.
+	eipClusterNames sets.Set[string]
 }
 
 func NewWrappedClusterProxy(name string, kubeconfigPath string, scheme *runtime.Scheme, options ...framework.Option) *wrappedClusterProxy {
 	return &wrappedClusterProxy{
-		clusterProxy: framework.NewClusterProxy(name, kubeconfigPath, scheme, options...),
-		clusterNames: sets.New[string](),
+		clusterProxy:    framework.NewClusterProxy(name, kubeconfigPath, scheme, options...),
+		eipClusterNames: sets.New[string](),
 	}
 }
 
@@ -236,7 +237,7 @@ func (w *wrappedClusterProxy) Dispose(ctx context.Context) {
 		metalClient := packet.NewClient(metalAuthToken)
 
 		Eventually(func(g Gomega) {
-			clusterNames := w.clusterNames.UnsortedList()
+			clusterNames := w.eipClusterNames.UnsortedList()
 			logf("Will clean up EIPs for the following clusters: %v", clusterNames)
 
 			for _, clusterName := range clusterNames {
@@ -259,7 +260,7 @@ func (w *wrappedClusterProxy) Dispose(ctx context.Context) {
 							Expect(err).NotTo(HaveOccurred())
 						}, "5m", "10s").Should(Succeed())
 
-						w.clusterNames.Delete(clusterName)
+						w.eipClusterNames.Delete(clusterName)
 					} else {
 						logf("EIP for cluster: %s with ID: %s appears to still be assigned", clusterName, ipID)
 					}
@@ -268,7 +269,7 @@ func (w *wrappedClusterProxy) Dispose(ctx context.Context) {
 				}
 			}
 
-			g.Expect(w.clusterNames.UnsortedList()).To(BeEmpty())
+			g.Expect(w.eipClusterNames.UnsortedList()).To(BeEmpty())
 		}, "30m", "1m").Should(Succeed())
 	}
 
@@ -289,7 +290,7 @@ type wrappedClient struct {
 	clusterProxy *wrappedClusterProxy
 }
 
-func (wc *wrappedClient) recordClusterNameForResource(obj client.Object) error {
+func (wc *wrappedClient) recordClusterNameForResource(ctx context.Context, obj client.Object) error {
 	var clusterName string
 
 	gvk, err := apiutil.GVKForObject(obj, wc.client.Scheme())
@@ -307,15 +308,17 @@ func (wc *wrappedClient) recordClusterNameForResource(obj client.Object) error {
 	}
 
 	if clusterName != "" {
-		logf("Recording cluster %s for EIP Cleanup later", clusterName)
-		wc.clusterProxy.clusterNames.Insert(clusterName)
+		if !wc.clusterProxy.isEMLBCluster(ctx, obj.GetName(), clusterName) {
+			logf("Recording cluster %s for EIP Cleanup later", clusterName)
+			wc.clusterProxy.eipClusterNames.Insert(clusterName)
+		}
 	}
 
 	return nil
 }
 
 func (wc *wrappedClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
-	err := wc.recordClusterNameForResource(obj)
+	err := wc.recordClusterNameForResource(ctx, obj)
 	if err != nil {
 		return err
 	}
@@ -324,29 +327,14 @@ func (wc *wrappedClient) Create(ctx context.Context, obj client.Object, opts ...
 }
 
 func (wc *wrappedClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
-	err := wc.recordClusterNameForResource(obj)
-	if err != nil {
-		return err
-	}
-
 	return wc.client.Delete(ctx, obj, opts...)
 }
 
 func (wc *wrappedClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-	err := wc.recordClusterNameForResource(obj)
-	if err != nil {
-		return err
-	}
-
 	return wc.client.Update(ctx, obj, opts...)
 }
 
 func (wc *wrappedClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-	err := wc.recordClusterNameForResource(obj)
-	if err != nil {
-		return err
-	}
-
 	return wc.client.Patch(ctx, obj, patch, opts...)
 }
 
@@ -356,11 +344,6 @@ func (wc *wrappedClient) DeleteAllOf(ctx context.Context, obj client.Object, opt
 }
 
 func (wc *wrappedClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-	err := wc.recordClusterNameForResource(obj)
-	if err != nil {
-		return err
-	}
-
 	return wc.client.Get(ctx, key, obj, opts...)
 }
 
