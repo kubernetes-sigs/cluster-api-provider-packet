@@ -24,6 +24,7 @@ In order to cut a release, you must:
    - Update [packet-ci-actions.yaml](../test/e2e/config/packet-ci-actions.yaml) and [packet-ci.yaml](../test/e2e/config/packet-ci.yaml) to have a new "next" version number for the latest contract version of the packet InfrastructureProvider (ie. v0.11.99).
    - Update clusterctl-settings.json to have the new "next" version number for the latest contract version of the packet InfrastructureProvider (ie. v0.11.99).
 
+1. Review and update the versions of installed deployments like CPEM and kube-vip inside the templates.
 1. Commit the changes.
 1. Push out your branch, open a PR and merge the changes
 1. Wait for the Continuous Integration github action to finish running
