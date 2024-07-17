@@ -30,9 +30,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -45,19 +43,10 @@ import (
 	"sigs.k8s.io/cluster-api/test/infrastructure/container"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 func logf(format string, a ...interface{}) {
 	fmt.Fprintf(GinkgoWriter, "INFO: "+format+"\n", a...)
-}
-
-func (wc *wrappedClient) GroupVersionKindFor(obj runtime.Object) (gvk schema.GroupVersionKind, err error) {
-	return wc.client.GroupVersionKindFor(obj)
-}
-
-func (wc *wrappedClient) IsObjectNamespaced(obj runtime.Object) (namespaced bool, err error) {
-	return wc.client.IsObjectNamespaced(obj)
 }
 
 // wrappedClusterProxy wraps framework.clusterProxy to add support for retrying if discovery times out
@@ -114,7 +103,7 @@ func (w *wrappedClusterProxy) GetClient() client.Client {
 
 	Eventually(func(g Gomega) {
 		var err error
-		resClient, err = NewWrappedClient(config, client.Options{Scheme: w.GetScheme()}, w)
+		resClient, err = client.New(config, client.Options{Scheme: w.GetScheme()})
 		g.Expect(err).NotTo(HaveOccurred())
 	}, "5m", "10s").Should(Succeed())
 
@@ -161,6 +150,13 @@ func (w *wrappedClusterProxy) GetWorkloadCluster(ctx context.Context, namespace,
 		w.fixConfig(ctx, name, config)
 	}
 
+	if w.isPacketCluster(ctx, namespace, name) {
+		if !w.isEMLBCluster(ctx, namespace, name) {
+			logf("Recording cluster %s for EIP Cleanup later", name)
+			w.eipClusterNames.Insert(name)
+		}
+	}
+
 	return newFromAPIConfig(name, config, w.GetScheme())
 }
 
@@ -191,6 +187,19 @@ func (w *wrappedClusterProxy) isDockerCluster(ctx context.Context, namespace str
 	Expect(cl.Get(ctx, key, cluster)).To(Succeed(), "Failed to get %s", key)
 
 	return cluster.Spec.InfrastructureRef.Kind == "DockerCluster"
+}
+
+func (w *wrappedClusterProxy) isPacketCluster(ctx context.Context, namespace string, name string) bool {
+	cl := w.GetClient()
+
+	cluster := &clusterv1.Cluster{}
+	key := client.ObjectKey{
+		Name:      name,
+		Namespace: namespace,
+	}
+	Expect(cl.Get(ctx, key, cluster)).To(Succeed(), "Failed to get %s", key)
+
+	return cluster.Spec.InfrastructureRef.Kind == "PacketCluster"
 }
 
 func (w *wrappedClusterProxy) isEMLBCluster(ctx context.Context, namespace string, name string) bool {
@@ -274,110 +283,4 @@ func (w *wrappedClusterProxy) Dispose(ctx context.Context) {
 	}
 
 	w.clusterProxy.Dispose(ctx)
-}
-
-func NewWrappedClient(config *rest.Config, options client.Options, clusterProxy *wrappedClusterProxy) (*wrappedClient, error) {
-	client, err := client.New(config, options)
-	if err != nil {
-		return nil, err
-	}
-
-	return &wrappedClient{client: client, clusterProxy: clusterProxy}, nil
-}
-
-type wrappedClient struct {
-	client       client.Client
-	clusterProxy *wrappedClusterProxy
-}
-
-func (wc *wrappedClient) recordClusterNameForResource(ctx context.Context, obj client.Object) error {
-	var clusterName string
-
-	gvk, err := apiutil.GVKForObject(obj, wc.client.Scheme())
-	if err != nil {
-		return err
-	}
-
-	if gvk.Group == clusterv1.GroupVersion.Group && gvk.Kind == "Cluster" {
-		clusterName = obj.GetName()
-	}
-
-	labeledCluster, ok := obj.GetLabels()[clusterv1.ClusterNameLabel]
-	if ok {
-		clusterName = labeledCluster
-	}
-
-	if clusterName != "" {
-		if !wc.clusterProxy.isEMLBCluster(ctx, obj.GetName(), clusterName) {
-			logf("Recording cluster %s for EIP Cleanup later", clusterName)
-			wc.clusterProxy.eipClusterNames.Insert(clusterName)
-		}
-	}
-
-	return nil
-}
-
-func (wc *wrappedClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
-	err := wc.recordClusterNameForResource(ctx, obj)
-	if err != nil {
-		return err
-	}
-
-	return wc.client.Create(ctx, obj, opts...)
-}
-
-func (wc *wrappedClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
-	return wc.client.Delete(ctx, obj, opts...)
-}
-
-func (wc *wrappedClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-	return wc.client.Update(ctx, obj, opts...)
-}
-
-func (wc *wrappedClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-	return wc.client.Patch(ctx, obj, patch, opts...)
-}
-
-func (wc *wrappedClient) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
-	// Nothing in the e2e framework appears to be using DeleteAllOf, so we can likely ignore it.
-	return wc.client.DeleteAllOf(ctx, obj, opts...)
-}
-
-func (wc *wrappedClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-	return wc.client.Get(ctx, key, obj, opts...)
-}
-
-func (wc *wrappedClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
-	err := wc.client.List(ctx, list, opts...)
-	if err != nil {
-		return err
-	}
-
-	if cl, ok := list.(*clusterv1.ClusterList); ok {
-		for _, c := range cl.Items {
-			if !wc.clusterProxy.isEMLBCluster(ctx, c.Namespace, c.GetName()) {
-				logf("Recording cluster %s for EIP Cleanup later", c.GetName())
-				wc.clusterProxy.clusterNames.Insert(c.GetName())
-			}
-		}
-	}
-
-	return nil
-}
-
-func (wc *wrappedClient) RESTMapper() meta.RESTMapper {
-	return wc.client.RESTMapper()
-}
-
-// SubResource returns the sub resource this client is using.
-func (wc *wrappedClient) SubResource(subResource string) client.SubResourceClient {
-	return wc.client.SubResource(subResource)
-}
-
-func (wc *wrappedClient) Scheme() *runtime.Scheme {
-	return wc.client.Scheme()
-}
-
-func (wc *wrappedClient) Status() client.StatusWriter {
-	return wc.client.Status()
 }
