@@ -26,24 +26,23 @@ Background
 User stories
 ------------
 
-As a  cluster administrator
+As a 	**user of Cluster API provider Packet (CAPP)**
+I want 	**to configure L2 interfaces and define my own IP Address range**
+so that **machines are able to communicate over layer2 VLAN**
 
-- I want  to configure L2 interfaces and define my own IP Address range so that  machines are able to communicate over layer2 VLAN.
 
 * * * * *
 
-Goals (phase-1)
+Goals
 ===============
 
--   For the phase-1 of supporting Layer2 functionalities in CAPP, it will add support for [Hybrid Bonded](https://deploy.equinix.com/developers/docs/metal/layer2-networking/hybrid-bonded-mode/) and [Hybrid Unbonded](https://deploy.equinix.com/developers/docs/metal/layer2-networking/hybrid-unbonded-mode/) mode.
+In Phase 1 of integrating Layer2 support, the Cluster API Provider (CAPP) will focus on Bring Your Own (BYO) Infrastructure.
+Key objectives for this phase include:
+- Implementing Hybrid Bonded Mode and Hybrid Unbonded Modes to enhance Layer2 functionalities in CAPP.
+- Enabling CAPP to attach network ports to specific VLANs or VXLANs.
+- Allowing CAPP to configure Layer2 networking at the OS level on a metal node, including creating sub-interfaces and assigning IP addresses.
+- Ensuring CAPP can track the lifecycle of available IP addresses from VRF Range.
 
--   CAPP will be able to attach ports to specified VLAN.
-
--   CAPP will be able to create a new VLAN if required in the specified project and metro.
-
--   CAPP will be able to create VRF (Virtual Routing & Forwarding) and IP Reservations as specified in the spec.
-
--   CAPP will be able to configure networking at the OS level of a metal node.
 
 Non-Goals
 ===============
@@ -57,309 +56,195 @@ Proposal Design/Approach
 
 * * * * *
 
-### PacketCluster
+**Understanding the context and problem space** : The problem space primarily revolves around the operating system (OS) and, to some extent, the cluster level. Specifically, it concerns how Cluster API (CAPP) clusters and machines are defined by IP addresses, networks, and gateways.
+A critical aspect of this space is how CAPP provisions infrastructure, particularly network infrastructure. This includes VLANs, gateways, virtual circuits, and IP address ranges such as elastic IPs or IP reservations. Additionally, it involves the management of VRFs and the attachment of these network resources to nodes, ensuring that newly created nodes have ports in a ready state for these attachments. The default approach will be Layer2 networking in a hybrid-bonded mode, though other configurations may also be supported in the future.
+This understanding forms the foundation for addressing the technical challenges in provisioning and managing network infrastructure with CAPP.
+ 
+**Bring Your Own Infrastructure (BYOI)**:
 
-The idea is to introduce options to specify VLANs and VRFs configurations as a part of ClusterSpec.
+The BYOI approach allows users to leverage their existing infrastructure, such as VLANs, VRFs, Metal Gateways, and similar components.
+In this model, users specify the IP ranges to be assigned to metal nodes on VLAN-tagged interfaces. Importantly, CAPP is not responsible for creating or managing this infrastructure, it is assumed to already exist.
+However, CAPP needs to be informed of the VLAN ID to attach the network port to the appropriate VLAN using the Equinix Metal (EM) API. This ensures that the network configuration aligns with the pre-existing infrastructure provided by the user.
 
-```go
-type  PacketClusterSpec struct {
-  ...
+### Custom Resource Changes:
+**PacketMachineTemplate**
 
-// VLANConfig represents the configuration for layer2 VLAN.
- VLANConfig *VLANConfig            `json:"vlanConfig,omitempty"`
-
-// VRFConfig represents the configuration for Virtual  Router and Forwarding (VRF)
- VRFConfig *VRFConfig              `json:"vrfConfig,omitempty"`
-}
-```
-
-// VLANConfig represents the configuration for an existing or new VLAN
-```go
-type VLANConfig struct {
- // VLANID is the ID of the VLAN. It can be an existing VLAN or a new one to be created.
-  VLANID string `json:"vlanID"`
-
- // Description of the VLAN
- // +optional
-  Description string `json:"description,omitempty"`
-
- // CreateNew indicates whether a new VLAN needs to be created
- // +optional
-  CreateNew bool `json:"createNew,omitempty"`
-}
-```
-
--   For an existing VLAN
-```json
-{
-"vlanID": "existing-vlan-id",
-"description": "Existing VLAN",
-"createNew": false
-}
-```
-
--   For a new VLAN:
-
-```json
-{
-"vlanID": "new-vlan-id",
-"description": "New VLAN to be created",
-"createNew": true
-}
-```
-
-* * * * *
-
-
-// VRFConfig represents the configuration for an existing or new VRF
+To support enhanced layer2 networking capabilities, we propose adding a new Ports field under the spec of the *PacketMachineTemplate*. This field will allow users to define various network port configurations for an Equinix Metal Machine. Below is an outline of the proposed changes:
 
 ```go
-type VRFConfig struct {
- // Name of the VRF. It can be an existing VRF or a new one to be created.
-  Name string `json:"name,omitempty"`
-
- // Description of the VRF
- // +optional
-  Description string `json:"description,omitempty"`
-
- // IP ranges that are allowed to access and communicate with this virtual router.
-  AllowedIPRanges []string `json:"allowedIPRanges,omitempty"`
-
- // CreateNew indicates whether a new VRF needs to be created\
- // +optional
-  CreateNew bool `json:"createNew,omitempty"`
+// PacketMachineSpec defines the desired state of PacketMachine.
+ type PacketMachineSpec struct {
+   ..
+   // List of Port Configurations on each Packet Machine
+   // +optional
+   Ports []Port `json:"ports"`
 }
-```
 
-- For an existing VRF:
-
-```json
-{
-"name": "Existing VRF",
-"description": "Existing VRF description",
-"allowedIPRanges": ["192.168.1.0/21"],
-"createNew": false
-}
-```
-
-- For a new VRF:
-```json
-{
-"name": "New VRF",
-"description": "New VRF description",
-  "allowedIPRanges": ["10.0.0.0/24"],
-"createNew": true
-}
-```
-
-Users can specify different options for CAPP Controllers to create a new VLAN/VRF or to provide existing configuration details. Below is an example YAML configuration illustrating this:
-
-```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1\
-kind: PacketCluster
-metadata:
-  name: capi-quickstart
-  namespace: default
-spec:
-  metro: da
-  projectID:  7f713f3e-fe14-4386-a2fb-f22c29ba685e\
-  vipManager: CPEM
-  vlanConfig:
- "vlanID": "existing-vlan-id",
-"description": "Existing VLAN",
-"createNew": false
-  vrfConfig: 
-    "name": "New VRF",
-    "description": "New VRF description",
-    "allowedIPRanges": ["10.0.0.0/24"],
-    "createNew": true
-```
-
-In the above example, vlanConfig and vrfConfig are used to create a new VLAN and a new VRF with specific configurations, respectively.
-
-### Infrastructure Setup and Readiness
-
-* * * * *
-
-The PacketCluster Controller is responsible for setting up infrastructure. Once the setup is successfully completed, it marks itself as "Ready" and sets the condition NetworkInfrastructureReadyCondition to true. The controller will continue to follow this setup process and call Equinix Metal APIs to create or get VLANs and VRFs as needed before marking the infrastructure as Ready.
-
-This approach also helps avoid potential race conditions between the execution of user-data scripts and the application of port configurations at the API level. By ensuring the network configurations are established through the controller before any user-data scripts run, we can maintain a consistent and reliable infrastructure setup process.
-
-### APIs
-
-* * * * *
-
-1.  Create a new VLAN
-
-```
-curl -X POST
--H "Content-Type: application/json"
--H "X-Auth-Token: <API_TOKEN>"
-"https://api.equinix.com/metal/v1/projects/{id}/virtual-networks"
--d '{
- "vxlan": <integer>,
- "description": "<string>",
- "metro": "<string>"
- }'
-```
-
-2.  Create a new VRF
-```
-curl -X POST
--H "Content-Type: application/json"
--H "X-Auth-Token: <API_TOKEN>"
-"https://api.equinix.com/metal/v1/projects/{id}/vrfs"
--d '{
- "name": "<string>",
- "description": "<string>",
- "metro": "<metro_slug>",
- "ip_ranges": [
- "<cidr_address>"
-    ],
- "local_asn": <integer>
-}'
-```
-
-### PacketMachineTemplate
-
-
-* * * * *
-
-The idea is to introduce a new field Ports under spec which will contain different networking specifications of networking ports for a Equinix Metal Machine. This could look like the following:
-
-```go
-// PacketMachineSpec defines the desired state of  PacketMachine.
-type  PacketMachineSpec struct {
-  ..
-// List of Port  Configurations on each Packet  Machine\
-  // +optional\
- Ports []Port `json:"ports"`
-}
-```
-
-```go
 type Port struct {
- // name of the port e.g bond0
-    Name string `json:"name"`
- // port bonded or not - by default true
-    Bonded bool `json:"bonded,omitempty"`
- // convert port to layer 2. is false by default on new devices. changes result in /ports/id/convert/layer-[2|3] API calls\
-    Layer2 bool `json:"layer2"`
-
-    IPAddresses []IPAddress `json:"ip_addresses,omitempty"`
+     // name of the port e.g bond0,eth0 and eth1 for 2 NIC servers.
+     Name string `json:"name"`
+     // port bonded or not - by default true
+     Bonded bool `json:"bonded,omitempty"`
+     // convert port to layer 2. is false by default on new devices. changes result in /ports/id/convert/layer-[2|3] API calls
+     Layer2 bool `json:"layer2"`
+     // IPAddress configurations associated with this port
+     // These are typically IP Reservations carved out of VRF.
+     IPAddresses []IPAddress `json:"ip_addresses,omitempty"`	
 }
-// IPAddress represents an IP address configuration\
+// IPAddress represents an IP address configuration 
 type IPAddress struct {
-    Type string `json:"type"`
-
-    // VRF used to create the IP Address Reservation for this cluster\
-    VRFName string `json:"vrfName,omitempty"`
-
-    // IPAddressReservation to reserve for these cluster nodes.
-    IPAddressReservation string `json:"ipAddressReservation"`
-
-    // VLAN Id to join
-    VLANId string `json:"vlanId,omitempty"`
+    // IPAddressReservation to reserve for these cluster nodes.
+    // for eg: can be carved out of a VRF IP Range.
+    IPAddressReservation string `json:"ipAddressReservation"`	
+    // VLANs for EM API to find by vxlan, project, and metro match then attach to device. OS userdata template will also configure this VLAN on the bond device    
+    VXLANIDs []string `json:"vxlan_ids,omitempty"`
+    // UUID of VLANs to which this port should be assigned.
+    // Either VXLANID or VLANID should be provided.
+    VLANIDs []string  `vlan_ids,omitempty`
+    // IP Address of the gateway
+    Gateway string `gateway,omitempty`
 }
 ```
 
-Example:
+For example:
+The following example configures the bond0 port of each node in a cluster to a hybrid bonded mode, attaches vxlan_id with ID 1000 and assigns each node an IP address from range "192.168.2.0/24" with gateway 192.168.2.1
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-kind: PacketMachineTemplate\
+kind: PacketMachineTemplate
 metadata:
-    name: example-packet-machine-template
+  name: example-packet-machine-template
 spec:
-  template:
-    spec:
-        facility: ny5
-        metro: ny
-        plan: c3.small.x86
-        billingCycle: hourly
-        project: your-packet-project-id
-        sshKeys:
-        -  ssh-rsa  AAAAB3...your-public-key...
-        operatingSystem: ubuntu_20_04
-        ports: # network_ports in the API naming\
-        - bond0:
-            bonded: true  # default\
-            layer2: false
-            ip_addresses:
-            - type: vrf
-              vrfName: "vrf-01"
-              ipAddressReservation: "192.168.2.0/24"
-              vlanId: 1000
-        - eth2: # unbonded eth ports can use most of the same attributes bond ports can use\
-            layer2: true
+  template:
+    spec:
+      facility: ny5
+      metro: ny
+      plan: c3.small.x86
+      billingCycle: hourly
+      project: your-packet-project-id
+      sshKeys:
+        - ssh-rsa AAAAB3...your-public-key...
+      operatingSystem: ubuntu_20_04
+      ports:
+       -  name: bond0
+          layer2: false
+          ip_addresses:
+            - ipAddressReservation: "192.168.2.0/24"
+              vxlan_ids: [1000]
+              gateway: "192.168.2.1"
 ```
 
-The CAPP Operators while provisioning the metal node would:
+The following example configures the eth1 port of each node in a cluster to a hybrid unbonded mode, removed the port from the bond, converts the port into a layer mode i.e attaches vxlan_id with ID 1001 and assigns each node an IP address from range "10.50.10.0/24" with gateway 10.50.10.1
 
-1.  Call the Equinix Metal API to attach Ports to the VLAN 
+```yaml
+
+kind: PacketMachineTemplate
+metadata:
+  name: example-packet-machine-template
+spec:
+  template:
+    spec:
+      facility: ny5
+      metro: ny
+      plan: c3.small.x86
+      billingCycle: hourly
+      project: your-packet-project-id
+      sshKeys:
+        - ssh-rsa AAAAB3...your-public-key...
+      operatingSystem: ubuntu_20_04
+      ports:
+       - eth1:
+          bonded: false
+          layer2: true
+          ip_addresses:
+            - ipAddressReservation: "10.50.10.0/24"
+              vxlan_ids: [1001]
+              gateway: "10.50.10.1"
 
 ```
-curl -X POST
--H "Content-Type: application/json"
--H "X-Auth-Token: <API_TOKEN> "
-"https://api.equinix.com/metal/v1/ports/{id}/assign"
--d '{
-    "vnid": "<vlan_ID>"
-    }'
-```
 
-1.  Once all the ports are attached to the respective VLANs, CAPP needs to configure the networking on the server's operating system.
+### APIs:
 
-2.  It will then GET the VRF and update it to reserve the IPAddressReservation.
+* * * * *
 
-```
-curl -X POST
--H 'Content-Type: application/json'
--H "X-Auth-Token: <API_TOKEN>"
-"https://api.equinix.com/metal/v1/projects/{id}/ips"
--d '{
-    "cidr": <integer>,
-    "network": "<ip_address>",
-    "type": "vrf",
-    "vrf_id": "<UUID>"
-}'
-```
+Following are some of the APIs provided by EM, that would be used:
+1. **Convert the port to a layer2 port**:
 
-1.  For each Machine, CAPP needs to pick an IP Address from the above range and assign it at the OS Level. In Phase 1, it will be done by CAPP itself (explained below) and later in phase-2, an IPAM Provider will be implemented as per CAPI standards.
+    a. https://deploy.equinix.com/developers/api/metal/#tag/Ports/operation/convertLayer2
+    b. Endpoint: https://api.equinix.com/metal/v1/ports/{id}/convert/layer-2
+    c. Requied Params : vnid (VLAN ID) 
 
-2.  Once it receives an IP Address that is non-conflicting, It will create subinterfaces to handle the tagged traffic over the VLAN and assign the IP Address on that sub-interface. Hybrid Bonded mode does not support untagged VLAN traffic or setting a Native VLAN.
+2. **Assign a port to a virtual network (VLAN)**:
 
-3.  In order to configure networking on the OS, user-data and cloud-config format could be utilized as shown below in the example.
+    a. https://deploy.equinix.com/developers/api/metal/#tag/Ports/operation/assignPort
 
-Example:
+    b. Endpoint: https://api.equinix.com/metal/v1/ports/{id}/assign
+Requied Params : vnid (VLAN ID)
+	c. Type: POST
+    d. Batch Mode
+    ```
+    curl -X POST \
+    -H "Content-Type: application/json" \
+    -H "X-Auth-Token: <API_TOKEN> " \
+    "https://api.equinix.com/metal/v1/ports/{id}/vlan-assignments/batches" \
+    -d '{
+        "vlan_assignments": [
+            {
+                "vlan": "string",
+                "state": "assigned"
+            },
+            {
+                "vlan": "string",
+                "state": "assigned"
+            },
+        ]
+    }'
+    ```
+
+3. **Device Events API**:
+ 	a. Endpoint:  `https://api.equinix.com/metal/v1/devices/<id>/events`
+
+4. **Remove port from the bond**
+    a. Endpoint: 
+    ```
+    curl -X POST \
+        -H "Content-Type: application/json" \
+        -H "X-Auth-Token: <API_TOKEN>" \
+        "https://api.equinix.com/metal/v1/ports/{id}/disbond" \
+        -d '{
+            "bulk_disable": false
+        }'
+    ```
+
+
+### User-Data Script for Network Configuration
+To configure the operating system (OS), create new sub-interfaces for handling VLAN-tagged traffic, and assign IP addresses to those sub-interfaces, a user-data script is required to run at the time of OS boot.
+Below is the user-data script that would be used (WIP)
 
 ```sh
-#cloud-config\
-write_files:\
-  - path: /etc/network/interfaces
 
-    append: true\
-    content: |
-
-      auto bond0.${VLAN_ID_0}\
-        iface bond0.${VLAN_ID_0} inet static
-
-        pre-up sleep 5\
-address 192.168.2.2\
-netmask 255.255.255.0\
-gateway 192.168.2.1\
-        vlan-raw-device bond0\
-runcmd:\
-  - systemctl restart networking
 ```
+### Layer 2 Networking Setup by the CAPP Operator
+When provisioning a metal node with Layer 2 networking, the Cluster API Provider (CAPP) Operator will perform the following steps:
+1. **Create a ConfigMap for IP Address Management**: The operator will create a new ConfigMap named <cluster_name-port_name> for each port to manage IP addresses. This ConfigMap is critical for tracking and allocating IP addresses as detailed in the *IP Address Management* section.
+2. **Select an Available IP Address**: CAPP will select an available IP address from the ConfigMap to be assigned to the machine, node, or server being provisioned.
+3. **Generate User-Data Script**: Using Go templates, CAPP will substitute the necessary variables in the user-data script, such as port name, IP address, gateway, and VXLAN. These values are provided by the user through the custom resource definition.
+4. **Submit Device Creation Request**: CAPP will then submit a request to create the device, incorporating the generated user-data script for OS and network configuration.
+5. **Verify Network Configuration**: After the machine or device is successfully provisioned, CAPP will poll the device events API to check whether the network configuration was successful. If not, it will handle the failure or timeout as needed.
+6. **Perform Post-Provisioning Network Operations**: Once the device is provisioned and the network configuration from the user-data script is in place, CAPP will make calls to the /ports API to perform additional operations. These include assigning the VLAN to the port, converting the port to Layer 2 if required, and other necessary configurations.
 
+### Explanation of send_user_state_event Function
+The send_user_state_event function in the script is responsible for sending status updates to the user_state_url fetched from Equinix Metadata API. The Metadata API is a service available on every Equinix Metal server instance that allows the server to access and share various data about itself. Here’s how the function works:
+1. **Retrieve the user_state_url**: The script fetches the user_state_url from the Equinix Metadata API. This URL is used to send custom user state events that report on the progress or status of the server's configuration.
+2. **Prepare the Event Data**: The function constructs a JSON payload containing the state, code, and message. The jq tool is used to create this JSON object dynamically, based on the input parameters.
+3. **Send the Event**: The constructed JSON data is then sent to the user_state_url via a POST request. This allows the system to log the state of the network configuration process (e.g., "running," "succeeded," or "failed") along with an appropriate status code and message.
+This approach enables tracking of the server's state during the boot process, particularly for critical operations like network configuration.
 
 
 ### IP Address Management:
 
 * * * * *
 
-In Phase-1, the Cluster API Provider Packet (CAPP) will manage IP allotment to individual machines using Kubernetes ConfigMaps. This approach allows for tracking allocations and assigning available IP addresses dynamically.
+In Phase-1, the Cluster API Provider Packet (CAPP) will manage IP allotment to individual machines using Kubernetes Configmaps. This approach allows for tracking allocations and assigning available IP addresses dynamically.
 
 Example:
 
