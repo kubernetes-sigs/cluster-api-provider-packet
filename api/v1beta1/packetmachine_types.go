@@ -86,6 +86,35 @@ type PacketMachineSpec struct {
 	// Tags is an optional set of tags to add to Packet resources managed by the Packet provider.
 	// +optional
 	Tags Tags `json:"tags,omitempty"`
+
+	// Ports is an optional set of configurations for configuring layer2 seetings in a machine. 
+	// +optional
+	Ports []Port `json:"ports,omitempty"`
+}
+// Port defines the Layer2(VLAN) Configuration that needs to be done on a port (eg: bond0)
+type Port struct {
+	// name of the port e.g bond0,eth0 and eth1 for 2 NIC servers.
+	Name string `json:"name"`
+	// port bonded or not.
+	Bonded bool `json:"bonded,omitempty"`
+	// convert port to layer 2. is false by default on new devices. changes result in /ports/id/convert/layer-[2|3] API calls
+	Layer2 bool `json:"layer2,omitempty"`
+	// IPAddress configurations associated with this port
+	// These are typically IP Reservations carved out of VRF.
+	IPAddresses []IPAddress `json:"ip_addresses,omitempty"`	
+}
+// IPAddress represents an IP address configuration on the Port.
+type IPAddress struct {
+   // IPAddressReservation to reserve for these cluster nodes.
+   // for eg: can be carved out of a VRF IP Range.
+   IPAddressReservation string `json:"ipAddressReservation"`	
+   // VLANs for EM API to find by vxlan, project, and metro match then attach to device. OS userdata template will also configure this VLAN on the bond device    
+   VXLANIDs []string `json:"vxlanIDs,omitempty"`
+   // UUID of VLANs to which this port should be assigned.
+   // Either VXLANID or VLANID should be provided.
+   VLANIDs []string  `json:"vlanIDs,omitempty"`
+   // IP Address of the gateway
+   Gateway string `json:"gateway,omitempty"`
 }
 
 // PacketMachineStatus defines the observed state of PacketMachine.

@@ -92,6 +92,63 @@ spec:
                 type: string
               os:
                 type: string
+              ports:
+                description: Ports is an optional set of configurations for configuring
+                  layer2 seetings in a machine.
+                items:
+                  description: 'Port defines the Layer2(VLAN) Configuration that needs
+                    to be done on a port (eg: bond0)'
+                  properties:
+                    bonded:
+                      description: port bonded or not.
+                      type: boolean
+                    ip_addresses:
+                      description: |-
+                        IPAddress configurations associated with this port
+                        These are typically IP Reservations carved out of VRF.
+                      items:
+                        description: IPAddress represents an IP address configuration
+                          on the Port.
+                        properties:
+                          gateway:
+                            description: IP Address of the gateway
+                            type: string
+                          ipAddressReservation:
+                            description: |-
+                              IPAddressReservation to reserve for these cluster nodes.
+                              for eg: can be carved out of a VRF IP Range.
+                            type: string
+                          vlanIDs:
+                            description: |-
+                              UUID of VLANs to which this port should be assigned.
+                              Either VXLANID or VLANID should be provided.
+                            items:
+                              type: string
+                            type: array
+                          vxlanIDs:
+                            description: VLANs for EM API to find by vxlan, project,
+                              and metro match then attach to device. OS userdata template
+                              will also configure this VLAN on the bond device
+                            items:
+                              type: string
+                            type: array
+                        required:
+                        - ipAddressReservation
+                        type: object
+                      type: array
+                    layer2:
+                      description: convert port to layer 2. is false by default on
+                        new devices. changes result in /ports/id/convert/layer-[2|3]
+                        API calls
+                      type: boolean
+                    name:
+                      description: name of the port e.g bond0,eth0 and eth1 for 2
+                        NIC servers.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
               providerID:
                 description: ProviderID is the unique identifier as specified by the
                   cloud provider.
