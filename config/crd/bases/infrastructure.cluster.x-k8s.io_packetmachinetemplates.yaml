@@ -90,7 +90,7 @@ spec:
                             bonded:
                               description: port bonded or not.
                               type: boolean
-                            ip_addresses:
+                            ipAddresses:
                               description: |-
                                 IPAddress configurations associated with this port
                                 These are typically IP Reservations carved out of VRF.

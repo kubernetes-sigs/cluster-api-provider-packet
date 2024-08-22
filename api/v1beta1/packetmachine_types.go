@@ -101,7 +101,7 @@ type Port struct {
 	Layer2 bool `json:"layer2,omitempty"`
 	// IPAddress configurations associated with this port
 	// These are typically IP Reservations carved out of VRF.
-	IPAddresses []IPAddress `json:"ip_addresses,omitempty"`	
+	IPAddresses []IPAddress `json:"ipAddresses,omitempty"`	
 }
 // IPAddress represents an IP address configuration on the Port.
 type IPAddress struct {
