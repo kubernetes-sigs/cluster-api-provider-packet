@@ -221,6 +221,110 @@ To configure the operating system (OS), create new sub-interfaces for handling V
 Below is the user-data script that would be used (WIP)
 
 ```sh
+#cloud-config
+
+# Write the provided script to a temporary file
+write_files:
+  - path: /tmp/final_configuration.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+
+      echo "Running final configuration commands"
+      apt-get update -qq
+      apt-get install -y -qq jq vlan
+
+      # Generate the network configuration and append it to /etc/network/interfaces for each VLAN-tagged sub-interface.
+      {
+        echo "{{ range $index, $vlan := .VLANs }}"
+        echo "auto {{ $vlan.PortName }}.{{ $vlan.ID }}"
+        echo "iface {{ $vlan.PortName }}.{{ $vlan.ID }} inet static"
+        echo " pre-up sleep 5"
+        echo " address {{ $vlan.IPAddress }}"
+        echo " netmask {{ $vlan.Netmask }}"
+        echo " gateway {{ $vlan.Gateway }}"
+        echo " vlan-raw-device {{ $vlan.PortName }}"
+        echo "{{ end }}"
+      } >> /etc/network/interfaces
+
+      echo "VLAN configuration appended to /etc/network/interfaces."
+
+      # Function to send user state events
+      url="$(curl -sf https://metadata.platformequinix.com/metadata | jq -r .user_state_url)"
+      send_user_state_event() {
+        local state="$1"
+        local code="$2"
+        local message="$3"
+        local data
+
+        data=$(jq -n --arg state "$state" --arg code "$code" --arg message "$message" \
+               '{state: $state, code: ($code | tonumber), message: $message}')
+        
+        curl -s -X POST -d "$data" "$url" || echo "Failed to send user state event"
+      }
+
+      send_user_state_event running 1000 "Configuring Network"
+
+      # Restart networking and check for failures
+      if ! systemctl restart networking; then
+        echo "Network restart failed" >&2
+        send_user_state_event failed 1002 "Network restart failed"
+        exit 1
+      fi
+
+      # Verify network configuration
+      verification_failed=false
+      {{ range $index, $vlan := .VLANs }}
+      if ip addr show {{ $vlan.PortName }}.{{ $vlan.ID }} | grep -q {{ $vlan.IPAddress }}; then
+        echo "Configuration for VLAN {{ $vlan.ID }} on {{ $vlan.PortName }} with IP {{ $vlan.IPAddress }} successful"
+      else
+        echo "Configuration for VLAN {{ $vlan.ID }} on {{ $vlan.PortName }} with IP {{ $vlan.IPAddress }} failed" >&2
+        verification_failed=true
+      fi
+      {{ end }}
+
+      if [ "$verification_failed" = true ]; then
+        send_user_state_event failed 1002 "Network configuration failed"
+        exit 1
+      else
+        send_user_state_event succeeded 1001 "Network configuration successful"
+      fi
+
+# Commands to run after the script is written
+runcmd:
+  - |
+      # Fetch metadata and set up network interfaces
+      metadata=$(curl -sf https://metadata.platformequinix.com/metadata)
+
+      # Extract MAC addresses for eth0 and eth1
+      mac_eth0=$(echo "$metadata" | jq -r '.network.interfaces[] | select(.name == "eth0") | .mac')
+      mac_eth1=$(echo "$metadata" | jq -r '.network.interfaces[] | select(.name == "eth1") | .mac')
+
+      # Function to find interface name by MAC address
+      find_interface_by_mac() {
+        local mac="$1"
+        for iface in $(ls /sys/class/net/); do
+          iface_mac=$(ethtool -P "$iface" 2>/dev/null | awk '{print $NF}')
+          if [ "$iface_mac" == "$mac" ]; then
+            echo "$iface"
+            return
+          fi
+        done
+        echo "Interface not found for MAC $mac" >&2
+        return 1
+      }
+
+      # Find interface names for eth0 and eth1
+      iface_eth0=$(find_interface_by_mac "$mac_eth0")
+      iface_eth1=$(find_interface_by_mac "$mac_eth1")
+
+      # Replace eth0 and eth1 in the script with the actual interface names
+      sed -i "s/eth0/${iface_eth0}/g" /tmp/final_configuration.sh
+      sed -i "s/eth1/${iface_eth1}/g" /tmp/final_configuration.sh
+
+      # Execute the modified script
+      bash /tmp/final_configuration.sh
 
 ```
 ### Layer 2 Networking Setup by the CAPP Operator
