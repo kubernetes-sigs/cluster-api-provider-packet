@@ -218,7 +218,7 @@ Requied Params : vnid (VLAN ID)
 
 ### User-Data Script for Network Configuration
 To configure the operating system (OS), create new sub-interfaces for handling VLAN-tagged traffic, and assign IP addresses to those sub-interfaces, a user-data script is required to run at the time of OS boot.
-Below is the user-data script that would be used (WIP)
+Below is the user-data script that would be used.
 
 ```sh
 #cloud-config
@@ -327,6 +327,9 @@ runcmd:
       bash /tmp/final_configuration.sh
 
 ```
+
+The CAPP will use go-templates to substitute the placeholders with appropriate values given by the user.
+
 ### Layer 2 Networking Setup by the CAPP Operator
 When provisioning a metal node with Layer 2 networking, the Cluster API Provider (CAPP) Operator will perform the following steps:
 1. **Create a ConfigMap for IP Address Management**: The operator will create a new ConfigMap named <cluster_name-port_name> for each port to manage IP addresses. This ConfigMap is critical for tracking and allocating IP addresses as detailed in the *IP Address Management* section.
