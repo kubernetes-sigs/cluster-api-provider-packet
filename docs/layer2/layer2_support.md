@@ -40,8 +40,8 @@ In Phase 1 of integrating Layer2 support, the Cluster API Provider (CAPP) will f
 Key objectives for this phase include:
 - Implementing Hybrid Bonded Mode and Hybrid Unbonded Modes to enhance Layer2 functionalities in CAPP.
 - Enabling CAPP to attach network ports to specific VLANs or VXLANs.
-- Allowing CAPP to configure Layer2 networking at the OS level on a metal node, including creating sub-interfaces and assigning IP addresses.
-- Ensuring CAPP can track the lifecycle of available IP addresses from VRF Range.
+- Allowing CAPP to configure Layer2 networking at the OS level on a metal node, including creating sub-interfaces, assigning IP addresses, and assigning VLANs.
+- Ensuring CAPP can track the lifecycle of available IP addresses from a specified range, which may be arbitrarily defined or sourced from VRF
 
 
 Non-Goals
@@ -152,7 +152,7 @@ spec:
         - ssh-rsa AAAAB3...your-public-key...
       operatingSystem: ubuntu_20_04
       ports:
-       - eth1:
+       - name: eth1
           bonded: false
           layer2: true
           ip_addresses:
