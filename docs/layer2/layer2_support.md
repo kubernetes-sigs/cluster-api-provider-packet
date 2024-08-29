@@ -93,9 +93,9 @@ type Port struct {
 }
 // IPAddress represents an IP address configuration 
 type IPAddress struct {
-    // IPAddressReservation to reserve for these cluster nodes.
+    // Addresses to reserve for these ports.
     // for eg: can be carved out of a VRF IP Range.
-    IPAddressReservation string `json:"ipAddressReservation"`	
+    Address string `json:"address"`
     // VLANs for EM API to find by vxlan, project, and metro match then attach to device. OS userdata template will also configure this VLAN on the bond device    
     VXLANIDs []string `json:"vxlan_ids,omitempty"`
     // UUID of VLANs to which this port should be assigned.
