@@ -98,13 +98,13 @@ spec:
                                 description: IPAddress represents an IP address configuration
                                   on the Port.
                                 properties:
+                                  address:
+                                    description: |-
+                                      Addresses to reserve for these ports.
+                                      for eg: can be carved out of a VRF IP Range.
+                                    type: string
                                   gateway:
                                     description: IP Address of the gateway
-                                    type: string
-                                  ipAddressReservation:
-                                    description: |-
-                                      IPAddressReservation to reserve for these cluster nodes.
-                                      for eg: can be carved out of a VRF IP Range.
                                     type: string
                                   vlanIDs:
                                     description: |-
@@ -122,7 +122,7 @@ spec:
                                       type: string
                                     type: array
                                 required:
-                                - ipAddressReservation
+                                - address
                                 type: object
                               type: array
                             layer2:
