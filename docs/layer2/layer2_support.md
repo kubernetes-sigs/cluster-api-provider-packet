@@ -67,6 +67,75 @@ In this model, users specify the IP ranges to be assigned to metal nodes on VLAN
 However, CAPP needs to be informed of the VLAN ID to attach the network port to the appropriate VLAN using the Equinix Metal (EM) API. This ensures that the network configuration aligns with the pre-existing infrastructure provided by the user.
 
 ### Custom Resource Changes:
+
+PacketCluster and PacketMachineTemplate will be extended to support the new network configurations for Layer2 networking.
+PacketCluster will have a new field called Networks, which will be a list of NetworkSpec objects. NetworkSpec objects define different networks that can be attached to the PacketCluster. Each NetworkSpec object will have the following fields:
+- Name: Name of the network, e.g., "storage VLAN" (optional)
+- Description: Description of the network, e.g., "Storage network for VMs" (optional)
+- IPAddresses: IP address range for the cluster network, e.g, Virtual Routing and Forwarding (VRF) . This field will be a list of strings, where each string represents an IP address range.
+- Assignment: Component responsible for allocating IP addresses to the machines, either cluster-api or dhcp.
+- Gateway: Default gateway for the network (optional)
+
+**PacketCluster**
+```go
+type PacketClusterSpec struct {
+  ...
+    // Networks is a list of network configurations for the PacketCluster
+    Networks []NetworkSpec `json:"networks,omitempty"`
+}
+
+// +kubebuilder:validation:Enum=cluster-api,dhcp
+type AssignmentType string
+
+const (
+    AssignmentClusterAPI AssignmentType = "cluster-api"
+    AssignmentDHCP       AssignmentType = "dhcp"
+)
+
+// NetworkSpec defines the network configuration for a PacketCluster
+type NetworkSpec struct {
+    // Name of the network, e.g. "storage VLAN", is optional
+    // +optional
+    Name        string         `json:"name,omitempty"`
+    // Description of the network, e.g. "Storage network", is optional
+    // +optional
+    Description string         `json:"description,omitempty"`
+    // IpAddressRange for the cluster network for eg: VRF IP Ranges
+    IPAddresses []string      `json:"ipAddresses,omitempty"`
+    // Assignment is component responsible for allocating IP addresses to the machines, either cluster-api or dhcp
+    Assignment  AssignmentType `json:"assignment,omitempty"`
+    // Default gateway for the network
+    // +optional
+    Gateway     string        `json:"gateway,omitempty"`
+}
+```
+
+The following example configures a network named "storage VLAN" with VXLAN ID 1000, IP address range 192.168.10.0/24, and a default gateway of
+192.168.10.1. The IP addresses are assigned by the cluster-api component.
+
+```yaml
+kind: PacketCluster
+metadata:
+  name: example-packet-cluster
+spec:
+  template:
+    spec:
+      facility: ny5
+      metro: ny
+      plan: c3.small.x86
+      billingCycle: hourly
+      project: your-packet-project-id
+      sshKeys:
+        - ssh-rsa AAAAB3...your-public-key...
+      operatingSystem: ubuntu_20_04
+      networks:
+        - name: Storage VLAN
+          description: Storage network for VMs
+          ipAddresses: ["192.168.0.0/16"]
+          assignment: cluster-api
+          gateway: "192.168.10.1"
+```
+
 **PacketMachineTemplate**
 
 To support enhanced layer2 networking capabilities, we propose adding a new Ports field under the spec of the *PacketMachineTemplate*. This field will allow users to define various network port configurations for an Equinix Metal Machine. Below is an outline of the proposed changes:
@@ -78,6 +147,9 @@ To support enhanced layer2 networking capabilities, we propose adding a new Port
    // List of Port Configurations on each Packet Machine
    // +optional
    Ports []Port `json:"ports"`
+   // List of Routes to be configured on the Packet Machine
+    // +optional
+   Routes      []RouteSpec     `json:"routes,omitempty"`
 }
 
 type Port struct {
@@ -89,7 +161,7 @@ type Port struct {
      Layer2 bool `json:"layer2"`
      // IPAddress configurations associated with this port
      // These are typically IP Reservations carved out of VRF.
-     IPAddresses []IPAddress `json:"ip_addresses,omitempty"`	
+     IPAddresses []IPAddress `json:"ip_addresses,omitempty"`
 }
 // IPAddress represents an IP address configuration 
 type IPAddress struct {
@@ -97,17 +169,23 @@ type IPAddress struct {
     // for eg: can be carved out of a VRF IP Range.
     Address string `json:"address"`
     // VLANs for EM API to find by vxlan, project, and metro match then attach to device. OS userdata template will also configure this VLAN on the bond device    
-    VXLANIDs []string `json:"vxlan_ids,omitempty"`
-    // UUID of VLANs to which this port should be assigned.
-    // Either VXLANID or VLANID should be provided.
-    VLANIDs []string  `vlan_ids,omitempty`
+    VXLANID int `json:"vxlanId,omitempty"`
     // IP Address of the gateway
     Gateway string `gateway,omitempty`
+    // Subnet Size for per machine
+    // +optional
+    SubnetSize string `json:"subnetSize,omitempty"`
+}
+
+// RouteSpec defines the static route configuration for a PacketMachine.
+type RouteSpec struct {
+    Destination string `json:"destination"`
+    Gateway     string `json:"gateway"`
 }
 ```
 
 For example:
-The following example configures the bond0 port of each node in a cluster to a hybrid bonded mode, attaches vxlan_id with ID 1000 and assigns each node an IP address from range "192.168.2.0/24" with gateway 192.168.2.1
+The following example configures the bond0 port of each node in a cluster to a hybrid bonded mode, attaches vxlanId with ID 1000 and assigns each node an IP address from range "192.168.10.0/24" with gateway 192.168.10.1
 
 ```yaml
 kind: PacketMachineTemplate
@@ -125,41 +203,20 @@ spec:
         - ssh-rsa AAAAB3...your-public-key...
       operatingSystem: ubuntu_20_04
       ports:
-       -  name: bond0
+        - name: bond0
           layer2: false
           ip_addresses:
-            - ipAddressReservation: "192.168.2.0/24"
-              vxlan_ids: [1000]
-              gateway: "192.168.2.1"
-```
-
-The following example configures the eth1 port of each node in a cluster to a hybrid unbonded mode, removed the port from the bond, converts the port into a layer mode i.e attaches vxlan_id with ID 1001 and assigns each node an IP address from range "10.50.10.0/24" with gateway 10.50.10.1
-
-```yaml
-
-kind: PacketMachineTemplate
-metadata:
-  name: example-packet-machine-template
-spec:
-  template:
-    spec:
-      facility: ny5
-      metro: ny
-      plan: c3.small.x86
-      billingCycle: hourly
-      project: your-packet-project-id
-      sshKeys:
-        - ssh-rsa AAAAB3...your-public-key...
-      operatingSystem: ubuntu_20_04
-      ports:
-       - name: eth1
-          bonded: false
-          layer2: true
-          ip_addresses:
-            - ipAddressReservation: "10.50.10.0/24"
-              vxlan_ids: [1001]
-              gateway: "10.50.10.1"
-
+            - address: "192.168.10.0/24"
+              vxlanId: 1000
+              gateway: "192.168.10.1"
+              subnetSize: "/32"
+            - address: "192.168.20.0/24"
+              vxlanId: 1001
+              gateway: "192.168.11.1"
+              subnetSize: "/29"
+      routes:
+        - destination: "10.40.0.0/16"
+          gateway: "192.168.10.1"
 ```
 
 ### APIs:
@@ -219,6 +276,8 @@ Requied Params : vnid (VLAN ID)
 ### User-Data Script for Network Configuration
 To configure the operating system (OS), create new sub-interfaces for handling VLAN-tagged traffic, and assign IP addresses to those sub-interfaces, a user-data script is required to run at the time of OS boot.
 Below is the user-data script that would be used.
+
+// TODO(rahuls): Add route configuration in the user-data script
 
 ```sh
 #cloud-config
@@ -359,7 +418,7 @@ The CAPP will use go-templates to substitute the placeholders with appropriate v
 
 ### Layer 2 Networking Setup by the CAPP Operator
 When provisioning a metal node with Layer 2 networking, the Cluster API Provider (CAPP) Operator will perform the following steps:
-1. **Create a ConfigMap for IP Address Management**: The operator will create a new ConfigMap named <cluster_name-port_name> for each port to manage IP addresses. This ConfigMap is critical for tracking and allocating IP addresses as detailed in the *IP Address Management* section.
+1. **Create a ConfigMap for IP Address Management**: The PacketMachine operator will create a new ConfigMap named <cluster_name-ip-allocations> This ConfigMap is critical for tracking and allocating IP addresses as detailed in the *IP Address Management* section.
 2. **Select an Available IP Address**: CAPP will select an available IP address from the ConfigMap to be assigned to the machine, node, or server being provisioned.
 3. **Generate User-Data Script**: Using Go templates, CAPP will substitute the necessary variables in the user-data script, such as port name, IP address, gateway, and VXLAN. These values are provided by the user through the custom resource definition.
 4. **Submit Device Creation Request**: CAPP will then submit a request to create the device, incorporating the generated user-data script for OS and network configuration.
@@ -389,11 +448,17 @@ metadata:
   name: capp-ip-allocations
   namespace: cluster-api-provider-packet-system
 Data:
-  cidr: 192.168.2.0/24
-  allocations: |
+  "da-1000-192.168.10.0/24": |
     {
-     "machine1": "192.168.2.2", 
-     "machine2": "192.168.2.3" 
+      "machine-1": "192.168.10.2",
+      "machine-2": "192.168.10.3",
+      "machine-3": "192.168.10.4"
+    }
+  "da-1001-192.168.20.0/24": |
+    {
+      "machine-1": "192.168.20.2",
+      "machine-2": "192.168.20.3",
+      "machine-3": "192.168.20.4"
     }
 ```
 
