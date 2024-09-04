@@ -110,8 +110,10 @@ type NetworkSpec struct {
 }
 ```
 
-The following example configures a network named "storage VLAN" with VXLAN ID 1000, IP address range 192.168.10.0/24, and a default gateway of
-192.168.10.1. The IP addresses are assigned by the cluster-api component.
+The following example configures a network named "storage VLAN" with VXLAN ID 1000, IP address range 10.60.10.0/24, and a default gateway of
+10.60.10.1. The IP addresses are assigned to the indvidual machines by the cluster-api component.
+
+// TODO: Do we need to add the VLAN and gateway field in the NetworkSpec?
 
 ```yaml
 kind: PacketCluster
@@ -137,7 +139,7 @@ spec:
 
 **PacketMachineTemplate**
 
-To support enhanced layer2 networking capabilities, we propose adding a new Ports field under the spec of the *PacketMachineTemplate*. This field will allow users to define various network port configurations for an Equinix Metal Machine. Below is an outline of the proposed changes:
+To support enhanced layer2 networking capabilities, we propose adding a new Ports and Routes field under the spec of the *PacketMachineTemplate*. These fields will allow users to define various network port configurations and add static routes for an Equinix Metal Machine. Below is an outline of the proposed changes:
 
 ```go
 // PacketMachineSpec defines the desired state of PacketMachine.
@@ -184,6 +186,8 @@ type RouteSpec struct {
 ```
 
 For example:
+In the below example, we have defined two PacketMachineTemplates, each with a different IP address range and VLAN ID. The first template has an IP address range of 10.60.10.0/24 with a VXLAN ID of 1000, while the second template has an IP address range of 10.60.20.0/24 with a VXLAN ID of 1001. Both templates have a static route defined for the destination 10.60.0.0/24 with the gateway set to the respective gateway IP address.
+
 
 ```yaml
 kind: PacketMachineTemplate
