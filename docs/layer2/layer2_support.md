@@ -74,7 +74,7 @@ PacketCluster will have a new field called Networks, which will be a list of Net
 - Description: Description of the network, e.g., "Storage network for VMs" (optional)
 - IPAddresses: IP address range for the cluster network, e.g, Virtual Routing and Forwarding (VRF) . This field will be a list of strings, where each string represents an IP address range.
 - Assignment: Component responsible for allocating IP addresses to the machines, either cluster-api or dhcp.
-- Gateway: Default gateway for the network (optional)
+- Gateway: Default gateway for the network (optional) (TODO: do we need this?)
 
 **PacketCluster**
 ```go
@@ -131,9 +131,8 @@ spec:
       networks:
         - name: Storage VLAN
           description: Storage network for VMs
-          ipAddresses: ["192.168.0.0/16"]
+          ipAddresses: ["10.60.0.0/16"]
           assignment: cluster-api
-          gateway: "192.168.10.1"
 ```
 
 **PacketMachineTemplate**
@@ -185,7 +184,6 @@ type RouteSpec struct {
 ```
 
 For example:
-The following example configures the bond0 port of each node in a cluster to a hybrid bonded mode, attaches vxlanId with ID 1000 and assigns each node an IP address from range "192.168.10.0/24" with gateway 192.168.10.1
 
 ```yaml
 kind: PacketMachineTemplate
@@ -206,17 +204,39 @@ spec:
         - name: bond0
           layer2: false
           ip_addresses:
-            - address: "192.168.10.0/24"
+            - address: "10.60.10.0/24"
               vxlanId: 1000
-              gateway: "192.168.10.1"
+              gateway: "10.60.10.1"
               subnetSize: "/32"
-            - address: "192.168.20.0/24"
-              vxlanId: 1001
-              gateway: "192.168.11.1"
-              subnetSize: "/29"
       routes:
-        - destination: "10.40.0.0/16"
-          gateway: "192.168.10.1"
+        - destination: "10.60.0.0/16"
+          gateway: "10.60.10.1"
+
+kind: PacketMachineTemplate
+metadata:
+  name: example-packet-machine-template-1
+spec:
+  template:
+    spec:
+      facility: ny5
+      metro: ny
+      plan: c3.small.x86
+      billingCycle: hourly
+      project: your-packet-project-id
+      sshKeys:
+        - ssh-rsa AAAAB3...your-public-key...
+      operatingSystem: ubuntu_20_04
+      ports:
+        - name: bond0
+          layer2: false
+          ip_addresses:
+            - address: "10.60.20.0/24"
+              vxlanId: 1001
+              gateway: "10.60.20.1"
+              subnetSize: "/32"
+      routes:
+        - destination: "10.60.0.0/16"
+          gateway: "10.60.20.1"
 ```
 
 ### APIs:
@@ -432,6 +452,10 @@ The send_user_state_event function in the script is responsible for sending stat
 3. **Send the Event**: The constructed JSON data is then sent to the user_state_url via a POST request. This allows the system to log the state of the network configuration process (e.g., "running," "succeeded," or "failed") along with an appropriate status code and message.
 This approach enables tracking of the server's state during the boot process, particularly for critical operations like network configuration.
 
+### Note: 
+1. If you want to connect the VLANs that are in different metros, you need to enable [Backend Transfer](https://deploy.equinix.com/developers/docs/metal/networking/backend-transfer/)
+
+2. If you want to use your own IP address range, and the VLANs are in the same metro, you can use the VRF Metal Gateway to connect the VLANs and allow CAPP to assign IP addresses from the specified range.
 
 ### IP Address Management:
 
@@ -448,19 +472,25 @@ metadata:
   name: capp-ip-allocations
   namespace: cluster-api-provider-packet-system
 Data:
-  "da-1000-192.168.10.0/24": |
+  "da-1000-10.60.10.0/24": |
     {
-      "machine-1": "192.168.10.2",
-      "machine-2": "192.168.10.3",
-      "machine-3": "192.168.10.4"
+      "machine-1": "10.60.10.2",
+      "machine-2": "10.60.10.3",
+      "machine-3": "10.60.10.4"
     }
-  "da-1001-192.168.20.0/24": |
+  "da-1001-10.60.20.0/24": |
     {
-      "machine-1": "192.168.20.2",
-      "machine-2": "192.168.20.3",
-      "machine-3": "192.168.20.4"
+      "machine-1": "10.60.20.2",
+      "machine-2": "10.60.20.3",
+      "machine-3": "10.60.20.4"
     }
 ```
 
-In the example above, capp-ip-allocations ConfigMap in the cluster-api-provider-packet-system namespace tracks IP allocations. The cidr field specifies the IP range, while the allocations field is a JSON object mapping machine names to their allocated IP addresses.
+1. In the example above, capp-ip-allocations ConfigMap in the cluster-api-provider-packet-system namespace tracks IP allocations.
+2. When a new machine is provisioned, CAPP will select an available IP address from the ConfigMap based on the specified IP range and assign it to the machine. The ConfigMap is updated to reflect the allocation, ensuring that IP addresses are not reused or double-assigned.
+3. The configmap entry is named using the format "metro-vlan-id-ip-range", where vlan-id is the VLAN ID and ip-range is the IP address range. The value is a JSON object with machine names as keys and IP addresses as values.
+4. When a machine is deleted or decommissioned, CAPP will remove the corresponding entry from the ConfigMap, making the IP address available for future allocations.
+5. The lifecycle of ConfigMap is tied to the PacketCluster, ensuring that IP address allocations are managed consistently across the cluster.
+The ConfigMap approach provides a simple and effective way to manage IP address allocations within a Kubernetes cluster, ensuring that IP addresses are tracked and assigned correctly.
+6. The lifecycle management of IP addresses is crucial for maintaining network integrity and avoiding conflicts or address exhaustion. By using ConfigMaps to track IP allocations, CAPP can efficiently manage IP addresses across multiple machines and ensure that each machine is assigned a unique and available IP address.
 
