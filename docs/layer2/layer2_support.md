@@ -188,6 +188,7 @@ type RouteSpec struct {
 For example:
 In the below example, we have defined two PacketMachineTemplates, each with a different IP address range and VLAN ID. The first template has an IP address range of 10.60.10.0/24 with a VXLAN ID of 1000, while the second template has an IP address range of 10.60.20.0/24 with a VXLAN ID of 1001. Both templates have a static route defined for the destination 10.60.0.0/24 with the gateway set to the respective gateway IP address.
 
+Ref: https://deploy.equinix.com/developers/guides/connecting-vlans-via-vrf/
 
 ```yaml
 kind: PacketMachineTemplate
