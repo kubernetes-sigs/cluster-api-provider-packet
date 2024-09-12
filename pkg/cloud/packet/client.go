@@ -180,6 +180,26 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*metal
 
 	serverCreateOpts := metal.CreateDeviceRequest{}
 
+	var sshKeyInput []metal.SSHKeyInput
+	if len(packetMachineSpec.SSHKeys) > 0 {
+		for _, key := range packetMachineSpec.SSHKeys {
+			sshKeyInput = append(sshKeyInput, metal.SSHKeyInput{
+				Label: metal.PtrString(fmt.Sprintf("cluster-api-provider-packet-%s", req.MachineScope.Name())),
+				Key:   metal.PtrString(key),
+			})
+		}
+	}
+
+	/*
+		var sshKeyInput metal.SSHKeyInput
+				if len(packetMachineSpec.SSHKeys) > 0 {
+					sshKeyInput = metal.SSHKeyInput{
+						Label: metal.PtrString("cluster-api-provider-packet"),
+						Key:   metal.PtrString(packetMachineSpec.SSHKeys[0]),
+					}
+				}
+	*/
+
 	if facility != "" {
 		serverCreateOpts.DeviceCreateInFacilityInput = &metal.DeviceCreateInFacilityInput{
 			Hostname:        &hostname,
@@ -188,6 +208,7 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*metal
 			Plan:            req.MachineScope.PacketMachine.Spec.MachineType,
 			OperatingSystem: req.MachineScope.PacketMachine.Spec.OS,
 			IpxeScriptUrl:   &req.MachineScope.PacketMachine.Spec.IPXEUrl,
+			SshKeys:         sshKeyInput,
 			Tags:            tags,
 			Userdata:        &userData,
 		}
@@ -199,6 +220,7 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*metal
 			Plan:            req.MachineScope.PacketMachine.Spec.MachineType,
 			OperatingSystem: req.MachineScope.PacketMachine.Spec.OS,
 			IpxeScriptUrl:   &req.MachineScope.PacketMachine.Spec.IPXEUrl,
+			SshKeys:         sshKeyInput,
 			Tags:            tags,
 			Userdata:        &userData,
 		}
