@@ -73,8 +73,7 @@ PacketCluster will have a new field called Networks, which will be a list of Net
 - Name: Name of the network, e.g., "storage VLAN" (optional)
 - Description: Description of the network, e.g., "Storage network for VMs" (optional)
 - IPAddresses: IP address range for the cluster network, e.g, Virtual Routing and Forwarding (VRF) . This field will be a list of strings, where each string represents an IP address range.
-- Assignment: Component responsible for allocating IP addresses to the machines, either cluster-api or dhcp.
-- Gateway: Default gateway for the network (optional) (TODO: do we need this?)
+- Assignment: Component responsible for allocating IP addresses to the machines, either cluster-api or dhcp or some other component.
 
 **PacketCluster**
 ```go
@@ -104,16 +103,11 @@ type NetworkSpec struct {
     IPAddresses []string      `json:"ipAddresses,omitempty"`
     // Assignment is component responsible for allocating IP addresses to the machines, either cluster-api or dhcp
     Assignment  AssignmentType `json:"assignment,omitempty"`
-    // Default gateway for the network
-    // +optional
-    Gateway     string        `json:"gateway,omitempty"`
 }
 ```
 
 The following example configures a network named "storage VLAN" with VXLAN ID 1000, IP address range 10.60.10.0/24, and a default gateway of
 10.60.10.1. The IP addresses are assigned to the indvidual machines by the cluster-api component.
-
-// TODO: Do we need to add the VLAN and gateway field in the NetworkSpec?
 
 ```yaml
 kind: PacketCluster
@@ -160,22 +154,25 @@ type Port struct {
      Bonded bool `json:"bonded,omitempty"`
      // convert port to layer 2. is false by default on new devices. changes result in /ports/id/convert/layer-[2|3] API calls
      Layer2 bool `json:"layer2"`
-     // IPAddress configurations associated with this port
-     // These are typically IP Reservations carved out of VRF.
-     IPAddresses []IPAddress `json:"ip_addresses,omitempty"`
+     // Network configurations for the port
+     Network []Network `json:"networks"`
 }
 // IPAddress represents an IP address configuration 
-type IPAddress struct {
+type Network struct {
     // Addresses to reserve for these ports.
     // for eg: can be carved out of a VRF IP Range.
     Address string `json:"address"`
-    // VLANs for EM API to find by vxlan, project, and metro match then attach to device. OS userdata template will also configure this VLAN on the bond device    
-    VXLANID int `json:"vxlanId,omitempty"`
-    // IP Address of the gateway
-    Gateway string `gateway,omitempty`
-    // Subnet Size for per machine
+    // VLANs for EM API to find by vxlan, project, and metro match then attach to device. OS userdata template will also configure this VLAN on the bond device
+    VXLAN int `json:"vxlan,omitempty"`
+    // AssignmentRange is the range of IP addresses to assign to the machine from the specified IP address range.
+    // for eg: if the IP address range is 10.60.10.0/24 , the assignment range can be '10.60.10.2-10.60.10.8'
+    // If not specified, the first available IP address from the IP address range will be assigned.
+    // This is useful when you want to reserve some IP addresses for other purposes for eg Gateways, DNS etc.
     // +optional
-    SubnetSize string `json:"subnetSize,omitempty"`
+    AssignmentRange string `json:"assignmentRange,omitempty"`
+    // AddressType is the type of address to assign to the machine. It can be either Internal or External.
+    // kubebuilder:validation:Enum=Internal;External
+    AddressType string `json:"addressType,omitempty"`
 }
 
 // RouteSpec defines the static route configuration for a PacketMachine.
@@ -208,11 +205,11 @@ spec:
       ports:
         - name: bond0
           layer2: false
-          ip_addresses:
-            - address: "10.60.10.0/24"
-              vxlanId: 1000
-              gateway: "10.60.10.1"
-              subnetSize: "/32"
+          networks:
+          - address: "10.60.10.0/24"
+            vxlan: 1000
+            assignmentRange: "10.60.10.2-10.60.10.8"
+            addressType: "Internal"
       routes:
         - destination: "10.60.0.0/16"
           gateway: "10.60.10.1"
@@ -234,11 +231,11 @@ spec:
       ports:
         - name: bond0
           layer2: false
-          ip_addresses:
-            - address: "10.60.20.0/24"
-              vxlanId: 1001
-              gateway: "10.60.20.1"
-              subnetSize: "/32"
+          networks:
+          - address: "10.60.20.0/24"
+            vxlan: 1001
+            assignmentRange: "10.60.20.2-10.60.20.8"
+            addressType: "Internal"
       routes:
         - destination: "10.60.0.0/16"
           gateway: "10.60.20.1"
