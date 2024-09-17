@@ -76,15 +76,15 @@ type PacketClusterSpec struct {
 type NetworkSpec struct {
     // Name of the network, e.g. "storage VLAN", is optional
     // +optional
-    Name        string         `json:"name,omitempty"`
+    Name        string         	`json:"name,omitempty"`
     // Description of the network, e.g. "Storage network", is optional
     // +optional
-    Description string         `json:"description,omitempty"`
-    // IpAddressRange for the cluster network for eg: VRF IP Ranges
-    IPAddresses []string      `json:"ipAddresses,omitempty"`
+    Description string         	`json:"description,omitempty"`
+    // AddressRange for the cluster network for eg: VRF IP Ranges
+    Addresses []string      	`json:"addresses,omitempty"`
     // Assignment is component responsible for allocating IP addresses to the machines, either cluster-api or dhcp
 	// +kubebuilder:validation:Enum=cluster-api;dhcp
-    Assignment  AssignmentType `json:"assignment,omitempty"`
+    Assignment  AssignmentType 	`json:"assignment,omitempty"`
 }
 
 // PacketClusterStatus defines the observed state of PacketCluster.

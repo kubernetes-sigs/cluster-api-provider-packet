@@ -80,6 +80,12 @@ spec:
                   description: NetworkSpec defines the network configuration for a
                     PacketCluster
                   properties:
+                    addresses:
+                      description: 'AddressRange for the cluster network for eg: VRF
+                        IP Ranges'
+                      items:
+                        type: string
+                      type: array
                     assignment:
                       description: Assignment is component responsible for allocating
                         IP addresses to the machines, either cluster-api or dhcp
@@ -91,12 +97,6 @@ spec:
                       description: Description of the network, e.g. "Storage network",
                         is optional
                       type: string
-                    ipAddresses:
-                      description: 'IpAddressRange for the cluster network for eg:
-                        VRF IP Ranges'
-                      items:
-                        type: string
-                      type: array
                     name:
                       description: Name of the network, e.g. "storage VLAN", is optional
                       type: string
