@@ -90,6 +90,9 @@ type PacketMachineSpec struct {
 	// Ports is an optional set of configurations for configuring layer2 seetings in a machine. 
 	// +optional
 	Ports []Port `json:"ports,omitempty"`
+	// List of Routes to be configured on the Packet Machine
+    // +optional
+	Routes      []RouteSpec     `json:"routes,omitempty"`
 }
 // Port defines the Layer2(VLAN) Configuration that needs to be done on a port (eg: bond0)
 type Port struct {
@@ -99,22 +102,31 @@ type Port struct {
 	Bonded bool `json:"bonded,omitempty"`
 	// convert port to layer 2. is false by default on new devices. changes result in /ports/id/convert/layer-[2|3] API calls
 	Layer2 bool `json:"layer2,omitempty"`
-	// IPAddress configurations associated with this port
-	// These are typically IP Reservations carved out of VRF.
-	IPAddresses []IPAddress `json:"ipAddresses,omitempty"`	
+	// Network configurations for the port
+    Networks []Network `json:"networks"`	
 }
-// IPAddress represents an IP address configuration on the Port.
-type IPAddress struct {
-   // Addresses to reserve for these ports.
-   // for eg: can be carved out of a VRF IP Range.
-   Address string `json:"address"`	
-   // VLANs for EM API to find by vxlan, project, and metro match then attach to device. OS userdata template will also configure this VLAN on the bond device    
-   VXLANIDs []string `json:"vxlanIDs,omitempty"`
-   // UUID of VLANs to which this port should be assigned.
-   // Either VXLANID or VLANID should be provided.
-   VLANIDs []string  `json:"vlanIDs,omitempty"`
-   // IP Address of the gateway
-   Gateway string `json:"gateway,omitempty"`
+
+type Network struct {
+    // network ip address range to reserve for these ports.
+    // for eg: can be carved out of a VRF IP Range.
+    Address string `json:"address"`
+    // VLANs for EM API to find by vxlan, project, and metro match then attach to device. OS userdata template will also configure this VLAN on the bond device
+    VXLAN int `json:"vxlan,omitempty"`
+    // AssignmentRange is the range of IP addresses to assign to the machine from the specified IP address range.
+    // for eg: if the IP address range is 10.60.10.0/24 , the assignment range can be '10.60.10.2-10.60.10.8'
+    // If not specified, the first available IP address from the IP address range will be assigned.
+    // This is useful when you want to reserve some IP addresses for other purposes for eg Gateways, DNS etc.
+    // +optional
+    AssignmentRange string `json:"assignmentRange,omitempty"`
+    // AddressType is the type of address to assign to the machine. It can be either Internal or External.
+    // kubebuilder:validation:Enum=Internal;External
+    AddressType string `json:"addressType,omitempty"`
+}
+
+// RouteSpec defines the static route configuration for a PacketMachine.
+type RouteSpec struct {
+    Destination string `json:"destination"`
+    Gateway     string `json:"gateway"`
 }
 
 // PacketMachineStatus defines the observed state of PacketMachine.

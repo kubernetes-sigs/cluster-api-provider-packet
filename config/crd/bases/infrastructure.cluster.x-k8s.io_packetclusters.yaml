@@ -73,6 +73,35 @@ spec:
               metro:
                 description: Metro represents the Packet metro for this cluster
                 type: string
+              networks:
+                description: Networks is a list of network configurations for the
+                  PacketCluster
+                items:
+                  description: NetworkSpec defines the network configuration for a
+                    PacketCluster
+                  properties:
+                    assignment:
+                      description: Assignment is component responsible for allocating
+                        IP addresses to the machines, either cluster-api or dhcp
+                      enum:
+                      - cluster-api
+                      - dhcp
+                      type: string
+                    description:
+                      description: Description of the network, e.g. "Storage network",
+                        is optional
+                      type: string
+                    ipAddresses:
+                      description: 'IpAddressRange for the cluster network for eg:
+                        VRF IP Ranges'
+                      items:
+                        type: string
+                      type: array
+                    name:
+                      description: Name of the network, e.g. "storage VLAN", is optional
+                      type: string
+                  type: object
+                type: array
               projectID:
                 description: ProjectID represents the Packet Project where this cluster
                   will be placed into

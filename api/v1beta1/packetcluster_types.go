@@ -35,6 +35,13 @@ const (
 	KUBEVIPID = "KUBE_VIP"
 )
 
+type AssignmentType string
+
+const (
+    AssignmentClusterAPI AssignmentType = "cluster-api"
+    AssignmentDHCP       AssignmentType = "dhcp"
+)
+
 // VIPManagerType describes if the VIP will be managed by CPEM or kube-vip or Equinix Metal Load Balancer.
 type VIPManagerType string
 
@@ -60,6 +67,24 @@ type PacketClusterSpec struct {
 	// +kubebuilder:validation:Enum=CPEM;KUBE_VIP;EMLB
 	// +kubebuilder:default:=CPEM
 	VIPManager VIPManagerType `json:"vipManager"`
+
+	// Networks is a list of network configurations for the PacketCluster
+    Networks []NetworkSpec `json:"networks,omitempty"`
+}
+
+// NetworkSpec defines the network configuration for a PacketCluster
+type NetworkSpec struct {
+    // Name of the network, e.g. "storage VLAN", is optional
+    // +optional
+    Name        string         `json:"name,omitempty"`
+    // Description of the network, e.g. "Storage network", is optional
+    // +optional
+    Description string         `json:"description,omitempty"`
+    // IpAddressRange for the cluster network for eg: VRF IP Ranges
+    IPAddresses []string      `json:"ipAddresses,omitempty"`
+    // Assignment is component responsible for allocating IP addresses to the machines, either cluster-api or dhcp
+	// +kubebuilder:validation:Enum=cluster-api;dhcp
+    Assignment  AssignmentType `json:"assignment,omitempty"`
 }
 
 // PacketClusterStatus defines the observed state of PacketCluster.

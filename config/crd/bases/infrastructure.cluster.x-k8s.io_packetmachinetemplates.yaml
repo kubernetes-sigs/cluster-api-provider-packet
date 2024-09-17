@@ -90,41 +90,6 @@ spec:
                             bonded:
                               description: port bonded or not.
                               type: boolean
-                            ipAddresses:
-                              description: |-
-                                IPAddress configurations associated with this port
-                                These are typically IP Reservations carved out of VRF.
-                              items:
-                                description: IPAddress represents an IP address configuration
-                                  on the Port.
-                                properties:
-                                  address:
-                                    description: |-
-                                      Addresses to reserve for these ports.
-                                      for eg: can be carved out of a VRF IP Range.
-                                    type: string
-                                  gateway:
-                                    description: IP Address of the gateway
-                                    type: string
-                                  vlanIDs:
-                                    description: |-
-                                      UUID of VLANs to which this port should be assigned.
-                                      Either VXLANID or VLANID should be provided.
-                                    items:
-                                      type: string
-                                    type: array
-                                  vxlanIDs:
-                                    description: VLANs for EM API to find by vxlan,
-                                      project, and metro match then attach to device.
-                                      OS userdata template will also configure this
-                                      VLAN on the bond device
-                                    items:
-                                      type: string
-                                    type: array
-                                required:
-                                - address
-                                type: object
-                              type: array
                             layer2:
                               description: convert port to layer 2. is false by default
                                 on new devices. changes result in /ports/id/convert/layer-[2|3]
@@ -134,14 +99,62 @@ spec:
                               description: name of the port e.g bond0,eth0 and eth1
                                 for 2 NIC servers.
                               type: string
+                            networks:
+                              description: Network configurations for the port
+                              items:
+                                properties:
+                                  address:
+                                    description: |-
+                                      network ip address range to reserve for these ports.
+                                      for eg: can be carved out of a VRF IP Range.
+                                    type: string
+                                  addressType:
+                                    description: |-
+                                      AddressType is the type of address to assign to the machine. It can be either Internal or External.
+                                      kubebuilder:validation:Enum=Internal;External
+                                    type: string
+                                  assignmentRange:
+                                    description: |-
+                                      AssignmentRange is the range of IP addresses to assign to the machine from the specified IP address range.
+                                      for eg: if the IP address range is 10.60.10.0/24 , the assignment range can be '10.60.10.2-10.60.10.8'
+                                      If not specified, the first available IP address from the IP address range will be assigned.
+                                      This is useful when you want to reserve some IP addresses for other purposes for eg Gateways, DNS etc.
+                                    type: string
+                                  vxlan:
+                                    description: VLANs for EM API to find by vxlan,
+                                      project, and metro match then attach to device.
+                                      OS userdata template will also configure this
+                                      VLAN on the bond device
+                                    type: integer
+                                required:
+                                - address
+                                type: object
+                              type: array
                           required:
                           - name
+                          - networks
                           type: object
                         type: array
                       providerID:
                         description: ProviderID is the unique identifier as specified
                           by the cloud provider.
                         type: string
+                      routes:
+                        description: List of Routes to be configured on the Packet
+                          Machine
+                        items:
+                          description: RouteSpec defines the static route configuration
+                            for a PacketMachine.
+                          properties:
+                            destination:
+                              type: string
+                            gateway:
+                              type: string
+                          required:
+                          - destination
+                          - gateway
+                          type: object
+                        type: array
                       sshKeys:
                         items:
                           type: string
