@@ -33,6 +33,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-packet/internal/layer2"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
 	"sigs.k8s.io/cluster-api-provider-packet/version"
 )
@@ -164,8 +165,30 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*metal
 		return nil, fmt.Errorf("error executing userdata template: %w", err)
 	}
 
-	userData = stringWriter.String()
+	var layer2UserData string	
+	// check if layer2 is enabled and add the layer2 user data
+	if packetMachineSpec.NetworkPorts != nil {
+		layer2Config := layer2.NewConfig()
+		for _, port := range packetMachineSpec.NetworkPorts {
+			// TODO: check for AssignmentType in ClusterSpec for this network.
+			for _, network := range port.Networks {
+				// TODO: select the IPAddress for this machine.
+				layer2Config.AddPortNetwork(port.Name, network.VXLAN, "", network.Netmask)
+			}
+		}
+		layer2UserData, err = layer2Config.GetTemplate()
+		if err != nil {
+			return nil, fmt.Errorf("error generating layer2 user data: %w", err)
+		}
 
+		// use multipart mime to send both: raw user data and layer2 user data
+		userData, err = layer2.GenerateInitDocument(stringWriter.String(), layer2UserData)
+		if err != nil {
+			return nil, fmt.Errorf("error generating multipart mime document for user-data: %w", err)
+		}
+	} else {
+		userData = stringWriter.String()
+	}
 	// If Metro or Facility are specified at the Machine level, we ignore the
 	// values set at the Cluster level
 	facility := packetClusterSpec.Facility

@@ -35,6 +35,7 @@ const (
 	KUBEVIPID = "KUBE_VIP"
 )
 
+// AssignmentType describes the component responsible for allocating IP addresses to the machines.
 type AssignmentType string
 
 const (
@@ -72,7 +73,7 @@ type PacketClusterSpec struct {
     Networks []NetworkSpec `json:"networks,omitempty"`
 }
 
-// NetworkSpec defines the network configuration for a PacketCluster
+// NetworkSpec defines the network configuration for a PacketCluster.
 type NetworkSpec struct {
     // Name of the network, e.g. "storage VLAN", is optional
     // +optional

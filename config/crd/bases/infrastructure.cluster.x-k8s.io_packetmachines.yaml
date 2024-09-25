@@ -93,11 +93,11 @@ spec:
               os:
                 type: string
               ports:
-                description: Ports is an optional set of configurations for configuring
-                  layer2 seetings in a machine.
+                description: NetworkPorts is an optional set of configurations for
+                  configuring layer2 seetings in a machine.
                 items:
                   description: 'Port defines the Layer2(VLAN) Configuration that needs
-                    to be done on a port (eg: bond0)'
+                    to be done on a port (eg: bond0).'
                   properties:
                     bonded:
                       description: port bonded or not.
@@ -114,6 +114,8 @@ spec:
                     networks:
                       description: Network configurations for the port
                       items:
+                        description: Network defines the network configuration for
+                          a port.
                         properties:
                           address:
                             description: |-

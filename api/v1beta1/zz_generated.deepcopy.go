@@ -243,17 +243,27 @@ func (in *PacketMachineSpec) DeepCopyInto(out *PacketMachineSpec) {
 		*out = make(Tags, len(*in))
 		copy(*out, *in)
 	}
-	if in.Ports != nil {
-		in, out := &in.Ports, &out.Ports
-		*out = make([]Port, len(*in))
+	if in.NetworkPorts != nil {
+		in, out := &in.NetworkPorts, &out.NetworkPorts
+		*out = make([]*Port, len(*in))
 		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
+			if (*in)[i] != nil {
+				in, out := &(*in)[i], &(*out)[i]
+				*out = new(Port)
+				(*in).DeepCopyInto(*out)
+			}
 		}
 	}
 	if in.Routes != nil {
 		in, out := &in.Routes, &out.Routes
-		*out = make([]RouteSpec, len(*in))
-		copy(*out, *in)
+		*out = make([]*RouteSpec, len(*in))
+		for i := range *in {
+			if (*in)[i] != nil {
+				in, out := &(*in)[i], &(*out)[i]
+				*out = new(RouteSpec)
+				**out = **in
+			}
+		}
 	}
 }
 

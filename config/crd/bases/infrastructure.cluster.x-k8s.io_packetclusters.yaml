@@ -78,7 +78,7 @@ spec:
                   PacketCluster
                 items:
                   description: NetworkSpec defines the network configuration for a
-                    PacketCluster
+                    PacketCluster.
                   properties:
                     addresses:
                       description: 'AddressRange for the cluster network for eg: VRF
