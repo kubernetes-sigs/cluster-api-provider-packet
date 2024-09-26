@@ -165,6 +165,7 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*metal
 		return nil, fmt.Errorf("error executing userdata template: %w", err)
 	}
 
+	// Todo: move this to a separate function
 	var layer2UserData string	
 	// check if layer2 is enabled and add the layer2 user data
 	if packetMachineSpec.NetworkPorts != nil {
