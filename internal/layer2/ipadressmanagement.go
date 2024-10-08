@@ -4,8 +4,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+
 type IPAddressManagement interface {
 	// CreateClusterIPAssignmentConfigMap creates a ConfigMap object for tracking IP address assignments per port and VLAN at the cluster level.
+	// Name of the ConfigMap is <cluster-name>-ip-allocations.
 	CreateClusterIPAssignmentConfigMap(clusterName string) error
 	// GetClusterIPAssignmentConfigMap returns the ConfigMap map object for tracking IP address assignments per port and VLAN at the cluster level.
 	// It returns the ConfigMap object and a boolean indicating if the ConfigMap was found or not.
@@ -25,7 +27,7 @@ type IPAddressManagement interface {
 	// GetNextAvailableIPAddress returns the next available IP address for the given cluster, metro, and vxlan from the assignment range.
 	// It queries the ConfigMap to get the list of assigned IP addresses and returns the next available IP address from the assignment range.
 	// For example, if the assignment range is 10.60.10.2-10.60.10.8 and the IP addresses 10.60.10.2, 10.60.10.3 are already assigned, it will return
-	// the next in the sequence.
+	// the next available IP address.
 	GetNextAvailableIPAddress(clusterName, metro, assignmentRange, vxlan string) (string, error)
 
 	// GetIPAddressForMachine returns the IP address assigned to the machine.

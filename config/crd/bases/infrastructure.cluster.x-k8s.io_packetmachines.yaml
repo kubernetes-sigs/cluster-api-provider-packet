@@ -134,6 +134,11 @@ spec:
                               If not specified, the first available IP address from the IP address range will be assigned.
                               This is useful when you want to reserve some IP addresses for other purposes for eg Gateways, DNS etc.
                             type: string
+                          netmask:
+                            description: |-
+                              Netmask is the netmask for the network.
+                              eg: 255.255.255.248
+                            type: string
                           vxlan:
                             description: VLANs for EM API to find by vxlan, project,
                               and metro match then attach to device. OS userdata template

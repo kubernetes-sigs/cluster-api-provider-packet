@@ -126,6 +126,7 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*metal
 	}
 
 	stringWriter := &strings.Builder{}
+	
 	userData := string(userDataRaw)
 	userDataValues := map[string]interface{}{
 		"kubernetesVersion": ptr.Deref(req.MachineScope.Machine.Spec.Version, ""),
@@ -166,7 +167,7 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*metal
 	}
 
 	// Todo: move this to a separate function
-	var layer2UserData string	
+	var layer2UserData string
 	// check if layer2 is enabled and add the layer2 user data
 	if packetMachineSpec.NetworkPorts != nil {
 		layer2Config := layer2.NewConfig()
@@ -174,18 +175,16 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*metal
 			// TODO: check for AssignmentType in ClusterSpec for this network.
 			for _, network := range port.Networks {
 				// TODO: select the IPAddress for this machine.
-				layer2Config.AddPortNetwork(port.Name, network.VXLAN, "", network.Netmask)
+				layer2Config.AddPortNetwork(port.Name, network.VXLAN, "192.168.10.2", "255.255.255.248")
 			}
 		}
 		layer2UserData, err = layer2Config.GetTemplate()
 		if err != nil {
 			return nil, fmt.Errorf("error generating layer2 user data: %w", err)
 		}
-
-		// use multipart mime to send both: raw user data and layer2 user data
-		userData, err = layer2.GenerateInitDocument(stringWriter.String(), layer2UserData)
+		userData, err = layer2.NewCloudConfigMerger().MergeConfigs(stringWriter.String(), layer2UserData)
 		if err != nil {
-			return nil, fmt.Errorf("error generating multipart mime document for user-data: %w", err)
+			return nil, fmt.Errorf("error combining user data: %w", err)
 		}
 	} else {
 		userData = stringWriter.String()

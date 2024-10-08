@@ -11,22 +11,23 @@ type PortNetwork struct {
 	Vxlan     int
 	IPAddress string
 	Netmask   string
+	Gateway   string // Added Gateway field to match template
 }
 
 type Config struct {
-	// Ports is a list of network configurations for the Layer2
-	Ports []PortNetwork
+	// VLANs is a list of network configurations for the Layer2
+	VLANs []PortNetwork // Changed from Ports to VLANs to match template
 }
 
 // NewConfig returns a new Config object
 func NewConfig() *Config {
 	return &Config{
-		Ports: make([]PortNetwork, 0),
+		VLANs: make([]PortNetwork, 0),
 	}
 }
 
 func (c *Config) AddPortNetwork(portName string, vxlan int, ipAddress string, netmask string) {
-	c.Ports = append(c.Ports, PortNetwork{
+	c.VLANs = append(c.VLANs, PortNetwork{
 		PortName:  portName,
 		Vxlan:     vxlan,
 		IPAddress: ipAddress,

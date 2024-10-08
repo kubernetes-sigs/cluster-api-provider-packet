@@ -1,7 +1,9 @@
 package layer2
 
-// TODO(Rahul): move this to config map
 const configTemplate = `
+## template: jinja
+#cloud-config
+
 package_update: true
 package_upgrade: true
 packages:
@@ -114,20 +116,20 @@ write_files:
       iface_eth0=$(find_interface_by_mac "$mac_eth0")
       iface_eth1=$(find_interface_by_mac "$mac_eth1")
       
-      # Check and replace eth0 in /tmp/final_configuration.sh
-      if grep -q "eth0" /tmp/final_configuration.sh; then
-        sed -i "s/eth0/${iface_eth0}/g" /tmp/final_configuration.sh
-        echo "Replaced eth0 with ${iface_eth0} in /tmp/final_configuration.sh"
+      # Check and replace eth0 in /var/lib/capi_network_settings/final_configuration.sh
+      if grep -q "eth0" /var/lib/capi_network_settings/final_configuration.sh; then
+        sed -i "s/eth0/${iface_eth0}/g" /var/lib/capi_network_settings/final_configuration.sh
+        echo "Replaced eth0 with ${iface_eth0} in /var/lib/capi_network_settings/final_configuration.sh"
       else
-        echo "No occurrences of eth0 found in /tmp/final_configuration.sh. No changes made."
+        echo "No occurrences of eth0 found in /var/lib/capi_network_settings/final_configuration.sh. No changes made."
       fi
       
-      # Check and replace eth1 in /tmp/final_configuration.sh
-      if grep -q "eth1" /tmp/final_configuration.sh; then
-        sed -i "s/eth1/${iface_eth1}/g" /tmp/final_configuration.sh
-        echo "Replaced eth1 with ${iface_eth1} in /tmp/final_configuration.sh"
+      # Check and replace eth1 in /var/lib/capi_network_settings/final_configuration.sh
+      if grep -q "eth1" /var/lib/capi_network_settings/final_configuration.sh; then
+        sed -i "s/eth1/${iface_eth1}/g" /var/lib/capi_network_settings/final_configuration.sh
+        echo "Replaced eth1 with ${iface_eth1} in /var/lib/capi_network_settings/final_configuration.sh"
       else
-        echo "No occurrences of eth1 found in /tmp/final_configuration.sh. No changes made."
+        echo "No occurrences of eth1 found in /var/lib/capi_network_settings/final_configuration.sh. No changes made."
       fi
 
 runcmd:
