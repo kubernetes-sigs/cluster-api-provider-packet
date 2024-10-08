@@ -26,6 +26,7 @@ import (
 	"time"
 
 	apitypes "k8s.io/apimachinery/pkg/types"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	corev1 "k8s.io/api/core/v1"
@@ -213,6 +214,10 @@ func (r *PacketMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl
 			builder.WithPredicates(
 				predicates.ClusterUnpausedAndInfrastructureReady(log),
 			),
+		).
+		Watches(
+			&ipamv1.IPAddressClaim{},
+			handler.EnqueueRequestsFromMapFunc(ipAddressClaimToPacketMachine),
 		).Complete(r)
 	if err != nil {
 		return fmt.Errorf("failed setting up with a controller manager: %w", err)
@@ -264,6 +269,29 @@ func (r *PacketMachineReconciler) PacketClusterToPacketMachines(ctx context.Cont
 	}
 
 	return result
+}
+
+func ipAddressClaimToPacketMachine(_ context.Context, a ctrlclient.Object) []reconcile.Request {
+	ipAddressClaim, ok := a.(*ipamv1.IPAddressClaim)
+	if !ok {
+		return nil
+	}
+
+	requests := []reconcile.Request{}
+	if clusterutilv1.HasOwner(ipAddressClaim.OwnerReferences, infrav1.GroupVersion.String(), []string{"PacketMachine"}) {
+		for _, ref := range ipAddressClaim.OwnerReferences {
+			if ref.Kind == "VSphereVM" {
+				requests = append(requests, reconcile.Request{
+					NamespacedName: apitypes.NamespacedName{
+						Name:      ref.Name,
+						Namespace: ipAddressClaim.Namespace,
+					},
+				})
+				break
+			}
+		}
+	}
+	return requests
 }
 
 func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *scope.MachineScope) (ctrl.Result, error) { //nolint:gocyclo,maintidx
@@ -350,7 +378,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 			}
 		}
 		if len(machineScope.PacketMachine.Spec.NetworkPorts) > 0 {
-			if err := r.reconcileIPAddresses(ctx, machineScope.PacketMachine); err != nil {
+			if err := r.ReconcileIPAddresses(ctx, machineScope.PacketMachine); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -582,7 +610,11 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 	return nil
 }
 
-func (r *PacketMachineReconciler) reconcileIPAddresses(ctx context.Context, machine *infrav1.PacketMachine) error {
+// +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddressclaims,verbs=get;create;patch;watch;list;update
+// +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddresses,verbs=get;list;watch
+
+// ReconcileIPAddresses reconciles ip addresses forpacket machine
+func (r *PacketMachineReconciler) ReconcileIPAddresses(ctx context.Context, machine *infrav1.PacketMachine) error {
 
 	log := ctrl.LoggerFrom(ctx)
 

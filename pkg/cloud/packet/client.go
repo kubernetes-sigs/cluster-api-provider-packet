@@ -179,13 +179,6 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*metal
 	// check if layer2 is enabled and add the layer2 user data
 	if packetMachineSpec.NetworkPorts != nil {
 		layer2Config := layer2.NewConfig()
-		// for _, port := range packetMachineSpec.NetworkPorts {
-		// 	// TODO: check for AssignmentType in ClusterSpec for this network.
-		// 	for _, network := range port.Networks {
-		// 		// TODO: select the IPAddress for this machine.
-		// 		layer2Config.AddPortNetwork(port.Name, network.VXLAN, "192.168.10.2", "255.255.255.248")
-		// 	}
-		// }
 
 		for _, ipAddr := range req.IPAddresses {
 			layer2Config.AddPortNetwork(ipAddr.PortName, ipAddr.VXLAN, ipAddr.Address, ipAddr.Netmask)

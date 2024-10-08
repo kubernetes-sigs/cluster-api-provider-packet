@@ -52,6 +52,7 @@ import (
 	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-packet/controllers"
 	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
+	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -66,6 +67,7 @@ func init() {
 	_ = infrav1.AddToScheme(scheme)
 	_ = clusterv1.AddToScheme(scheme)
 	_ = bootstrapv1.AddToScheme(scheme)
+	_ = ipamv1.AddToScheme(scheme)
 }
 
 var (
