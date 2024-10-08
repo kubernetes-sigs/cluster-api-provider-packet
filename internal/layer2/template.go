@@ -1,7 +1,6 @@
 package layer2
 
 const configTemplate = `
-## template: jinja
 #cloud-config
 
 package_update: true

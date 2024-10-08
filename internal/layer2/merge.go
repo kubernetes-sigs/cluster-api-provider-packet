@@ -71,17 +71,23 @@ func (m *CloudConfigMerger) deepMerge(base, overlay map[string]interface{}) map[
 				}
 			}
 
-			// If both values are slices, append them
-			if baseSlice, ok := baseVal.([]interface{}); ok {
-				if overlaySlice, ok := v.([]interface{}); ok {
-					result[k] = append(baseSlice, overlaySlice...)
-					continue
-				}
-			}
-		}
+			// If either value is a slice or both values are different, create/extend a slice
+			baseSlice, baseIsSlice := baseVal.([]interface{})
+			overlaySlice, overlayIsSlice := v.([]interface{})
 
-		// For all other cases, overlay value takes precedence
-		result[k] = v
+			if baseIsSlice && overlayIsSlice {
+				result[k] = append(baseSlice, overlaySlice...)
+			} else if baseIsSlice {
+				result[k] = append(baseSlice, v)
+			} else if overlayIsSlice {
+				result[k] = append([]interface{}{baseVal}, overlaySlice...)
+			} else {
+				result[k] = []interface{}{baseVal, v}
+			}
+		} else {
+			// Key doesn't exist in base, so add it
+			result[k] = v
+		}
 	}
 
 	return result
