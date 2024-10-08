@@ -71,3 +71,7 @@ func DefaultCreateTags(namespace, name, clusterName string) []string {
 		GenerateNamespaceTag(namespace),
 	}
 }
+
+func IPAddressClaimName(machineName string, portIndex, networkIndex int) string {
+	return fmt.Sprintf("%s-port-%d-network-%d", machineName, portIndex, networkIndex)
+}

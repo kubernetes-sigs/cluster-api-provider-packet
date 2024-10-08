@@ -20,17 +20,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
 
+	apitypes "k8s.io/apimachinery/pkg/types"
+
 	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
+	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
+	clusterutilv1 "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/predicates"
@@ -47,6 +54,7 @@ import (
 	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
 	clog "sigs.k8s.io/cluster-api/util/log"
+	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const (
@@ -341,10 +349,21 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 				return ctrl.Result{}, patchErr
 			}
 		}
+		if len(machineScope.PacketMachine.Spec.NetworkPorts) > 0 {
+			if err := r.reconcileIPAddresses(ctx, machineScope.PacketMachine); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+
+		ipAddrCfg, err := getIPAddressCfg(ctx, r.Client, machineScope.PacketMachine)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 
 		createDeviceReq := packet.CreateDeviceRequest{
 			MachineScope: machineScope,
 			ExtraTags:    packet.DefaultCreateTags(machineScope.Namespace(), machineScope.Machine.Name, machineScope.Cluster.Name),
+			IPAddresses:  ipAddrCfg,
 		}
 
 		// when a node is a control plane node we need the elastic IP
@@ -561,4 +580,212 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 
 	controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
 	return nil
+}
+
+func (r *PacketMachineReconciler) reconcileIPAddresses(ctx context.Context, machine *infrav1.PacketMachine) error {
+
+	log := ctrl.LoggerFrom(ctx)
+
+	totalClaims, claimsCreated := 0, 0
+	claimsFulfilled := 0
+
+	var (
+		claims  []conditions.Getter
+		errList []error
+	)
+
+	for portIdx, port := range machine.Spec.NetworkPorts {
+		for networkIdx, network := range port.Networks {
+			totalClaims++
+
+			ipAddrClaimName := packet.IPAddressClaimName(machine.Name, portIdx, networkIdx)
+
+			ipAddrClaim := &ipamv1.IPAddressClaim{}
+			ipAddrClaimKey := client.ObjectKey{
+				Namespace: machine.Namespace,
+				Name:      ipAddrClaimName,
+			}
+
+			log := log.WithValues("IPAddressClaim", klog.KRef(ipAddrClaimKey.Namespace, ipAddrClaimKey.Name))
+			ctx := ctrl.LoggerInto(ctx, log)
+
+			err := r.Client.Get(ctx, ipAddrClaimKey, ipAddrClaim)
+			if err != nil && !apierrors.IsNotFound(err) {
+				return fmt.Errorf("failed to get IPAddressClaim %s err: %v", klog.KRef(ipAddrClaimKey.Namespace, ipAddrClaimKey.Name), err)
+			}
+
+			ipAddrClaim, created, err := createOrPatchIPAddressClaim(ctx, r.Client, machine, ipAddrClaimName, network.AddressFromPool)
+			if err != nil {
+				errList = append(errList, err)
+				continue
+			}
+
+			if err != nil {
+				errList = append(errList, err)
+				continue
+			}
+			if created {
+				claimsCreated++
+			}
+			if ipAddrClaim.Status.AddressRef.Name != "" {
+				claimsFulfilled++
+			}
+
+			if conditions.Has(ipAddrClaim, clusterv1.ReadyCondition) {
+				claims = append(claims, ipAddrClaim)
+			}
+		}
+	}
+
+	if len(errList) > 0 {
+		aggregatedErr := kerrors.NewAggregate(errList)
+		conditions.MarkFalse(machine,
+			infrav1.IPAddressClaimedCondition,
+			infrav1.IPAddressClaimNotFoundReason,
+			clusterv1.ConditionSeverityError,
+			aggregatedErr.Error())
+		return aggregatedErr
+	}
+
+	// Fallback logic to calculate the state of the IPAddressClaimed condition
+	switch {
+	case totalClaims == claimsFulfilled:
+		conditions.MarkTrue(machine, infrav1.IPAddressClaimedCondition)
+	case claimsFulfilled < totalClaims && claimsCreated > 0:
+		conditions.MarkFalse(machine, infrav1.IPAddressClaimedCondition,
+			infrav1.IPAddressClaimsBeingCreatedReason, clusterv1.ConditionSeverityInfo,
+			"%d/%d claims being created", claimsCreated, totalClaims)
+	case claimsFulfilled < totalClaims && claimsCreated == 0:
+		conditions.MarkFalse(machine, infrav1.IPAddressClaimedCondition,
+			infrav1.WaitingForIPAddressReason, clusterv1.ConditionSeverityInfo,
+			"%d/%d claims being processed", totalClaims-claimsFulfilled, totalClaims)
+	}
+
+	return nil
+}
+
+func createOrPatchIPAddressClaim(ctx context.Context, client client.Client, machine *infrav1.PacketMachine, name string, poolRef corev1.TypedLocalObjectReference) (*ipamv1.IPAddressClaim, bool, error) {
+	claim := &ipamv1.IPAddressClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: machine.Namespace,
+		},
+	}
+
+	mutateFn := func() (err error) {
+		claim.SetOwnerReferences(clusterutilv1.EnsureOwnerRef(
+			claim.OwnerReferences,
+			metav1.OwnerReference{
+				APIVersion: infrav1.GroupVersion.String(),
+				Kind:       "PacketMachine",
+				Name:       machine.Name,
+				UID:        machine.UID,
+			}))
+
+		ctrlutil.AddFinalizer(claim, infrav1.IPAddressClaimFinalizer)
+
+		if claim.Labels == nil {
+			claim.Labels = make(map[string]string)
+		}
+		claim.Labels[clusterv1.ClusterNameLabel] = machine.Labels[clusterv1.ClusterNameLabel]
+
+		claim.Spec.PoolRef.APIGroup = poolRef.APIGroup
+		claim.Spec.PoolRef.Kind = poolRef.Kind
+		claim.Spec.PoolRef.Name = poolRef.Name
+		return nil
+	}
+
+	log := ctrl.LoggerFrom(ctx)
+
+	result, err := ctrlutil.CreateOrPatch(ctx, client, claim, mutateFn)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to CreateOrPatch IPAddressClaim, err: : %s", err)
+	}
+	switch result {
+	case ctrlutil.OperationResultCreated:
+		log.Info("Created IPAddressClaim")
+		return claim, true, nil
+	case ctrlutil.OperationResultUpdated:
+		log.Info("Updated IPAddressClaim")
+	case ctrlutil.OperationResultNone, ctrlutil.OperationResultUpdatedStatus, ctrlutil.OperationResultUpdatedStatusOnly:
+		log.V(3).Info("No change required for IPAddressClaim", "operationResult", result)
+	}
+	return claim, false, nil
+}
+
+func getIPAddressCfg(ctx context.Context, client client.Client, machine *infrav1.PacketMachine) ([]packet.IPAddressCfg, error) {
+	log := ctrl.LoggerFrom(ctx)
+
+	boundClaims, totalClaims := 0, 0
+	ipaddrCfgs := []packet.IPAddressCfg{}
+
+	for portIdx, port := range machine.Spec.NetworkPorts {
+		for networkIdx, network := range port.Networks {
+			totalClaims++
+
+			ipAddrClaimName := packet.IPAddressClaimName(machine.Name, portIdx, networkIdx)
+
+			log := log.WithValues("IPAddressClaim", klog.KRef(machine.Namespace, ipAddrClaimName))
+
+			ctx := ctrl.LoggerInto(ctx, log)
+
+			ipAddrClaim, err := getIPAddrClaim(ctx, client, ipAddrClaimName, machine.Namespace)
+			if err != nil {
+				if apierrors.IsNotFound(err) {
+					// it would be odd for this to occur, a findorcreate just happened in a previous step
+					continue
+				}
+				return nil, fmt.Errorf("failed to get IPAddressClaim %s, err: %v", klog.KRef(machine.Namespace, ipAddrClaimName), err)
+			}
+
+			log.V(5).Info("Fetched IPAddressClaim")
+			ipAddrName := ipAddrClaim.Status.AddressRef.Name
+			if ipAddrName == "" {
+				log.V(5).Info("IPAddress not yet bound to IPAddressClaim")
+				continue
+			}
+
+			ipAddr := &ipamv1.IPAddress{}
+			ipAddrKey := apitypes.NamespacedName{
+				Namespace: machine.Namespace,
+				Name:      ipAddrName,
+			}
+			if err := client.Get(ctx, ipAddrKey, ipAddr); err != nil {
+				// because the ref was set on the claim, it is expected this error should not occur
+				return nil, err
+			}
+			ipaddrCfgs = append(ipaddrCfgs, packet.IPAddressCfg{
+				VXLAN:    network.VXLAN,
+				Address:  ipAddr.Spec.Address,
+				Netmask:  net.IP(net.CIDRMask(ipAddr.Spec.Prefix, 32)).String(),
+				PortName: port.Name,
+			})
+			boundClaims++
+		}
+	}
+
+	if boundClaims < totalClaims {
+		log.Info("Waiting for ip address claims to be bound",
+			"total claims", totalClaims,
+			"claims bound", boundClaims)
+		return nil, fmt.Errorf("waiting for IP address claims to be bound")
+	}
+
+	return ipaddrCfgs, nil
+}
+
+func getIPAddrClaim(ctx context.Context, client client.Client, ipAddrClaimName, namespace string) (*ipamv1.IPAddressClaim, error) {
+	log := ctrl.LoggerFrom(ctx)
+
+	ipAddrClaim := &ipamv1.IPAddressClaim{}
+	ipAddrClaimKey := apitypes.NamespacedName{
+		Namespace: namespace,
+		Name:      ipAddrClaimName,
+	}
+
+	log.V(5).Info("Fetching IPAddressClaim", "IPAddressClaim", klog.KRef(ipAddrClaimKey.Namespace, ipAddrClaimKey.Name))
+	if err := client.Get(ctx, ipAddrClaimKey, ipAddrClaim); err != nil {
+		return nil, err
+	}
+	return ipAddrClaim, nil
 }
