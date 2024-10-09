@@ -325,6 +325,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		err                  error
 		controlPlaneEndpoint *metal.IPReservation
 		resp                 *http.Response
+		ipAddrCfg			 []packet.IPAddressCfg
 	)
 
 	if deviceID != "" {
@@ -383,7 +384,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 			}
 		}
 
-		ipAddrCfg, err := getIPAddressCfg(ctx, r.Client, machineScope.PacketMachine)
+		ipAddrCfg, err = getIPAddressCfg(ctx, r.Client, machineScope.PacketMachine)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -459,7 +460,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	}
 
 	deviceAddr := r.PacketClient.GetDeviceAddresses(dev)
-	machineScope.SetAddresses(append(addrs, deviceAddr...))
+	machineScope.SetAddresses(append(addrs,deviceAddr...))
 
 	// Proceed to reconcile the PacketMachine state.
 	var result reconcile.Result
@@ -498,6 +499,25 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 				}
 			}
 		}
+
+		// if layer2 template is enabled, we need to poll the /events endpoint to check if the network has been configured successfully
+		// if machineScope.PacketMachine.Spec.NetworkPorts != nil {
+		// 	var NetworkConfigurationSuccess *string = "network_configuration_success"
+		// 	eventsList,resp,err := r.PacketClient.EventsApi.FindDeviceEvents(ctx, *dev.Id).Execute()
+		// 	if err != nil {
+		// 		return ctrl.Result{}, fmt.Errorf("failed to get device events: %w", err)
+		// 	}
+		// 	if resp.StatusCode != http.StatusOK {
+		// 		return ctrl.Result{}, fmt.Errorf("failed to get device events: %w", err)
+		// 	}
+		// 	for _, event := range eventsList.Events {
+		// 		if event.Type ==  {
+		// 			machineScope.SetReady()
+		// 			conditions.MarkTrue(machineScope.PacketMachine, infrav1.DeviceReadyCondition)
+		// 		}
+		// 	}
+
+		// }
 
 		machineScope.SetReady()
 		conditions.MarkTrue(machineScope.PacketMachine, infrav1.DeviceReadyCondition)
