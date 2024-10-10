@@ -139,6 +139,10 @@ spec:
                                       Netmask is the netmask for the network.
                                       eg: 255.255.255.248
                                     type: string
+                                  vlanID:
+                                    description: VLAN ID for the VLAN created on the
+                                      EM Console
+                                    type: string
                                   vxlan:
                                     description: VLANs for EM API to find by vxlan,
                                       project, and metro match then attach to device.

@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -501,23 +503,43 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		}
 
 		// if layer2 template is enabled, we need to poll the /events endpoint to check if the network has been configured successfully
-		// if machineScope.PacketMachine.Spec.NetworkPorts != nil {
-		// 	var NetworkConfigurationSuccess *string = "network_configuration_success"
-		// 	eventsList,resp,err := r.PacketClient.EventsApi.FindDeviceEvents(ctx, *dev.Id).Execute()
-		// 	if err != nil {
-		// 		return ctrl.Result{}, fmt.Errorf("failed to get device events: %w", err)
-		// 	}
-		// 	if resp.StatusCode != http.StatusOK {
-		// 		return ctrl.Result{}, fmt.Errorf("failed to get device events: %w", err)
-		// 	}
-		// 	for _, event := range eventsList.Events {
-		// 		if event.Type ==  {
-		// 			machineScope.SetReady()
-		// 			conditions.MarkTrue(machineScope.PacketMachine, infrav1.DeviceReadyCondition)
-		// 		}
-		// 	}
+		if machineScope.PacketMachine.Spec.NetworkPorts != nil {
+			eventsList,resp,err := r.PacketClient.EventsApi.FindDeviceEvents(ctx, *dev.Id).Execute()
+			if err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to get device events: %w", err)
+			}
+			if resp.StatusCode != http.StatusOK {
+				return ctrl.Result{}, fmt.Errorf("failed to get device events: %w", err)
+			}
+			// check if the network configuration has been successful/failed by polling the /events endpoint
+			// if the network configuration has been successful, we can set the device to ready else we need to requeue
+			// we need to wait for either the network configuration to be successful or failed before we can proceed.
+			if len(eventsList.Events) > 0 {
+				if checkIfEventsContainNetworkConfigurationSuccess(eventsList) {
+					conditions.MarkTrue(machineScope.PacketMachine, infrav1.Layer2NetworkConfigurationConditionSuccess)
+				} else if checkIfEventsContainNetworkConfigurationFailure(eventsList) {
+					conditions.MarkTrue(machineScope.PacketMachine, infrav1.Layer2NetworkConfigurationConditionFailed)
+					return ctrl.Result{}, fmt.Errorf("failed to configure network on device")
+				} else {
+					// if the network configuration is still in progress, we need to requeue
+					// user data scripts might take some time to complete.
+					log.Info("waiting for layer2 network configurations to complete")
+					return ctrl.Result{RequeueAfter: time.Second * 10}, nil
+				}
+			}
+		}
 
-		// }
+		// once the network configuration has been successful, we can call the APIs to set the port configuration to layer2/bonded/bound VXLAN to port.
+		// reconstruct ipAddrCfg as earlier it was done when device was created first. During later reconciliations, this might be nil and we need to reconstruct it.
+		ipAddrCfg, err = getIPAddressCfg(ctx, r.Client, machineScope.PacketMachine)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if len(ipAddrCfg) > 0 {
+			if err := r.reconcilePortConfigurations(ctx, *dev.Id, ipAddrCfg); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to set port configuration: %w", err)
+			}
+		}
 
 		machineScope.SetReady()
 		conditions.MarkTrue(machineScope.PacketMachine, infrav1.DeviceReadyCondition)
@@ -672,10 +694,6 @@ func (r *PacketMachineReconciler) ReconcileIPAddresses(ctx context.Context, mach
 				continue
 			}
 
-			if err != nil {
-				errList = append(errList, err)
-				continue
-			}
 			if created {
 				claimsCreated++
 			}
@@ -811,6 +829,8 @@ func getIPAddressCfg(ctx context.Context, client client.Client, machine *infrav1
 				Address:  ipAddr.Spec.Address,
 				Netmask:  net.IP(net.CIDRMask(ipAddr.Spec.Prefix, 32)).String(),
 				PortName: port.Name,
+				Layer2:   port.Layer2,
+				Bonded:   port.Bonded,
 			})
 			boundClaims++
 		}
@@ -824,6 +844,149 @@ func getIPAddressCfg(ctx context.Context, client client.Client, machine *infrav1
 	}
 
 	return ipaddrCfgs, nil
+}
+
+func (r *PacketMachineReconciler) reconcilePortConfigurations(ctx context.Context, deviceID string, ipAddrCfgs []packet.IPAddressCfg) error {
+	log := ctrl.LoggerFrom(ctx)
+
+	dev, _, err := r.PacketClient.GetDevice(ctx, deviceID)
+	if err != nil {
+		return fmt.Errorf("failed to get device: %w", err)
+	}
+	networkPorts := dev.NetworkPorts
+	for _, ipAddrCfg := range ipAddrCfgs {
+		portID, err := getMetalPortID(ipAddrCfg.PortName, networkPorts)
+		if err != nil {
+			return fmt.Errorf("failed to get port id: %w", err)
+		}
+		// check if the port is already bound to a vxlan
+		vlanAssignList, resp, err := r.PacketClient.PortsApi.FindPortVlanAssignments(ctx, *portID).Execute()
+		if err != nil {
+			return fmt.Errorf("failed to get port vlan assignments: %w", err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("failed to get port vlan assignments: %w", err)
+		}
+
+		desiredVXLAN := int32(ipAddrCfg.VXLAN)
+		vxlanStr := strconv.Itoa(ipAddrCfg.VXLAN)
+    	currentAssignments := getPortVXLANAssignments(vlanAssignList)
+
+		if slices.Contains(currentAssignments, desiredVXLAN) {
+			log.Info("Port is already assigned to desired VXLAN", "port", ipAddrCfg.PortName, "vxlan", desiredVXLAN)
+			continue
+		}
+		desiredVXLANExists := false
+		// Remove any VXLAN assignments that are not the desired one
+		for _, currentVXLAN := range currentAssignments {
+			if currentVXLAN == desiredVXLAN {
+				desiredVXLANExists = true
+				continue
+			}
+			// all other vxlan assignments needs to be removed from the port as the CRD is the source of truth.
+			// these assignments were either set by the user manually or by the any other entity.
+			_, resp, err := r.PacketClient.PortsApi.UnassignPort(ctx, *portID).PortAssignInput(metal.PortAssignInput{
+				Vnid: &vxlanStr,
+			}).Execute()
+			if err != nil {
+				return fmt.Errorf("failed to unassign port from vxlan: %w", err)
+			}
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("failed to unassign port from vxlan: %w", err)
+			}
+			log.Info("Port unassigned from VXLAN", "port", ipAddrCfg.PortName, "vxlan", currentVXLAN)
+		}
+
+		// Assign port to the desired VXLAN if it doesn't already exist
+		if !desiredVXLANExists {
+			_, resp, err = r.PacketClient.PortsApi.AssignPort(ctx, *portID).PortAssignInput(metal.PortAssignInput{
+				Vnid: &vxlanStr,
+			}).Execute()
+			if err != nil {
+				return fmt.Errorf("failed to assign port to vxlan: %w", err)
+			}
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("failed to assign port to vxlan: %w", err)
+			}
+			log.Info("Port assigned to VXLAN", "port", ipAddrCfg.PortName, "vxlan", desiredVXLAN)
+		} else {
+			log.Info("Port already assigned to desired VXLAN", "port", ipAddrCfg.PortName, "vxlan", desiredVXLAN)
+		}
+		
+		// fetch the port by ID to check if the port is set to layer2 or bonded.
+		port, _, err := r.PacketClient.PortsApi.FindPortById(ctx, *portID).Execute()
+		if err != nil {
+			return fmt.Errorf("failed to get port: %w", err)
+		}
+		if port == nil {
+			return fmt.Errorf("failed to get port: %w", err)
+		}
+		// if the port is set to layer2, we need to set the port to layer2
+		if ipAddrCfg.Layer2 {
+			// check if port is already set to layer2
+			// NetworkType for layer2 is either "layer2-bonded" or "layer2-individual", hence we check if the string contains "layer2"
+			if strings.Contains(string(*port.NetworkType), "layer2") {
+				log.Info("Port is already set to layer2", "port", ipAddrCfg.PortName)
+				continue
+			}
+			_, resp, err := r.PacketClient.PortsApi.ConvertLayer2(ctx, *portID).Execute()
+			if err != nil {
+				return fmt.Errorf("failed to set port to layer2: %w", err)
+			}
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("failed to set port to layer2: %w", err)
+			}
+			log.Info("Port set to layer2", "port", ipAddrCfg.PortName)
+		}
+
+		// if the port is set to bonded, we need to set the port to bonded
+		if ipAddrCfg.Bonded {
+			// check if port is already set to bonded, if not set it to bonded.
+			if port.Data == nil {
+				return fmt.Errorf("failed to get port data to check bonded status")
+			}
+			if !*port.Data.Bonded {
+					_, resp, err := r.PacketClient.PortsApi.BondPort(ctx, *portID).Execute()
+				if err != nil {
+					return fmt.Errorf("failed to set port to bonded: %w", err)
+				}
+				if resp.StatusCode != http.StatusOK {
+					return fmt.Errorf("failed to set port to bonded: %w", err)
+				}
+				log.Info("Port set to bonded", "port", ipAddrCfg.PortName)
+			}
+		}
+	}
+	return nil
+}
+
+// getPortVXLANAssignments returns all current VXLAN assignments for a port
+func getPortVXLANAssignments(vlanAssignList *metal.PortVlanAssignmentList) []int32 {
+    var assignments []int32
+    for _, vlanAssign := range vlanAssignList.VlanAssignments {
+        if vlanAssign.Vlan != nil {
+            assignments = append(assignments, *vlanAssign.Vlan)
+        }
+    }
+    return assignments
+}
+
+func checkIfPortIsBoundToVXLAN(vlanAssignList *metal.PortVlanAssignmentList, vxlan int32) bool {
+	for _, vlanAssign := range vlanAssignList.VlanAssignments {
+		if *vlanAssign.Vlan == vxlan {
+			return true
+		}
+	}
+	return false
+}
+
+func getMetalPortID(portName string, networkPorts []metal.Port) (*string, error) {
+	for _, port := range networkPorts {
+		if *port.Name == portName {
+			return port.Id, nil
+		}
+	}
+	return nil, fmt.Errorf("failed to find port %s", portName)
 }
 
 func getIPAddrClaim(ctx context.Context, client client.Client, ipAddrClaimName, namespace string) (*ipamv1.IPAddressClaim, error) {
@@ -840,4 +1003,31 @@ func getIPAddrClaim(ctx context.Context, client client.Client, ipAddrClaimName, 
 		return nil, err
 	}
 	return ipAddrClaim, nil
+}
+
+func checkIfEventsContainNetworkConfigurationSuccess(eventsList *metal.EventList) bool {
+	networkConfigurationSuccess := "network_configuration_success"
+
+	for _, event := range eventsList.Events {
+		if event.Body == nil {
+            continue
+        }
+
+		if *event.Body == networkConfigurationSuccess {
+			return true
+		}
+	}
+	return false
+}
+
+func checkIfEventsContainNetworkConfigurationFailure(eventsList *metal.EventList) bool {
+	var networkConfigurationFailure *string = new(string)
+	*networkConfigurationFailure = "network_configuration_failure"
+
+	for _, event := range eventsList.Events {
+		if event.Body == networkConfigurationFailure {
+			return true
+		}
+	}
+	return false
 }

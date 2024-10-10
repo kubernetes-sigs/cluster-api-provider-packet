@@ -115,6 +115,8 @@ type IPAddressCfg struct {
 	VXLAN    int
 	Address  string
 	PortName string
+	Layer2   bool
+	Bonded   bool
 }
 
 // NewDevice creates a new device.

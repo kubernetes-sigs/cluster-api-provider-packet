@@ -42,19 +42,32 @@ write_files:
 
       # Function to send user state events
       url="$(curl -sf https://metadata.platformequinix.com/metadata | jq -r .user_state_url)"
+
       send_user_state_event() {
-        local state="$1"
-        local code="$2"
-        local message="$3"
-        local data
-
-        data=$(jq -n --arg state "$state" --arg code "$code" --arg message "$message" \
-               '{state: $state, code: ($code | tonumber), message: $message}')
-
-        curl -s -X POST -d "$data" "$url" || echo "Failed to send user state event"
+          local state="$1"
+          local code="$2"
+          local message="$3"
+          local data
+          
+          data=$(jq -n --arg state "$state" --arg code "$code" --arg message "$message" \
+                '{state: $state, code: ($code | tonumber), message: $message}')
+          
+          # Use a temporary file to capture both stdout and stderr
+          local tmp_file=$(mktemp)
+          
+          if ! curl -s -X POST -d "$data" "$url" > "$tmp_file" 2>&1; then
+              echo "Error: Failed to send user state event. Curl error: $(cat "$tmp_file")"
+          elif [ ! -s "$tmp_file" ]; then
+              echo "Warning: Received empty response from server"
+          else
+              echo "User state event sent successfully"
+          fi
+          
+          # Clean up the temporary file
+          rm "$tmp_file"
       }
 
-      send_user_state_event running 1000 "Configuring Network"
+      send_user_state_event running 1000 "network_configuration_started"
 
       systemctl restart networking
       # Verify network configuration
@@ -69,10 +82,10 @@ write_files:
 {{ end }}
 
       if [ "$verification_failed" = true ]; then
-        send_user_state_event failed 1002 "Network configuration failed"
+        send_user_state_event failed 1002 "network_configuration_failed"
         exit 1
       else
-        send_user_state_event succeeded 1001 "Network configuration successful"
+        send_user_state_event succeeded 1001 "network_configuration_success"
       fi
     
   - path: /var/lib/capi_network_settings/initial_configuration.sh

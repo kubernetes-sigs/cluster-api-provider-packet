@@ -53,7 +53,12 @@ const (
 	WaitingForClusterInfrastructureReason = "WaitingForClusterInfrastructure"
 	// WaitingForBootstrapDataReason used when machine is waiting for bootstrap data to be ready before proceeding.
 	WaitingForBootstrapDataReason = "WaitingForBootstrapData"
+
+	Layer2NetworkConfigurationConditionSuccess = "Layer2NetworkConfigurationSuccess"
+	Layer2NetworkConfigurationConditionFailed  = "Layer2NetworkConfigurationFailed"
+
 	
+
 )
 
 const (
@@ -137,6 +142,8 @@ type Port struct {
 type Network struct {
 	// VLANs for EM API to find by vxlan, project, and metro match then attach to device. OS userdata template will also configure this VLAN on the bond device
 	VXLAN int `json:"vxlan,omitempty"`
+	// VLAN ID for the VLAN created on the EM Console
+	VLANID string `json:"vlanID,omitempty"`
 	// Netmask is the netmask for the network.
 	// eg: 255.255.255.248
 	Netmask string `json:"netmask,omitempty"`
