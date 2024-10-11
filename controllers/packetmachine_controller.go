@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -872,10 +871,6 @@ func (r *PacketMachineReconciler) reconcilePortConfigurations(ctx context.Contex
 		vxlanStr := strconv.Itoa(ipAddrCfg.VXLAN)
     	currentAssignments := getPortVXLANAssignments(vlanAssignList)
 
-		if slices.Contains(currentAssignments, desiredVXLAN) {
-			log.Info("Port is already assigned to desired VXLAN", "port", ipAddrCfg.PortName, "vxlan", desiredVXLAN)
-			continue
-		}
 		desiredVXLANExists := false
 		// Remove any VXLAN assignments that are not the desired one
 		for _, currentVXLAN := range currentAssignments {
@@ -883,10 +878,11 @@ func (r *PacketMachineReconciler) reconcilePortConfigurations(ctx context.Contex
 				desiredVXLANExists = true
 				continue
 			}
+			currentVXLANStr := strconv.Itoa(int(currentVXLAN))
 			// all other vxlan assignments needs to be removed from the port as the CRD is the source of truth.
 			// these assignments were either set by the user manually or by the any other entity.
 			_, resp, err := r.PacketClient.PortsApi.UnassignPort(ctx, *portID).PortAssignInput(metal.PortAssignInput{
-				Vnid: &vxlanStr,
+				Vnid: &currentVXLANStr,
 			}).Execute()
 			if err != nil {
 				return fmt.Errorf("failed to unassign port from vxlan: %w", err)
