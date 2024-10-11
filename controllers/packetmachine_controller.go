@@ -27,7 +27,6 @@ import (
 	"time"
 
 	apitypes "k8s.io/apimachinery/pkg/types"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	corev1 "k8s.io/api/core/v1"
@@ -38,7 +37,6 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util"
 	clusterutilv1 "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/conditions"
@@ -47,12 +45,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-packet/internal/emlb"
+	"sigs.k8s.io/cluster-api-provider-packet/internal/layer2"
 	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
 	clog "sigs.k8s.io/cluster-api/util/log"
@@ -61,6 +59,12 @@ import (
 
 const (
 	force = true
+)
+
+const (
+	networkConfigurationSuccessEvent = "network_configuration_success"
+	networkConfigurationFailureEvent = "network_configuration_failure"
+	eventPollingInterval             = 5 * time.Second
 )
 
 var (
@@ -107,7 +111,7 @@ func (r *PacketMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// Fetch the Machine.
-	machine, err := util.GetOwnerMachine(ctx, r.Client, packetmachine.ObjectMeta)
+	machine, err := clusterutilv1.GetOwnerMachine(ctx, r.Client, packetmachine.ObjectMeta)
 	if err != nil {
 		log.Error(err, "Failed to get owner machine")
 		return ctrl.Result{}, err
@@ -121,7 +125,7 @@ func (r *PacketMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	ctx = ctrl.LoggerInto(ctx, log)
 
 	// Fetch the Cluster.
-	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
+	cluster, err := clusterutilv1.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
 	if err != nil {
 		log.Info("Machine is missing cluster label or cluster does not exist")
 		return ctrl.Result{}, err
@@ -176,8 +180,8 @@ func (r *PacketMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Add finalizer first if not set to avoid the race condition between init and delete.
 	// Note: Finalizers in general can only be added when the deletionTimestamp is not set.
-	if packetmachine.ObjectMeta.DeletionTimestamp.IsZero() && !controllerutil.ContainsFinalizer(packetmachine, infrav1.MachineFinalizer) {
-		controllerutil.AddFinalizer(packetmachine, infrav1.MachineFinalizer)
+	if packetmachine.ObjectMeta.DeletionTimestamp.IsZero() && !ctrlutil.ContainsFinalizer(packetmachine, infrav1.MachineFinalizer) {
+		ctrlutil.AddFinalizer(packetmachine, infrav1.MachineFinalizer)
 		return ctrl.Result{}, nil
 	}
 
@@ -192,7 +196,7 @@ func (r *PacketMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 func (r *PacketMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, options controller.Options) error {
 	log := ctrl.LoggerFrom(ctx)
 
-	clusterToPacketMachines, err := util.ClusterToTypedObjectsMapper(mgr.GetClient(), &infrav1.PacketMachineList{}, mgr.GetScheme())
+	clusterToPacketMachines, err := clusterutilv1.ClusterToTypedObjectsMapper(mgr.GetClient(), &infrav1.PacketMachineList{}, mgr.GetScheme())
 	if err != nil {
 		return fmt.Errorf("failed to create mapper for Cluster to PacketMachines: %w", err)
 	}
@@ -203,7 +207,7 @@ func (r *PacketMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl
 		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(log, r.WatchFilterValue)).
 		Watches(
 			&clusterv1.Machine{},
-			handler.EnqueueRequestsFromMapFunc(util.MachineToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("PacketMachine"))),
+			handler.EnqueueRequestsFromMapFunc(clusterutilv1.MachineToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("PacketMachine"))),
 		).
 		Watches(
 			&infrav1.PacketCluster{},
@@ -245,7 +249,7 @@ func (r *PacketMachineReconciler) PacketClusterToPacketMachines(ctx context.Cont
 		return nil
 	}
 
-	cluster, err := util.GetOwnerCluster(ctx, r.Client, c.ObjectMeta)
+	cluster, err := clusterutilv1.GetOwnerCluster(ctx, r.Client, c.ObjectMeta)
 	switch {
 	case apierrors.IsNotFound(err) || cluster == nil:
 		log.Error(err, "owning cluster is not found, skipping mapping.")
@@ -272,7 +276,7 @@ func (r *PacketMachineReconciler) PacketClusterToPacketMachines(ctx context.Cont
 	return result
 }
 
-func ipAddressClaimToPacketMachine(_ context.Context, a ctrlclient.Object) []reconcile.Request {
+func ipAddressClaimToPacketMachine(_ context.Context, a client.Object) []reconcile.Request {
 	ipAddressClaim, ok := a.(*ipamv1.IPAddressClaim)
 	if !ok {
 		return nil
@@ -390,10 +394,16 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 			return ctrl.Result{}, err
 		}
 
+		routesCfg, err := getRoutesCfg(machineScope.PacketMachine)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
 		createDeviceReq := packet.CreateDeviceRequest{
 			MachineScope: machineScope,
 			ExtraTags:    packet.DefaultCreateTags(machineScope.Namespace(), machineScope.Machine.Name, machineScope.Cluster.Name),
 			IPAddresses:  ipAddrCfg,
+			Routes:       routesCfg,
 		}
 
 		// when a node is a control plane node we need the elastic IP
@@ -502,30 +512,13 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		}
 
 		// if layer2 template is enabled, we need to poll the /events endpoint to check if the network has been configured successfully
-		if machineScope.PacketMachine.Spec.NetworkPorts != nil {
-			eventsList,resp,err := r.PacketClient.EventsApi.FindDeviceEvents(ctx, *dev.Id).Execute()
-			if err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to get device events: %w", err)
-			}
-			if resp.StatusCode != http.StatusOK {
-				return ctrl.Result{}, fmt.Errorf("failed to get device events: %w", err)
-			}
-			// check if the network configuration has been successful/failed by polling the /events endpoint
-			// if the network configuration has been successful, we can set the device to ready else we need to requeue
-			// we need to wait for either the network configuration to be successful or failed before we can proceed.
-			if len(eventsList.Events) > 0 {
-				if checkIfEventsContainNetworkConfigurationSuccess(eventsList) {
-					conditions.MarkTrue(machineScope.PacketMachine, infrav1.Layer2NetworkConfigurationConditionSuccess)
-				} else if checkIfEventsContainNetworkConfigurationFailure(eventsList) {
-					conditions.MarkTrue(machineScope.PacketMachine, infrav1.Layer2NetworkConfigurationConditionFailed)
-					return ctrl.Result{}, fmt.Errorf("failed to configure network on device")
-				} else {
-					// if the network configuration is still in progress, we need to requeue
-					// user data scripts might take some time to complete.
-					log.Info("waiting for layer2 network configurations to complete")
-					return ctrl.Result{RequeueAfter: time.Second * 10}, nil
-				}
-			}
+		res, err := r.checkNetworkConfiguration(ctx, machineScope)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if res.Requeue || res.RequeueAfter > 0 {
+			log.Info("Requeuing after network configuration check", "result", result)
+			return result, nil
 		}
 
 		// once the network configuration has been successful, we can call the APIs to set the port configuration to layer2/bonded/bound VXLAN to port.
@@ -592,7 +585,7 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 
 		if dev == nil {
 			log.Info("Server not found by tags, nothing left to do")
-			controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
+			ctrlutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
 			return nil
 		}
 
@@ -607,14 +600,14 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 					// When the server does not exist we do not have anything left to do.
 					// Probably somebody manually deleted the server from the UI or via API.
 					log.Info("Server not found by id, nothing left to do")
-					controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
+					ctrlutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
 					return nil
 				}
 
 				if resp.StatusCode == http.StatusForbidden {
 					// When a server fails to provision it will return a 403
 					log.Info("Server appears to have failed provisioning, nothing left to do")
-					controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
+					ctrlutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
 					return nil
 				}
 			}
@@ -627,7 +620,7 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 
 	// We should never get there but this is a safety check
 	if device == nil {
-		controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
+		ctrlutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
 		return fmt.Errorf("%w: %s", errMissingDevice, packetmachine.Name)
 	}
 
@@ -647,7 +640,7 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 		return fmt.Errorf("failed to delete the machine: %w", err)
 	}
 
-	controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
+	ctrlutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
 	return nil
 }
 
@@ -845,117 +838,287 @@ func getIPAddressCfg(ctx context.Context, client client.Client, machine *infrav1
 	return ipaddrCfgs, nil
 }
 
-func (r *PacketMachineReconciler) reconcilePortConfigurations(ctx context.Context, deviceID string, ipAddrCfgs []packet.IPAddressCfg) error {
+func getRoutesCfg(machine *infrav1.PacketMachine) ([]layer2.RouteSpec, error) {
+	routes := []layer2.RouteSpec{}
+
+	for _, route := range machine.Spec.Routes {
+		routes = append(routes, layer2.RouteSpec{
+			Destination: route.Destination,
+			Gateway:     route.Gateway,
+		})
+	}
+
+	if len(routes) == 0 {
+		return nil, nil
+	}
+
+	return routes, nil
+}
+
+// checkNetworkConfiguration checks the network configuration status for a device
+func (r *PacketMachineReconciler) checkNetworkConfiguration(ctx context.Context, machineScope *scope.MachineScope) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 
-	dev, _, err := r.PacketClient.GetDevice(ctx, deviceID)
-	if err != nil {
-		return fmt.Errorf("failed to get device: %w", err)
+	if machineScope.PacketMachine.Spec.NetworkPorts == nil {
+		log.V(4).Info("Network ports not specified, skipping network configuration check")
+		return ctrl.Result{}, nil
 	}
-	networkPorts := dev.NetworkPorts
-	for _, ipAddrCfg := range ipAddrCfgs {
-		portID, err := getMetalPortID(ipAddrCfg.PortName, networkPorts)
-		if err != nil {
-			return fmt.Errorf("failed to get port id: %w", err)
-		}
-		// check if the port is already bound to a vxlan
-		vlanAssignList, resp, err := r.PacketClient.PortsApi.FindPortVlanAssignments(ctx, *portID).Execute()
-		if err != nil {
-			return fmt.Errorf("failed to get port vlan assignments: %w", err)
-		}
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("failed to get port vlan assignments: %w", err)
-		}
 
-		desiredVXLAN := int32(ipAddrCfg.VXLAN)
-		vxlanStr := strconv.Itoa(ipAddrCfg.VXLAN)
-    	currentAssignments := getPortVXLANAssignments(vlanAssignList)
+	deviceID := machineScope.GetDeviceID()
+	if deviceID == "" {
+		return ctrl.Result{}, errors.New("device ID is empty")
+	}
 
-		desiredVXLANExists := false
-		// Remove any VXLAN assignments that are not the desired one
-		for _, currentVXLAN := range currentAssignments {
-			if currentVXLAN == desiredVXLAN {
-				desiredVXLANExists = true
-				continue
-			}
-			currentVXLANStr := strconv.Itoa(int(currentVXLAN))
-			// all other vxlan assignments needs to be removed from the port as the CRD is the source of truth.
-			// these assignments were either set by the user manually or by the any other entity.
-			_, resp, err := r.PacketClient.PortsApi.UnassignPort(ctx, *portID).PortAssignInput(metal.PortAssignInput{
-				Vnid: &currentVXLANStr,
-			}).Execute()
-			if err != nil {
-				return fmt.Errorf("failed to unassign port from vxlan: %w", err)
-			}
-			if resp.StatusCode != http.StatusOK {
-				return fmt.Errorf("failed to unassign port from vxlan: %w", err)
-			}
-			log.Info("Port unassigned from VXLAN", "port", ipAddrCfg.PortName, "vxlan", currentVXLAN)
-		}
+	eventsList, err := r.getDeviceEvents(ctx, deviceID)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
-		// Assign port to the desired VXLAN if it doesn't already exist
-		if !desiredVXLANExists {
-			_, resp, err = r.PacketClient.PortsApi.AssignPort(ctx, *portID).PortAssignInput(metal.PortAssignInput{
-				Vnid: &vxlanStr,
-			}).Execute()
-			if err != nil {
-				return fmt.Errorf("failed to assign port to vxlan: %w", err)
-			}
-			if resp.StatusCode != http.StatusOK {
-				return fmt.Errorf("failed to assign port to vxlan: %w", err)
-			}
-			log.Info("Port assigned to VXLAN", "port", ipAddrCfg.PortName, "vxlan", desiredVXLAN)
-		} else {
-			log.Info("Port already assigned to desired VXLAN", "port", ipAddrCfg.PortName, "vxlan", desiredVXLAN)
-		}
-		
-		// fetch the port by ID to check if the port is set to layer2 or bonded.
-		port, _, err := r.PacketClient.PortsApi.FindPortById(ctx, *portID).Execute()
-		if err != nil {
-			return fmt.Errorf("failed to get port: %w", err)
-		}
-		if port == nil {
-			return fmt.Errorf("failed to get port: %w", err)
-		}
-		// if the port is set to layer2, we need to set the port to layer2
-		if ipAddrCfg.Layer2 {
-			// check if port is already set to layer2
-			// NetworkType for layer2 is either "layer2-bonded" or "layer2-individual", hence we check if the string contains "layer2"
-			if strings.Contains(string(*port.NetworkType), "layer2") {
-				log.Info("Port is already set to layer2", "port", ipAddrCfg.PortName)
-				continue
-			}
-			_, resp, err := r.PacketClient.PortsApi.ConvertLayer2(ctx, *portID).Execute()
-			if err != nil {
-				return fmt.Errorf("failed to set port to layer2: %w", err)
-			}
-			if resp.StatusCode != http.StatusOK {
-				return fmt.Errorf("failed to set port to layer2: %w", err)
-			}
-			log.Info("Port set to layer2", "port", ipAddrCfg.PortName)
-		}
+	networkStatus := analyzeNetworkEvents(eventsList)
 
-		// if the port is set to bonded, we need to set the port to bonded
-		if ipAddrCfg.Bonded {
-			// check if port is already set to bonded, if not set it to bonded.
-			if port.Data == nil {
-				return fmt.Errorf("failed to get port data to check bonded status")
-			}
-			if !*port.Data.Bonded {
-					_, resp, err := r.PacketClient.PortsApi.BondPort(ctx, *portID).Execute()
-				if err != nil {
-					return fmt.Errorf("failed to set port to bonded: %w", err)
-				}
-				if resp.StatusCode != http.StatusOK {
-					return fmt.Errorf("failed to set port to bonded: %w", err)
-				}
-				log.Info("Port set to bonded", "port", ipAddrCfg.PortName)
-			}
+	switch networkStatus {
+	case NetworkStatusSuccess:
+		log.Info("Network configuration successful")
+		conditions.MarkTrue(machineScope.PacketMachine, infrav1.Layer2NetworkConfigurationConditionSuccess)
+		return ctrl.Result{}, nil
+	case NetworkStatusFailure:
+		log.Error(errors.New("network configuration failed"), "Failed to configure network on device")
+		conditions.MarkTrue(machineScope.PacketMachine, infrav1.Layer2NetworkConfigurationConditionFailed)
+		return ctrl.Result{}, errors.New("failed to configure network on device")
+	case NetworkStatusInProgress:
+		log.Info("Waiting for layer2 network configurations to complete")
+		return ctrl.Result{RequeueAfter: eventPollingInterval}, nil
+	default:
+		log.Info("No relevant network configuration events found")
+		return ctrl.Result{RequeueAfter: eventPollingInterval}, nil
+	}
+}
+
+// getDeviceEvents retrieves the events for a given device
+func (r *PacketMachineReconciler) getDeviceEvents(ctx context.Context, deviceID string) (*metal.EventList, error) {
+	eventsList, resp, err := r.PacketClient.EventsApi.FindDeviceEvents(ctx, deviceID).Execute()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get device events: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get device events: unexpected status code %d", resp.StatusCode)
+	}
+	return eventsList, nil
+}
+
+// NetworkStatus represents the status of network configuration
+type NetworkStatus int
+
+const (
+	NetworkStatusUnknown NetworkStatus = iota
+	NetworkStatusInProgress
+	NetworkStatusSuccess
+	NetworkStatusFailure
+)
+
+// analyzeNetworkEvents checks the events list for network configuration status
+func analyzeNetworkEvents(eventsList *metal.EventList) NetworkStatus {
+	if eventsList == nil || len(eventsList.Events) == 0 {
+		return NetworkStatusUnknown
+	}
+
+	for _, event := range eventsList.Events {
+		if event.Body == nil {
+			continue
 		}
+		if *event.Body == networkConfigurationSuccessEvent{
+			return NetworkStatusSuccess
+		}
+		if *event.Body == networkConfigurationFailureEvent {
+			return NetworkStatusFailure
+		}
+	}
+
+	return NetworkStatusInProgress
+}
+
+// reconcilePortConfigurations manages port configurations for a given device
+// It ensures that the ports are configured with the correct VXLAN, layer2, and bonding settings
+func (r *PacketMachineReconciler) reconcilePortConfigurations(ctx context.Context, deviceID string, desiredConfigs []packet.IPAddressCfg) error {
+	// Fetch the device details
+	device, _, err := r.PacketClient.GetDevice(ctx, deviceID)
+	if err != nil {
+		return fmt.Errorf("failed to get device %s: %w", deviceID, err)
+	}
+
+	for _, desiredConfig := range desiredConfigs {
+		if err := r.reconcilePortConfig(ctx, device.NetworkPorts, desiredConfig); err != nil {
+			return fmt.Errorf("failed to reconcile port %s: %w", desiredConfig.PortName, err)
+		}
+	}
+
+	return nil
+}
+
+// reconcilePortConfig handles the configuration for a single port
+func (r *PacketMachineReconciler) reconcilePortConfig(ctx context.Context, networkPorts []metal.Port, desiredConfig packet.IPAddressCfg) error {
+	log := ctrl.LoggerFrom(ctx)
+
+	portID, err := getMetalPortID(desiredConfig.PortName, networkPorts)
+	if err != nil {
+		return fmt.Errorf("failed to get port ID for %s: %w", desiredConfig.PortName, err)
+	}
+
+	if err := r.reconcileVXLAN(ctx, *portID, desiredConfig); err != nil {
+		return err
+	}
+
+	if err := r.reconcileLayer2AndBonding(ctx, *portID, desiredConfig); err != nil {
+		return err
+	}
+
+	log.Info("Port configuration reconciled successfully", "port", desiredConfig.PortName)
+	return nil
+}
+
+// reconcileVXLAN ensures the port is assigned to the correct VXLAN
+func (r *PacketMachineReconciler) reconcileVXLAN(ctx context.Context, portID string, desiredConfig packet.IPAddressCfg) error {
+	log := ctrl.LoggerFrom(ctx)
+
+	currentAssignments, err := r.getCurrentVXLANAssignments(ctx, portID)
+	if err != nil {
+		return err
+	}
+
+	desiredVXLAN := int32(desiredConfig.VXLAN)
+	desiredVXLANStr := strconv.Itoa(desiredConfig.VXLAN)
+	desiredStateExists := false
+
+	for _, currentVXLAN := range currentAssignments {
+		if currentVXLAN == desiredVXLAN {
+			desiredStateExists = true
+			continue
+		}
+		if err := r.unassignVXLAN(ctx, portID, currentVXLAN); err != nil {
+			return err
+		}
+	}
+
+	if !desiredStateExists {
+		if err := r.assignVXLAN(ctx, portID, desiredVXLANStr); err != nil {
+			return err
+		}
+		log.Info("Port assigned to VXLAN", "port", desiredConfig.PortName, "vxlan", desiredVXLAN)
+	} else {
+		log.Info("Port already assigned to desired VXLAN", "port", desiredConfig.PortName, "vxlan", desiredVXLAN)
+	}
+
+	return nil
+}
+
+// reconcileLayer2AndBonding ensures the port is set to the correct layer2 and bonding configuration
+func (r *PacketMachineReconciler) reconcileLayer2AndBonding(ctx context.Context, portID string, desiredConfig packet.IPAddressCfg) error {
+	port, _, err := r.PacketClient.PortsApi.FindPortById(ctx, portID).Execute()
+	if err != nil {
+		return fmt.Errorf("failed to get port %s: %w", portID, err)
+	}
+	if port == nil {
+		return fmt.Errorf("port %s not found", portID)
+	}
+
+	if desiredConfig.Layer2 {
+		if err := r.setLayer2(ctx, portID, port, desiredConfig.PortName); err != nil {
+			return err
+		}
+	}
+
+	if desiredConfig.Bonded {
+		if err := r.setBonding(ctx, portID, port, desiredConfig.PortName); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// getCurrentVXLANAssignments fetches the current VXLAN assignments for a port
+func (r *PacketMachineReconciler) getCurrentVXLANAssignments(ctx context.Context, portID string) ([]int32, error) {
+	vlanAssignList, resp, err := r.PacketClient.PortsApi.FindPortVlanAssignments(ctx, portID).Execute()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get port VLAN assignments: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get port VLAN assignments: unexpected status code %d", resp.StatusCode)
+	}
+	return getPortVXLANAssignments(vlanAssignList), nil
+}
+
+// unassignVXLAN removes a VXLAN assignment from a port
+func (r *PacketMachineReconciler) unassignVXLAN(ctx context.Context, portID string, vxlan int32) error {
+	vxlanStr := strconv.Itoa(int(vxlan))
+	_, resp, err := r.PacketClient.PortsApi.UnassignPort(ctx, portID).PortAssignInput(metal.PortAssignInput{
+		Vnid: &vxlanStr,
+	}).Execute()
+	if err != nil {
+		return fmt.Errorf("failed to unassign port from VXLAN %d: %w", vxlan, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to unassign port from VXLAN %d: unexpected status code %d", vxlan, resp.StatusCode)
 	}
 	return nil
 }
 
+// assignVXLAN assigns a VXLAN to a port
+func (r *PacketMachineReconciler) assignVXLAN(ctx context.Context, portID, vxlanStr string) error {
+	_, resp, err := r.PacketClient.PortsApi.AssignPort(ctx, portID).PortAssignInput(metal.PortAssignInput{
+		Vnid: &vxlanStr,
+	}).Execute()
+	if err != nil {
+		return fmt.Errorf("failed to assign port to VXLAN %s: %w", vxlanStr, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to assign port to VXLAN %s: unexpected status code %d", vxlanStr, resp.StatusCode)
+	}
+	return nil
+}
+
+// setLayer2 configures the port for layer2 if not already set
+func (r *PacketMachineReconciler) setLayer2(ctx context.Context, portID string, port *metal.Port, portName string) error {
+	log := ctrl.LoggerFrom(ctx)
+
+	if strings.Contains(string(*port.NetworkType), "layer2") {
+		log.Info("Port is already set to layer2", "port", portName)
+		return nil
+	}
+
+	_, resp, err := r.PacketClient.PortsApi.ConvertLayer2(ctx, portID).Execute()
+	if err != nil {
+		return fmt.Errorf("failed to set port to layer2: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to set port to layer2: unexpected status code %d", resp.StatusCode)
+	}
+	log.Info("Port set to layer2", "port", portName)
+	return nil
+}
+
+// setBonding configures the port for bonding if not already set
+func (r *PacketMachineReconciler) setBonding(ctx context.Context, portID string, port *metal.Port, portName string) error {
+	log := ctrl.LoggerFrom(ctx)
+
+	if port.Data == nil {
+		return fmt.Errorf("failed to get port data to check bonded status")
+	}
+	if *port.Data.Bonded {
+		log.Info("Port is already bonded", "port", portName)
+		return nil
+	}
+
+	_, resp, err := r.PacketClient.PortsApi.BondPort(ctx, portID).Execute()
+	if err != nil {
+		return fmt.Errorf("failed to set port to bonded: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to set port to bonded: unexpected status code %d", resp.StatusCode)
+	}
+	log.Info("Port set to bonded", "port", portName)
+	return nil
+}
 // getPortVXLANAssignments returns all current VXLAN assignments for a port
 func getPortVXLANAssignments(vlanAssignList *metal.PortVlanAssignmentList) []int32 {
     var assignments []int32
@@ -965,15 +1128,6 @@ func getPortVXLANAssignments(vlanAssignList *metal.PortVlanAssignmentList) []int
         }
     }
     return assignments
-}
-
-func checkIfPortIsBoundToVXLAN(vlanAssignList *metal.PortVlanAssignmentList, vxlan int32) bool {
-	for _, vlanAssign := range vlanAssignList.VlanAssignments {
-		if *vlanAssign.Vlan == vxlan {
-			return true
-		}
-	}
-	return false
 }
 
 func getMetalPortID(portName string, networkPorts []metal.Port) (*string, error) {
@@ -999,31 +1153,4 @@ func getIPAddrClaim(ctx context.Context, client client.Client, ipAddrClaimName, 
 		return nil, err
 	}
 	return ipAddrClaim, nil
-}
-
-func checkIfEventsContainNetworkConfigurationSuccess(eventsList *metal.EventList) bool {
-	networkConfigurationSuccess := "network_configuration_success"
-
-	for _, event := range eventsList.Events {
-		if event.Body == nil {
-            continue
-        }
-
-		if *event.Body == networkConfigurationSuccess {
-			return true
-		}
-	}
-	return false
-}
-
-func checkIfEventsContainNetworkConfigurationFailure(eventsList *metal.EventList) bool {
-	var networkConfigurationFailure *string = new(string)
-	*networkConfigurationFailure = "network_configuration_failure"
-
-	for _, event := range eventsList.Events {
-		if event.Body == networkConfigurationFailure {
-			return true
-		}
-	}
-	return false
 }
