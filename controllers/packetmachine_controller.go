@@ -511,14 +511,30 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 			}
 		}
 
-		// if layer2 template is enabled, we need to poll the /events endpoint to check if the network has been configured successfully
-		res, err := r.checkNetworkConfiguration(ctx, machineScope)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		if res.Requeue || res.RequeueAfter > 0 {
-			log.Info("Requeuing after network configuration check", "result", result)
-			return result, nil
+		if machineScope.PacketMachine.Spec.NetworkPorts != nil {
+			eventsList,resp,err := r.PacketClient.EventsApi.FindDeviceEvents(ctx, *dev.Id).Execute()
+			if err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to get device events: %w", err)
+			}
+			if resp.StatusCode != http.StatusOK {
+				return ctrl.Result{}, fmt.Errorf("failed to get device events: %w", err)
+			}
+			// check if the network configuration has been successful/failed by polling the /events endpoint
+			// if the network configuration has been successful, we can set the device to ready else we need to requeue
+			// we need to wait for either the network configuration to be successful or failed before we can proceed.
+			if len(eventsList.Events) > 0 {
+				if checkIfEventsContainNetworkConfigurationSuccess(eventsList) {
+					conditions.MarkTrue(machineScope.PacketMachine, infrav1.Layer2NetworkConfigurationConditionSuccess)
+				} else if checkIfEventsContainNetworkConfigurationFailure(eventsList) {
+					conditions.MarkTrue(machineScope.PacketMachine, infrav1.Layer2NetworkConfigurationConditionFailed)
+					return ctrl.Result{}, fmt.Errorf("failed to configure network on device")
+				} else {
+					// if the network configuration is still in progress, we need to requeue
+					// user data scripts might take some time to complete.
+					log.Info("waiting for layer2 network configurations to complete")
+					return ctrl.Result{RequeueAfter: time.Second * 10}, nil
+				}
+			}
 		}
 
 		// once the network configuration has been successful, we can call the APIs to set the port configuration to layer2/bonded/bound VXLAN to port.
@@ -855,86 +871,33 @@ func getRoutesCfg(machine *infrav1.PacketMachine) ([]layer2.RouteSpec, error) {
 	return routes, nil
 }
 
-// checkNetworkConfiguration checks the network configuration status for a device
-func (r *PacketMachineReconciler) checkNetworkConfiguration(ctx context.Context, machineScope *scope.MachineScope) (ctrl.Result, error) {
-	log := ctrl.LoggerFrom(ctx)
 
-	if machineScope.PacketMachine.Spec.NetworkPorts == nil {
-		log.V(4).Info("Network ports not specified, skipping network configuration check")
-		return ctrl.Result{}, nil
-	}
 
-	deviceID := machineScope.GetDeviceID()
-	if deviceID == "" {
-		return ctrl.Result{}, errors.New("device ID is empty")
-	}
-
-	eventsList, err := r.getDeviceEvents(ctx, deviceID)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	networkStatus := analyzeNetworkEvents(eventsList)
-
-	switch networkStatus {
-	case NetworkStatusSuccess:
-		log.Info("Network configuration successful")
-		conditions.MarkTrue(machineScope.PacketMachine, infrav1.Layer2NetworkConfigurationConditionSuccess)
-		return ctrl.Result{}, nil
-	case NetworkStatusFailure:
-		log.Error(errors.New("network configuration failed"), "Failed to configure network on device")
-		conditions.MarkTrue(machineScope.PacketMachine, infrav1.Layer2NetworkConfigurationConditionFailed)
-		return ctrl.Result{}, errors.New("failed to configure network on device")
-	case NetworkStatusInProgress:
-		log.Info("Waiting for layer2 network configurations to complete")
-		return ctrl.Result{RequeueAfter: eventPollingInterval}, nil
-	default:
-		log.Info("No relevant network configuration events found")
-		return ctrl.Result{RequeueAfter: eventPollingInterval}, nil
-	}
-}
-
-// getDeviceEvents retrieves the events for a given device
-func (r *PacketMachineReconciler) getDeviceEvents(ctx context.Context, deviceID string) (*metal.EventList, error) {
-	eventsList, resp, err := r.PacketClient.EventsApi.FindDeviceEvents(ctx, deviceID).Execute()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get device events: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get device events: unexpected status code %d", resp.StatusCode)
-	}
-	return eventsList, nil
-}
-
-// NetworkStatus represents the status of network configuration
-type NetworkStatus int
-
-const (
-	NetworkStatusUnknown NetworkStatus = iota
-	NetworkStatusInProgress
-	NetworkStatusSuccess
-	NetworkStatusFailure
-)
-
-// analyzeNetworkEvents checks the events list for network configuration status
-func analyzeNetworkEvents(eventsList *metal.EventList) NetworkStatus {
-	if eventsList == nil || len(eventsList.Events) == 0 {
-		return NetworkStatusUnknown
-	}
+func checkIfEventsContainNetworkConfigurationSuccess(eventsList *metal.EventList) bool {
+	networkConfigurationSuccess := "network_configuration_success"
 
 	for _, event := range eventsList.Events {
 		if event.Body == nil {
-			continue
-		}
-		if *event.Body == networkConfigurationSuccessEvent{
-			return NetworkStatusSuccess
-		}
-		if *event.Body == networkConfigurationFailureEvent {
-			return NetworkStatusFailure
+            continue
+        }
+
+		if *event.Body == networkConfigurationSuccess {
+			return true
 		}
 	}
+	return false
+}
 
-	return NetworkStatusInProgress
+func checkIfEventsContainNetworkConfigurationFailure(eventsList *metal.EventList) bool {
+	var networkConfigurationFailure *string = new(string)
+	*networkConfigurationFailure = "network_configuration_failure"
+
+	for _, event := range eventsList.Events {
+		if event.Body == networkConfigurationFailure {
+			return true
+		}
+	}
+	return false
 }
 
 // reconcilePortConfigurations manages port configurations for a given device
