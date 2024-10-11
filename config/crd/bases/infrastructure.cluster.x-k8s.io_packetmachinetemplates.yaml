@@ -105,27 +105,43 @@ spec:
                                 description: Network defines the network configuration
                                   for a port.
                                 properties:
-                                  address:
+                                  addressFromPool:
                                     description: |-
-                                      network ip address range to reserve for these ports.
-                                      for eg: can be carved out of a VRF IP Range.
-                                    type: string
+                                      AddressFromPool is a reference of IPAddressPool that should be assigned to IPAddressClaim.
+                                      The machine's cloud-init metadata will be populated with IPAddresse fulfilled by an IPAM provider.
+                                    properties:
+                                      apiGroup:
+                                        description: |-
+                                          APIGroup is the group for the resource being referenced.
+                                          If APIGroup is not specified, the specified Kind must be in the core API group.
+                                          For any other third-party types, APIGroup is required.
+                                        type: string
+                                      kind:
+                                        description: Kind is the type of resource
+                                          being referenced
+                                        type: string
+                                      name:
+                                        description: Name is the name of resource
+                                          being referenced
+                                        type: string
+                                    required:
+                                    - kind
+                                    - name
+                                    type: object
+                                    x-kubernetes-map-type: atomic
                                   addressType:
                                     description: |-
                                       AddressType is the type of address to assign to the machine. It can be either Internal or External.
                                       kubebuilder:validation:Enum=Internal;External
                                     type: string
-                                  assignmentRange:
-                                    description: |-
-                                      AssignmentRange is the range of IP addresses to assign to the machine from the specified IP address range.
-                                      for eg: if the IP address range is 10.60.10.0/24 , the assignment range can be '10.60.10.2-10.60.10.8'
-                                      If not specified, the first available IP address from the IP address range will be assigned.
-                                      This is useful when you want to reserve some IP addresses for other purposes for eg Gateways, DNS etc.
-                                    type: string
                                   netmask:
                                     description: |-
                                       Netmask is the netmask for the network.
                                       eg: 255.255.255.248
+                                    type: string
+                                  vlanID:
+                                    description: VLAN ID for the VLAN created on the
+                                      EM Console
                                     type: string
                                   vxlan:
                                     description: VLANs for EM API to find by vxlan,
@@ -133,8 +149,6 @@ spec:
                                       OS userdata template will also configure this
                                       VLAN on the bond device
                                     type: integer
-                                required:
-                                - address
                                 type: object
                               type: array
                           required:

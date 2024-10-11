@@ -14,15 +14,24 @@ type PortNetwork struct {
 	Gateway   string // Added Gateway field to match template
 }
 
+// RouteSpec represents a static route.
+type RouteSpec struct {
+    Destination string
+    Gateway     string
+}
+
 type Config struct {
 	// VLANs is a list of network configurations for the Layer2
-	VLANs []PortNetwork // Changed from Ports to VLANs to match template
+	VLANs []PortNetwork
+	// Routes is a list of static routes.
+	Routes []RouteSpec
 }
 
 // NewConfig returns a new Config object
 func NewConfig() *Config {
 	return &Config{
-		VLANs: make([]PortNetwork, 0),
+		VLANs:  make([]PortNetwork, 0),
+		Routes: make([]RouteSpec, 0),
 	}
 }
 
@@ -32,6 +41,13 @@ func (c *Config) AddPortNetwork(portName string, vxlan int, ipAddress string, ne
 		Vxlan:     vxlan,
 		IPAddress: ipAddress,
 		Netmask:   netmask,
+	})
+}
+
+func (c *Config) AddRoute(destination, gateway string) {
+	c.Routes = append(c.Routes, RouteSpec{
+		Destination: destination,
+		Gateway:     gateway,
 	})
 }
 

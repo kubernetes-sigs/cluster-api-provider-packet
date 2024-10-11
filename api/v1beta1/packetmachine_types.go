@@ -28,6 +28,9 @@ const (
 	// MachineFinalizer allows ReconcilePacketMachine to clean up Packet resources before
 	// removing it from the apiserver.
 	MachineFinalizer = "packetmachine.infrastructure.cluster.x-k8s.io"
+	// IPAddressClaimFinalizer allows the reconciler to prevent deletion of an
+	// IPAddressClaim that is in use.
+	IPAddressClaimFinalizer = "packetmachine.infrastructure.cluster.x-k8s.io/ip-claim-protection"
 )
 
 const (
@@ -50,6 +53,34 @@ const (
 	WaitingForClusterInfrastructureReason = "WaitingForClusterInfrastructure"
 	// WaitingForBootstrapDataReason used when machine is waiting for bootstrap data to be ready before proceeding.
 	WaitingForBootstrapDataReason = "WaitingForBootstrapData"
+
+	Layer2NetworkConfigurationConditionSuccess = "Layer2NetworkConfigurationSuccess"
+	Layer2NetworkConfigurationConditionFailed  = "Layer2NetworkConfigurationFailed"
+
+	
+
+)
+
+const (
+	// IPAddressClaimedCondition documents the status of claiming an IP address
+	// from an IPAM provider.
+	IPAddressClaimedCondition clusterv1.ConditionType = "IPAddressClaimed"
+
+	// IPAddressClaimsBeingCreatedReason (Severity=Info) documents that claims for the
+	// IP addresses required by the VSphereVM are being created.
+	IPAddressClaimsBeingCreatedReason = "IPAddressClaimsBeingCreated"
+
+	// WaitingForIPAddressReason (Severity=Info) documents that the VSphereVM is
+	// currently waiting for an IP address to be provisioned.
+	WaitingForIPAddressReason = "WaitingForIPAddress"
+
+	// IPAddressInvalidReason (Severity=Error) documents that the IP address
+	// provided by the IPAM provider is not valid.
+	IPAddressInvalidReason = "IPAddressInvalid"
+
+	// IPAddressClaimNotFoundReason (Severity=Error) documents that the IPAddressClaim
+	// cannot be found.
+	IPAddressClaimNotFoundReason = "IPAddressClaimNotFound"
 )
 
 // PacketMachineSpec defines the desired state of PacketMachine.
@@ -87,13 +118,14 @@ type PacketMachineSpec struct {
 	// +optional
 	Tags Tags `json:"tags,omitempty"`
 
-	// NetworkPorts is an optional set of configurations for configuring layer2 seetings in a machine. 
+	// NetworkPorts is an optional set of configurations for configuring layer2 seetings in a machine.
 	// +optional
 	NetworkPorts []*Port `json:"ports,omitempty"`
 	// List of Routes to be configured on the Packet Machine
-    // +optional
-	Routes      []*RouteSpec     `json:"routes,omitempty"`
+	// +optional
+	Routes []*RouteSpec `json:"routes,omitempty"`
 }
+
 // Port defines the Layer2(VLAN) Configuration that needs to be done on a port (eg: bond0).
 type Port struct {
 	// name of the port e.g bond0,eth0 and eth1 for 2 NIC servers.
@@ -103,34 +135,30 @@ type Port struct {
 	// convert port to layer 2. is false by default on new devices. changes result in /ports/id/convert/layer-[2|3] API calls
 	Layer2 bool `json:"layer2,omitempty"`
 	// Network configurations for the port
-    Networks []Network `json:"networks"`	
+	Networks []Network `json:"networks"`
 }
 
 // Network defines the network configuration for a port.
 type Network struct {
-    // network ip address range to reserve for these ports.
-    // for eg: can be carved out of a VRF IP Range.
-    Address string `json:"address"`
-    // VLANs for EM API to find by vxlan, project, and metro match then attach to device. OS userdata template will also configure this VLAN on the bond device
-    VXLAN int `json:"vxlan,omitempty"`
-    // AssignmentRange is the range of IP addresses to assign to the machine from the specified IP address range.
-    // for eg: if the IP address range is 10.60.10.0/24 , the assignment range can be '10.60.10.2-10.60.10.8'
-    // If not specified, the first available IP address from the IP address range will be assigned.
-    // This is useful when you want to reserve some IP addresses for other purposes for eg Gateways, DNS etc.
-    // +optional
-    AssignmentRange string `json:"assignmentRange,omitempty"`
+	// VLANs for EM API to find by vxlan, project, and metro match then attach to device. OS userdata template will also configure this VLAN on the bond device
+	VXLAN int `json:"vxlan,omitempty"`
+	// VLAN ID for the VLAN created on the EM Console
+	VLANID string `json:"vlanID,omitempty"`
 	// Netmask is the netmask for the network.
 	// eg: 255.255.255.248
 	Netmask string `json:"netmask,omitempty"`
-    // AddressType is the type of address to assign to the machine. It can be either Internal or External.
-    // kubebuilder:validation:Enum=Internal;External
-    AddressType string `json:"addressType,omitempty"`
+	// AddressFromPool is a reference of IPAddressPool that should be assigned to IPAddressClaim.
+	// The machine's cloud-init metadata will be populated with IPAddresse fulfilled by an IPAM provider.
+	AddressFromPool corev1.TypedLocalObjectReference `json:"addressFromPool,omitempty"`
+	// AddressType is the type of address to assign to the machine. It can be either Internal or External.
+	// kubebuilder:validation:Enum=Internal;External
+	AddressType string `json:"addressType,omitempty"`
 }
 
 // RouteSpec defines the static route configuration for a PacketMachine.
 type RouteSpec struct {
-    Destination string `json:"destination"`
-    Gateway     string `json:"gateway"`
+	Destination string `json:"destination"`
+	Gateway     string `json:"gateway"`
 }
 
 // PacketMachineStatus defines the observed state of PacketMachine.

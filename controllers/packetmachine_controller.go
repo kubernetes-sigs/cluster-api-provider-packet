@@ -20,17 +20,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
+
+	apitypes "k8s.io/apimachinery/pkg/types"
 
 	metal "github.com/equinix/equinix-sdk-go/services/metalv1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
-	"sigs.k8s.io/cluster-api/util"
+	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
+	clusterutilv1 "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/predicates"
@@ -38,19 +45,26 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-packet/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-packet/internal/emlb"
+	"sigs.k8s.io/cluster-api-provider-packet/internal/layer2"
 	packet "sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet"
 	"sigs.k8s.io/cluster-api-provider-packet/pkg/cloud/packet/scope"
 	clog "sigs.k8s.io/cluster-api/util/log"
+	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const (
 	force = true
+)
+
+const (
+	networkConfigurationSuccessEvent = "network_configuration_success"
+	networkConfigurationFailureEvent = "network_configuration_failure"
+	eventPollingInterval             = 5 * time.Second
 )
 
 var (
@@ -97,7 +111,7 @@ func (r *PacketMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// Fetch the Machine.
-	machine, err := util.GetOwnerMachine(ctx, r.Client, packetmachine.ObjectMeta)
+	machine, err := clusterutilv1.GetOwnerMachine(ctx, r.Client, packetmachine.ObjectMeta)
 	if err != nil {
 		log.Error(err, "Failed to get owner machine")
 		return ctrl.Result{}, err
@@ -111,7 +125,7 @@ func (r *PacketMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	ctx = ctrl.LoggerInto(ctx, log)
 
 	// Fetch the Cluster.
-	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
+	cluster, err := clusterutilv1.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
 	if err != nil {
 		log.Info("Machine is missing cluster label or cluster does not exist")
 		return ctrl.Result{}, err
@@ -166,8 +180,8 @@ func (r *PacketMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Add finalizer first if not set to avoid the race condition between init and delete.
 	// Note: Finalizers in general can only be added when the deletionTimestamp is not set.
-	if packetmachine.ObjectMeta.DeletionTimestamp.IsZero() && !controllerutil.ContainsFinalizer(packetmachine, infrav1.MachineFinalizer) {
-		controllerutil.AddFinalizer(packetmachine, infrav1.MachineFinalizer)
+	if packetmachine.ObjectMeta.DeletionTimestamp.IsZero() && !ctrlutil.ContainsFinalizer(packetmachine, infrav1.MachineFinalizer) {
+		ctrlutil.AddFinalizer(packetmachine, infrav1.MachineFinalizer)
 		return ctrl.Result{}, nil
 	}
 
@@ -182,7 +196,7 @@ func (r *PacketMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 func (r *PacketMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, options controller.Options) error {
 	log := ctrl.LoggerFrom(ctx)
 
-	clusterToPacketMachines, err := util.ClusterToTypedObjectsMapper(mgr.GetClient(), &infrav1.PacketMachineList{}, mgr.GetScheme())
+	clusterToPacketMachines, err := clusterutilv1.ClusterToTypedObjectsMapper(mgr.GetClient(), &infrav1.PacketMachineList{}, mgr.GetScheme())
 	if err != nil {
 		return fmt.Errorf("failed to create mapper for Cluster to PacketMachines: %w", err)
 	}
@@ -193,7 +207,7 @@ func (r *PacketMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl
 		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(log, r.WatchFilterValue)).
 		Watches(
 			&clusterv1.Machine{},
-			handler.EnqueueRequestsFromMapFunc(util.MachineToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("PacketMachine"))),
+			handler.EnqueueRequestsFromMapFunc(clusterutilv1.MachineToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("PacketMachine"))),
 		).
 		Watches(
 			&infrav1.PacketCluster{},
@@ -205,6 +219,10 @@ func (r *PacketMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl
 			builder.WithPredicates(
 				predicates.ClusterUnpausedAndInfrastructureReady(log),
 			),
+		).
+		Watches(
+			&ipamv1.IPAddressClaim{},
+			handler.EnqueueRequestsFromMapFunc(ipAddressClaimToPacketMachine),
 		).Complete(r)
 	if err != nil {
 		return fmt.Errorf("failed setting up with a controller manager: %w", err)
@@ -231,7 +249,7 @@ func (r *PacketMachineReconciler) PacketClusterToPacketMachines(ctx context.Cont
 		return nil
 	}
 
-	cluster, err := util.GetOwnerCluster(ctx, r.Client, c.ObjectMeta)
+	cluster, err := clusterutilv1.GetOwnerCluster(ctx, r.Client, c.ObjectMeta)
 	switch {
 	case apierrors.IsNotFound(err) || cluster == nil:
 		log.Error(err, "owning cluster is not found, skipping mapping.")
@@ -256,6 +274,29 @@ func (r *PacketMachineReconciler) PacketClusterToPacketMachines(ctx context.Cont
 	}
 
 	return result
+}
+
+func ipAddressClaimToPacketMachine(_ context.Context, a client.Object) []reconcile.Request {
+	ipAddressClaim, ok := a.(*ipamv1.IPAddressClaim)
+	if !ok {
+		return nil
+	}
+
+	requests := []reconcile.Request{}
+	if clusterutilv1.HasOwner(ipAddressClaim.OwnerReferences, infrav1.GroupVersion.String(), []string{"PacketMachine"}) {
+		for _, ref := range ipAddressClaim.OwnerReferences {
+			if ref.Kind == "VSphereVM" {
+				requests = append(requests, reconcile.Request{
+					NamespacedName: apitypes.NamespacedName{
+						Name:      ref.Name,
+						Namespace: ipAddressClaim.Namespace,
+					},
+				})
+				break
+			}
+		}
+	}
+	return requests
 }
 
 func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *scope.MachineScope) (ctrl.Result, error) { //nolint:gocyclo,maintidx
@@ -289,6 +330,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		err                  error
 		controlPlaneEndpoint *metal.IPReservation
 		resp                 *http.Response
+		ipAddrCfg			 []packet.IPAddressCfg
 	)
 
 	if deviceID != "" {
@@ -341,10 +383,27 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 				return ctrl.Result{}, patchErr
 			}
 		}
+		if len(machineScope.PacketMachine.Spec.NetworkPorts) > 0 {
+			if err := r.ReconcileIPAddresses(ctx, machineScope.PacketMachine); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+
+		ipAddrCfg, err = getIPAddressCfg(ctx, r.Client, machineScope.PacketMachine)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		routesCfg, err := getRoutesCfg(machineScope.PacketMachine)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 
 		createDeviceReq := packet.CreateDeviceRequest{
 			MachineScope: machineScope,
 			ExtraTags:    packet.DefaultCreateTags(machineScope.Namespace(), machineScope.Machine.Name, machineScope.Cluster.Name),
+			IPAddresses:  ipAddrCfg,
+			Routes:       routesCfg,
 		}
 
 		// when a node is a control plane node we need the elastic IP
@@ -412,7 +471,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	}
 
 	deviceAddr := r.PacketClient.GetDeviceAddresses(dev)
-	machineScope.SetAddresses(append(addrs, deviceAddr...))
+	machineScope.SetAddresses(append(addrs,deviceAddr...))
 
 	// Proceed to reconcile the PacketMachine state.
 	var result reconcile.Result
@@ -449,6 +508,44 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 				if err := lb.ReconcileVIPOrigin(ctx, machineScope, deviceAddr); err != nil {
 					return ctrl.Result{}, err
 				}
+			}
+		}
+
+		if machineScope.PacketMachine.Spec.NetworkPorts != nil {
+			eventsList,resp,err := r.PacketClient.EventsApi.FindDeviceEvents(ctx, *dev.Id).Execute()
+			if err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to get device events: %w", err)
+			}
+			if resp.StatusCode != http.StatusOK {
+				return ctrl.Result{}, fmt.Errorf("failed to get device events: %w", err)
+			}
+			// check if the network configuration has been successful/failed by polling the /events endpoint
+			// if the network configuration has been successful, we can set the device to ready else we need to requeue
+			// we need to wait for either the network configuration to be successful or failed before we can proceed.
+			if len(eventsList.Events) > 0 {
+				if checkIfEventsContainNetworkConfigurationSuccess(eventsList) {
+					conditions.MarkTrue(machineScope.PacketMachine, infrav1.Layer2NetworkConfigurationConditionSuccess)
+				} else if checkIfEventsContainNetworkConfigurationFailure(eventsList) {
+					conditions.MarkTrue(machineScope.PacketMachine, infrav1.Layer2NetworkConfigurationConditionFailed)
+					return ctrl.Result{}, fmt.Errorf("failed to configure network on device")
+				} else {
+					// if the network configuration is still in progress, we need to requeue
+					// user data scripts might take some time to complete.
+					log.Info("waiting for layer2 network configurations to complete")
+					return ctrl.Result{RequeueAfter: time.Second * 10}, nil
+				}
+			}
+		}
+
+		// once the network configuration has been successful, we can call the APIs to set the port configuration to layer2/bonded/bound VXLAN to port.
+		// reconstruct ipAddrCfg as earlier it was done when device was created first. During later reconciliations, this might be nil and we need to reconstruct it.
+		ipAddrCfg, err = getIPAddressCfg(ctx, r.Client, machineScope.PacketMachine)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if len(ipAddrCfg) > 0 {
+			if err := r.reconcilePortConfigurations(ctx, *dev.Id, ipAddrCfg); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to set port configuration: %w", err)
 			}
 		}
 
@@ -504,7 +601,7 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 
 		if dev == nil {
 			log.Info("Server not found by tags, nothing left to do")
-			controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
+			ctrlutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
 			return nil
 		}
 
@@ -519,14 +616,14 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 					// When the server does not exist we do not have anything left to do.
 					// Probably somebody manually deleted the server from the UI or via API.
 					log.Info("Server not found by id, nothing left to do")
-					controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
+					ctrlutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
 					return nil
 				}
 
 				if resp.StatusCode == http.StatusForbidden {
 					// When a server fails to provision it will return a 403
 					log.Info("Server appears to have failed provisioning, nothing left to do")
-					controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
+					ctrlutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
 					return nil
 				}
 			}
@@ -539,7 +636,7 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 
 	// We should never get there but this is a safety check
 	if device == nil {
-		controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
+		ctrlutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
 		return fmt.Errorf("%w: %s", errMissingDevice, packetmachine.Name)
 	}
 
@@ -559,6 +656,464 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 		return fmt.Errorf("failed to delete the machine: %w", err)
 	}
 
-	controllerutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
+	ctrlutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
 	return nil
+}
+
+// +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddressclaims,verbs=get;create;patch;watch;list;update
+// +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddresses,verbs=get;list;watch
+
+// ReconcileIPAddresses reconciles ip addresses forpacket machine
+func (r *PacketMachineReconciler) ReconcileIPAddresses(ctx context.Context, machine *infrav1.PacketMachine) error {
+
+	log := ctrl.LoggerFrom(ctx)
+
+	totalClaims, claimsCreated := 0, 0
+	claimsFulfilled := 0
+
+	var (
+		claims  []conditions.Getter
+		errList []error
+	)
+
+	for portIdx, port := range machine.Spec.NetworkPorts {
+		for networkIdx, network := range port.Networks {
+			totalClaims++
+
+			ipAddrClaimName := packet.IPAddressClaimName(machine.Name, portIdx, networkIdx)
+
+			ipAddrClaim := &ipamv1.IPAddressClaim{}
+			ipAddrClaimKey := client.ObjectKey{
+				Namespace: machine.Namespace,
+				Name:      ipAddrClaimName,
+			}
+
+			log := log.WithValues("IPAddressClaim", klog.KRef(ipAddrClaimKey.Namespace, ipAddrClaimKey.Name))
+			ctx := ctrl.LoggerInto(ctx, log)
+
+			err := r.Client.Get(ctx, ipAddrClaimKey, ipAddrClaim)
+			if err != nil && !apierrors.IsNotFound(err) {
+				return fmt.Errorf("failed to get IPAddressClaim %s err: %v", klog.KRef(ipAddrClaimKey.Namespace, ipAddrClaimKey.Name), err)
+			}
+
+			ipAddrClaim, created, err := createOrPatchIPAddressClaim(ctx, r.Client, machine, ipAddrClaimName, network.AddressFromPool)
+			if err != nil {
+				errList = append(errList, err)
+				continue
+			}
+
+			if created {
+				claimsCreated++
+			}
+			if ipAddrClaim.Status.AddressRef.Name != "" {
+				claimsFulfilled++
+			}
+
+			if conditions.Has(ipAddrClaim, clusterv1.ReadyCondition) {
+				claims = append(claims, ipAddrClaim)
+			}
+		}
+	}
+
+	if len(errList) > 0 {
+		aggregatedErr := kerrors.NewAggregate(errList)
+		conditions.MarkFalse(machine,
+			infrav1.IPAddressClaimedCondition,
+			infrav1.IPAddressClaimNotFoundReason,
+			clusterv1.ConditionSeverityError,
+			aggregatedErr.Error())
+		return aggregatedErr
+	}
+
+	// Fallback logic to calculate the state of the IPAddressClaimed condition
+	switch {
+	case totalClaims == claimsFulfilled:
+		conditions.MarkTrue(machine, infrav1.IPAddressClaimedCondition)
+	case claimsFulfilled < totalClaims && claimsCreated > 0:
+		conditions.MarkFalse(machine, infrav1.IPAddressClaimedCondition,
+			infrav1.IPAddressClaimsBeingCreatedReason, clusterv1.ConditionSeverityInfo,
+			"%d/%d claims being created", claimsCreated, totalClaims)
+	case claimsFulfilled < totalClaims && claimsCreated == 0:
+		conditions.MarkFalse(machine, infrav1.IPAddressClaimedCondition,
+			infrav1.WaitingForIPAddressReason, clusterv1.ConditionSeverityInfo,
+			"%d/%d claims being processed", totalClaims-claimsFulfilled, totalClaims)
+	}
+
+	return nil
+}
+
+func createOrPatchIPAddressClaim(ctx context.Context, client client.Client, machine *infrav1.PacketMachine, name string, poolRef corev1.TypedLocalObjectReference) (*ipamv1.IPAddressClaim, bool, error) {
+	claim := &ipamv1.IPAddressClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: machine.Namespace,
+		},
+	}
+
+	mutateFn := func() (err error) {
+		claim.SetOwnerReferences(clusterutilv1.EnsureOwnerRef(
+			claim.OwnerReferences,
+			metav1.OwnerReference{
+				APIVersion: infrav1.GroupVersion.String(),
+				Kind:       "PacketMachine",
+				Name:       machine.Name,
+				UID:        machine.UID,
+			}))
+
+		ctrlutil.AddFinalizer(claim, infrav1.IPAddressClaimFinalizer)
+
+		if claim.Labels == nil {
+			claim.Labels = make(map[string]string)
+		}
+		claim.Labels[clusterv1.ClusterNameLabel] = machine.Labels[clusterv1.ClusterNameLabel]
+
+		claim.Spec.PoolRef.APIGroup = poolRef.APIGroup
+		claim.Spec.PoolRef.Kind = poolRef.Kind
+		claim.Spec.PoolRef.Name = poolRef.Name
+		return nil
+	}
+
+	log := ctrl.LoggerFrom(ctx)
+
+	result, err := ctrlutil.CreateOrPatch(ctx, client, claim, mutateFn)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to CreateOrPatch IPAddressClaim, err: : %s", err)
+	}
+	switch result {
+	case ctrlutil.OperationResultCreated:
+		log.Info("Created IPAddressClaim")
+		return claim, true, nil
+	case ctrlutil.OperationResultUpdated:
+		log.Info("Updated IPAddressClaim")
+	case ctrlutil.OperationResultNone, ctrlutil.OperationResultUpdatedStatus, ctrlutil.OperationResultUpdatedStatusOnly:
+		log.V(3).Info("No change required for IPAddressClaim", "operationResult", result)
+	}
+	return claim, false, nil
+}
+
+func getIPAddressCfg(ctx context.Context, client client.Client, machine *infrav1.PacketMachine) ([]packet.IPAddressCfg, error) {
+	log := ctrl.LoggerFrom(ctx)
+
+	boundClaims, totalClaims := 0, 0
+	ipaddrCfgs := []packet.IPAddressCfg{}
+
+	for portIdx, port := range machine.Spec.NetworkPorts {
+		for networkIdx, network := range port.Networks {
+			totalClaims++
+
+			ipAddrClaimName := packet.IPAddressClaimName(machine.Name, portIdx, networkIdx)
+
+			log := log.WithValues("IPAddressClaim", klog.KRef(machine.Namespace, ipAddrClaimName))
+
+			ctx := ctrl.LoggerInto(ctx, log)
+
+			ipAddrClaim, err := getIPAddrClaim(ctx, client, ipAddrClaimName, machine.Namespace)
+			if err != nil {
+				if apierrors.IsNotFound(err) {
+					// it would be odd for this to occur, a findorcreate just happened in a previous step
+					continue
+				}
+				return nil, fmt.Errorf("failed to get IPAddressClaim %s, err: %v", klog.KRef(machine.Namespace, ipAddrClaimName), err)
+			}
+
+			log.V(5).Info("Fetched IPAddressClaim")
+			ipAddrName := ipAddrClaim.Status.AddressRef.Name
+			if ipAddrName == "" {
+				log.V(5).Info("IPAddress not yet bound to IPAddressClaim")
+				continue
+			}
+
+			ipAddr := &ipamv1.IPAddress{}
+			ipAddrKey := apitypes.NamespacedName{
+				Namespace: machine.Namespace,
+				Name:      ipAddrName,
+			}
+			if err := client.Get(ctx, ipAddrKey, ipAddr); err != nil {
+				// because the ref was set on the claim, it is expected this error should not occur
+				return nil, err
+			}
+			ipaddrCfgs = append(ipaddrCfgs, packet.IPAddressCfg{
+				VXLAN:    network.VXLAN,
+				Address:  ipAddr.Spec.Address,
+				Netmask:  net.IP(net.CIDRMask(ipAddr.Spec.Prefix, 32)).String(),
+				PortName: port.Name,
+				Layer2:   port.Layer2,
+				Bonded:   port.Bonded,
+			})
+			boundClaims++
+		}
+	}
+
+	if boundClaims < totalClaims {
+		log.Info("Waiting for ip address claims to be bound",
+			"total claims", totalClaims,
+			"claims bound", boundClaims)
+		return nil, fmt.Errorf("waiting for IP address claims to be bound")
+	}
+
+	return ipaddrCfgs, nil
+}
+
+func getRoutesCfg(machine *infrav1.PacketMachine) ([]layer2.RouteSpec, error) {
+	routes := []layer2.RouteSpec{}
+
+	for _, route := range machine.Spec.Routes {
+		routes = append(routes, layer2.RouteSpec{
+			Destination: route.Destination,
+			Gateway:     route.Gateway,
+		})
+	}
+
+	if len(routes) == 0 {
+		return nil, nil
+	}
+
+	return routes, nil
+}
+
+
+
+func checkIfEventsContainNetworkConfigurationSuccess(eventsList *metal.EventList) bool {
+	networkConfigurationSuccess := "network_configuration_success"
+
+	for _, event := range eventsList.Events {
+		if event.Body == nil {
+            continue
+        }
+
+		if *event.Body == networkConfigurationSuccess {
+			return true
+		}
+	}
+	return false
+}
+
+func checkIfEventsContainNetworkConfigurationFailure(eventsList *metal.EventList) bool {
+	var networkConfigurationFailure *string = new(string)
+	*networkConfigurationFailure = "network_configuration_failure"
+
+	for _, event := range eventsList.Events {
+		if event.Body == networkConfigurationFailure {
+			return true
+		}
+	}
+	return false
+}
+
+// reconcilePortConfigurations manages port configurations for a given device
+// It ensures that the ports are configured with the correct VXLAN, layer2, and bonding settings
+func (r *PacketMachineReconciler) reconcilePortConfigurations(ctx context.Context, deviceID string, desiredConfigs []packet.IPAddressCfg) error {
+	// Fetch the device details
+	device, _, err := r.PacketClient.GetDevice(ctx, deviceID)
+	if err != nil {
+		return fmt.Errorf("failed to get device %s: %w", deviceID, err)
+	}
+
+	for _, desiredConfig := range desiredConfigs {
+		if err := r.reconcilePortConfig(ctx, device.NetworkPorts, desiredConfig); err != nil {
+			return fmt.Errorf("failed to reconcile port %s: %w", desiredConfig.PortName, err)
+		}
+	}
+
+	return nil
+}
+
+// reconcilePortConfig handles the configuration for a single port
+func (r *PacketMachineReconciler) reconcilePortConfig(ctx context.Context, networkPorts []metal.Port, desiredConfig packet.IPAddressCfg) error {
+	log := ctrl.LoggerFrom(ctx)
+
+	portID, err := getMetalPortID(desiredConfig.PortName, networkPorts)
+	if err != nil {
+		return fmt.Errorf("failed to get port ID for %s: %w", desiredConfig.PortName, err)
+	}
+
+	if err := r.reconcileVXLAN(ctx, *portID, desiredConfig); err != nil {
+		return err
+	}
+
+	if err := r.reconcileLayer2AndBonding(ctx, *portID, desiredConfig); err != nil {
+		return err
+	}
+
+	log.Info("Port configuration reconciled successfully", "port", desiredConfig.PortName)
+	return nil
+}
+
+// reconcileVXLAN ensures the port is assigned to the correct VXLAN
+func (r *PacketMachineReconciler) reconcileVXLAN(ctx context.Context, portID string, desiredConfig packet.IPAddressCfg) error {
+	log := ctrl.LoggerFrom(ctx)
+
+	currentAssignments, err := r.getCurrentVXLANAssignments(ctx, portID)
+	if err != nil {
+		return err
+	}
+
+	desiredVXLAN := int32(desiredConfig.VXLAN)
+	desiredVXLANStr := strconv.Itoa(desiredConfig.VXLAN)
+	desiredStateExists := false
+
+	for _, currentVXLAN := range currentAssignments {
+		if currentVXLAN == desiredVXLAN {
+			desiredStateExists = true
+			continue
+		}
+		if err := r.unassignVXLAN(ctx, portID, currentVXLAN); err != nil {
+			return err
+		}
+	}
+
+	if !desiredStateExists {
+		if err := r.assignVXLAN(ctx, portID, desiredVXLANStr); err != nil {
+			return err
+		}
+		log.Info("Port assigned to VXLAN", "port", desiredConfig.PortName, "vxlan", desiredVXLAN)
+	} else {
+		log.Info("Port already assigned to desired VXLAN", "port", desiredConfig.PortName, "vxlan", desiredVXLAN)
+	}
+
+	return nil
+}
+
+// reconcileLayer2AndBonding ensures the port is set to the correct layer2 and bonding configuration
+func (r *PacketMachineReconciler) reconcileLayer2AndBonding(ctx context.Context, portID string, desiredConfig packet.IPAddressCfg) error {
+	port, _, err := r.PacketClient.PortsApi.FindPortById(ctx, portID).Execute()
+	if err != nil {
+		return fmt.Errorf("failed to get port %s: %w", portID, err)
+	}
+	if port == nil {
+		return fmt.Errorf("port %s not found", portID)
+	}
+
+	if desiredConfig.Layer2 {
+		if err := r.setLayer2(ctx, portID, port, desiredConfig.PortName); err != nil {
+			return err
+		}
+	}
+
+	if desiredConfig.Bonded {
+		if err := r.setBonding(ctx, portID, port, desiredConfig.PortName); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// getCurrentVXLANAssignments fetches the current VXLAN assignments for a port
+func (r *PacketMachineReconciler) getCurrentVXLANAssignments(ctx context.Context, portID string) ([]int32, error) {
+	vlanAssignList, resp, err := r.PacketClient.PortsApi.FindPortVlanAssignments(ctx, portID).Execute()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get port VLAN assignments: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get port VLAN assignments: unexpected status code %d", resp.StatusCode)
+	}
+	return getPortVXLANAssignments(vlanAssignList), nil
+}
+
+// unassignVXLAN removes a VXLAN assignment from a port
+func (r *PacketMachineReconciler) unassignVXLAN(ctx context.Context, portID string, vxlan int32) error {
+	vxlanStr := strconv.Itoa(int(vxlan))
+	_, resp, err := r.PacketClient.PortsApi.UnassignPort(ctx, portID).PortAssignInput(metal.PortAssignInput{
+		Vnid: &vxlanStr,
+	}).Execute()
+	if err != nil {
+		return fmt.Errorf("failed to unassign port from VXLAN %d: %w", vxlan, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to unassign port from VXLAN %d: unexpected status code %d", vxlan, resp.StatusCode)
+	}
+	return nil
+}
+
+// assignVXLAN assigns a VXLAN to a port
+func (r *PacketMachineReconciler) assignVXLAN(ctx context.Context, portID, vxlanStr string) error {
+	_, resp, err := r.PacketClient.PortsApi.AssignPort(ctx, portID).PortAssignInput(metal.PortAssignInput{
+		Vnid: &vxlanStr,
+	}).Execute()
+	if err != nil {
+		return fmt.Errorf("failed to assign port to VXLAN %s: %w", vxlanStr, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to assign port to VXLAN %s: unexpected status code %d", vxlanStr, resp.StatusCode)
+	}
+	return nil
+}
+
+// setLayer2 configures the port for layer2 if not already set
+func (r *PacketMachineReconciler) setLayer2(ctx context.Context, portID string, port *metal.Port, portName string) error {
+	log := ctrl.LoggerFrom(ctx)
+
+	if strings.Contains(string(*port.NetworkType), "layer2") {
+		log.Info("Port is already set to layer2", "port", portName)
+		return nil
+	}
+
+	_, resp, err := r.PacketClient.PortsApi.ConvertLayer2(ctx, portID).Execute()
+	if err != nil {
+		return fmt.Errorf("failed to set port to layer2: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to set port to layer2: unexpected status code %d", resp.StatusCode)
+	}
+	log.Info("Port set to layer2", "port", portName)
+	return nil
+}
+
+// setBonding configures the port for bonding if not already set
+func (r *PacketMachineReconciler) setBonding(ctx context.Context, portID string, port *metal.Port, portName string) error {
+	log := ctrl.LoggerFrom(ctx)
+
+	if port.Data == nil {
+		return fmt.Errorf("failed to get port data to check bonded status")
+	}
+	if *port.Data.Bonded {
+		log.Info("Port is already bonded", "port", portName)
+		return nil
+	}
+
+	_, resp, err := r.PacketClient.PortsApi.BondPort(ctx, portID).Execute()
+	if err != nil {
+		return fmt.Errorf("failed to set port to bonded: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to set port to bonded: unexpected status code %d", resp.StatusCode)
+	}
+	log.Info("Port set to bonded", "port", portName)
+	return nil
+}
+// getPortVXLANAssignments returns all current VXLAN assignments for a port
+func getPortVXLANAssignments(vlanAssignList *metal.PortVlanAssignmentList) []int32 {
+    var assignments []int32
+    for _, vlanAssign := range vlanAssignList.VlanAssignments {
+        if vlanAssign.Vlan != nil {
+            assignments = append(assignments, *vlanAssign.Vlan)
+        }
+    }
+    return assignments
+}
+
+func getMetalPortID(portName string, networkPorts []metal.Port) (*string, error) {
+	for _, port := range networkPorts {
+		if *port.Name == portName {
+			return port.Id, nil
+		}
+	}
+	return nil, fmt.Errorf("failed to find port %s", portName)
+}
+
+func getIPAddrClaim(ctx context.Context, client client.Client, ipAddrClaimName, namespace string) (*ipamv1.IPAddressClaim, error) {
+	log := ctrl.LoggerFrom(ctx)
+
+	ipAddrClaim := &ipamv1.IPAddressClaim{}
+	ipAddrClaimKey := apitypes.NamespacedName{
+		Namespace: namespace,
+		Name:      ipAddrClaimName,
+	}
+
+	log.V(5).Info("Fetching IPAddressClaim", "IPAddressClaim", klog.KRef(ipAddrClaimKey.Namespace, ipAddrClaimKey.Name))
+	if err := client.Get(ctx, ipAddrClaimKey, ipAddrClaim); err != nil {
+		return nil, err
+	}
+	return ipAddrClaim, nil
 }

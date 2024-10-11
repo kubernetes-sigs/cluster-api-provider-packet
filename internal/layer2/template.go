@@ -42,21 +42,65 @@ write_files:
 
       # Function to send user state events
       url="$(curl -sf https://metadata.platformequinix.com/metadata | jq -r .user_state_url)"
+
+      # Function to send user state events
       send_user_state_event() {
-        local state="$1"
-        local code="$2"
-        local message="$3"
-        local data
+          local state="$1"
+          local code="$2"
+          local message="$3"
+          local data
+          local max_retries=3
+          local retry_count=0
+          
+          data=$(jq -n --arg state "$state" --arg code "$code" --arg message "$message" \
+                '{state: $state, code: ($code | tonumber), message: $message}')
 
-        data=$(jq -n --arg state "$state" --arg code "$code" --arg message "$message" \
-               '{state: $state, code: ($code | tonumber), message: $message}')
+          while [ $retry_count -lt $max_retries ]; do
+              # Make the POST request and capture the HTTP status code
+              http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST -d "$data" "$url")
 
-        curl -s -X POST -d "$data" "$url" || echo "Failed to send user state event"
+              echo "HTTP Status Code: $http_code"
+
+              if [[ "$http_code" -ge 200 && "$http_code" -lt 300 ]]; then
+                  echo "User state event sent successfully on attempt $((retry_count + 1))"
+                  return 0
+              else
+                  echo "Warning: Received non-success status code: $http_code"
+              fi
+
+              retry_count=$((retry_count + 1))
+              if [ $retry_count -lt $max_retries ]; then
+                  echo "Retrying in 5 seconds..."
+                  sleep 5
+              fi
+          done
+
+          echo "Error: Failed to send user state event after $max_retries attempts"
+          return 1
       }
 
-      send_user_state_event running 1000 "Configuring Network"
 
+      send_user_state_event running 1000 "network_configuration_started"
+
+      # Restart networking to apply VLAN configurations
+      echo "Restarting networking service..."
       systemctl restart networking
+
+      # Wait for interfaces to be fully up
+      echo "Waiting for interfaces to be up..."
+      sleep 5
+
+      # Add static routes
+      echo "Configuring static routes..."
+{{ range .Routes }}
+      if ip route add {{ .Destination }} via {{ .Gateway }}; then
+          echo "Added route: {{ .Destination }} via {{ .Gateway }}"
+      else
+          echo "Failed to add route: {{ .Destination }} via {{ .Gateway }}" >&2
+          send_user_state_event failed 1002 "network_configuration_failed"
+      fi
+{{ end }}
+
       # Verify network configuration
       verification_failed=false
 {{ range .VLANs }}
@@ -68,11 +112,21 @@ write_files:
       fi
 {{ end }}
 
+      # Verify static routes
+{{ range .Routes }}
+      if ip route | grep -q "{{ .Destination }} via {{ .Gateway }}"; then
+        echo "Static route to {{ .Destination }} via {{ .Gateway }} added successfully"
+      else
+        echo "Failed to add static route to {{ .Destination }} via {{ .Gateway }}" >&2
+        verification_failed=true
+      fi
+{{ end }}
+
       if [ "$verification_failed" = true ]; then
-        send_user_state_event failed 1002 "Network configuration failed"
+        send_user_state_event failed 1002 "network_configuration_failed"
         exit 1
       else
-        send_user_state_event succeeded 1001 "Network configuration successful"
+        send_user_state_event succeeded 1001 "network_configuration_success"
       fi
     
   - path: /var/lib/capi_network_settings/initial_configuration.sh
