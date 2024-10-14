@@ -285,7 +285,7 @@ func ipAddressClaimToPacketMachine(_ context.Context, a client.Object) []reconci
 	requests := []reconcile.Request{}
 	if clusterutilv1.HasOwner(ipAddressClaim.OwnerReferences, infrav1.GroupVersion.String(), []string{"PacketMachine"}) {
 		for _, ref := range ipAddressClaim.OwnerReferences {
-			if ref.Kind == "VSphereVM" {
+			if ref.Kind == "PacketMachine" {
 				requests = append(requests, reconcile.Request{
 					NamespacedName: apitypes.NamespacedName{
 						Name:      ref.Name,
