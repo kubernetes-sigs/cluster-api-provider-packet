@@ -324,7 +324,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		err                  error
 		controlPlaneEndpoint *metal.IPReservation
 		resp                 *http.Response
-		ipAddrCfg			 []packet.IPAddressCfg
+		ipAddrCfg            []packet.IPAddressCfg
 	)
 
 	if deviceID != "" {
@@ -465,7 +465,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 	}
 
 	deviceAddr := r.PacketClient.GetDeviceAddresses(dev)
-	machineScope.SetAddresses(append(addrs,deviceAddr...))
+	machineScope.SetAddresses(append(addrs, deviceAddr...))
 
 	// Proceed to reconcile the PacketMachine state.
 	var result reconcile.Result
@@ -506,7 +506,7 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 		}
 
 		if machineScope.PacketMachine.Spec.NetworkPorts != nil {
-			eventsList,resp,err := r.PacketClient.EventsApi.FindDeviceEvents(ctx, *dev.Id).Execute()
+			eventsList, resp, err := r.PacketClient.EventsApi.FindDeviceEvents(ctx, *dev.Id).Execute()
 			if err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to get device events: %w", err)
 			}
@@ -627,7 +627,7 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 
 	// We should never get there but this is a safety check
 	if device == nil {
-		_ =  r.deletePacketMachine(ctx, packetmachine)
+		_ = r.deletePacketMachine(ctx, packetmachine)
 		return fmt.Errorf("%w: %s", errMissingDevice, packetmachine.Name)
 	}
 
@@ -861,15 +861,13 @@ func getRoutesCfg(machine *infrav1.PacketMachine) ([]layer2.RouteSpec, error) {
 	return routes, nil
 }
 
-
-
 func checkIfEventsContainNetworkConfigurationSuccess(eventsList *metal.EventList) bool {
 	networkConfigurationSuccess := "network_configuration_success"
 
 	for _, event := range eventsList.Events {
 		if event.Body == nil {
-            continue
-        }
+			continue
+		}
 
 		if *event.Body == networkConfigurationSuccess {
 			return true
@@ -883,8 +881,8 @@ func checkIfEventsContainNetworkConfigurationFailure(eventsList *metal.EventList
 
 	for _, event := range eventsList.Events {
 		if event.Body == nil {
-            continue
-        }
+			continue
+		}
 		if *event.Body == networkConfigurationFailure {
 			return true
 		}
@@ -1074,15 +1072,16 @@ func (r *PacketMachineReconciler) setBonding(ctx context.Context, portID string,
 	log.Info("Port set to bonded", "port", portName)
 	return nil
 }
+
 // getPortVXLANAssignments returns all current VXLAN assignments for a port
 func getPortVXLANAssignments(vlanAssignList *metal.PortVlanAssignmentList) []int32 {
-    var assignments []int32
-    for _, vlanAssign := range vlanAssignList.VlanAssignments {
-        if vlanAssign.Vlan != nil {
-            assignments = append(assignments, *vlanAssign.Vlan)
-        }
-    }
-    return assignments
+	var assignments []int32
+	for _, vlanAssign := range vlanAssignList.VlanAssignments {
+		if vlanAssign.Vlan != nil {
+			assignments = append(assignments, *vlanAssign.Vlan)
+		}
+	}
+	return assignments
 }
 
 func getMetalPortID(portName string, networkPorts []metal.Port) (*string, error) {
@@ -1121,7 +1120,6 @@ func (r *PacketMachineReconciler) deletePacketMachine(ctx context.Context, packe
 	ctrlutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
 	return nil
 }
-
 
 // +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddressclaims,verbs=get;create;patch;watch;list;update
 
