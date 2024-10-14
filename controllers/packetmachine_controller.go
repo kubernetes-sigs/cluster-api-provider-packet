@@ -61,12 +61,6 @@ const (
 	force = true
 )
 
-const (
-	networkConfigurationSuccessEvent = "network_configuration_success"
-	networkConfigurationFailureEvent = "network_configuration_failure"
-	eventPollingInterval             = 5 * time.Second
-)
-
 var (
 	errMissingDevice = errors.New("machine does not exist")
 	errFacilityMatch = errors.New("instance facility does not match machine facility")
@@ -601,8 +595,7 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 
 		if dev == nil {
 			log.Info("Server not found by tags, nothing left to do")
-			ctrlutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
-			return nil
+			return r.deletePacketMachine(ctx, packetmachine)
 		}
 
 		device = dev
@@ -616,15 +609,13 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 					// When the server does not exist we do not have anything left to do.
 					// Probably somebody manually deleted the server from the UI or via API.
 					log.Info("Server not found by id, nothing left to do")
-					ctrlutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
-					return nil
+					return r.deletePacketMachine(ctx, packetmachine)
 				}
 
 				if resp.StatusCode == http.StatusForbidden {
 					// When a server fails to provision it will return a 403
 					log.Info("Server appears to have failed provisioning, nothing left to do")
-					ctrlutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
-					return nil
+					return r.deletePacketMachine(ctx, packetmachine)
 				}
 			}
 
@@ -636,7 +627,7 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 
 	// We should never get there but this is a safety check
 	if device == nil {
-		ctrlutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
+		_ =  r.deletePacketMachine(ctx, packetmachine)
 		return fmt.Errorf("%w: %s", errMissingDevice, packetmachine.Name)
 	}
 
@@ -656,8 +647,7 @@ func (r *PacketMachineReconciler) reconcileDelete(ctx context.Context, machineSc
 		return fmt.Errorf("failed to delete the machine: %w", err)
 	}
 
-	ctrlutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
-	return nil
+	return r.deletePacketMachine(ctx, packetmachine)
 }
 
 // +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddressclaims,verbs=get;create;patch;watch;list;update
@@ -1116,4 +1106,54 @@ func getIPAddrClaim(ctx context.Context, client client.Client, ipAddrClaimName, 
 		return nil, err
 	}
 	return ipAddrClaim, nil
+}
+
+func (r *PacketMachineReconciler) deletePacketMachine(ctx context.Context, packetmachine *infrav1.PacketMachine) error {
+
+	if packetmachine.Spec.NetworkPorts != nil {
+		if err := r.reconcileDeletePacketMachineIPAddressClaims(ctx, packetmachine); err != nil {
+			return err
+		}
+	}
+
+	ctrlutil.RemoveFinalizer(packetmachine, infrav1.MachineFinalizer)
+	return nil
+}
+
+
+// +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddressclaims,verbs=get;create;patch;watch;list;update
+
+// reconcileDeletePacketMachineIPAddressClaims removes the finalizers from the IPAddressClaim objects of given packet machine
+// so that they can be deleted as part of garbage collection
+func (r *PacketMachineReconciler) reconcileDeletePacketMachineIPAddressClaims(ctx context.Context, packetMachine *infrav1.PacketMachine) error {
+	log := ctrl.LoggerFrom(ctx)
+
+	for portIdx, port := range packetMachine.Spec.NetworkPorts {
+		for networkIdx := range port.Networks {
+			// check if claim exists
+			ipAddrClaim := &ipamv1.IPAddressClaim{}
+			ipAddrClaimName := packet.IPAddressClaimName(packetMachine.Name, portIdx, networkIdx)
+			ipAddrClaimKey := client.ObjectKey{
+				Namespace: packetMachine.Namespace,
+				Name:      ipAddrClaimName,
+			}
+
+			if err := r.Client.Get(ctx, ipAddrClaimKey, ipAddrClaim); err != nil {
+				if apierrors.IsNotFound(err) {
+					continue
+				}
+				return fmt.Errorf("failed to get IPAddressClaim %s to remove the finalizer,err: %v", ipAddrClaimName, err)
+			}
+
+			if ctrlutil.RemoveFinalizer(ipAddrClaim, infrav1.IPAddressClaimFinalizer) {
+				log.Info(fmt.Sprintf("Removing finalizer %s", infrav1.IPAddressClaimFinalizer), "IPAddressClaim", klog.KObj(ipAddrClaim))
+
+				if err := r.Client.Update(ctx, ipAddrClaim); err != nil {
+					return fmt.Errorf("failed to update IPAddressClaim %s, err: %v", klog.KObj(ipAddrClaim), err)
+				}
+			}
+		}
+	}
+
+	return nil
 }

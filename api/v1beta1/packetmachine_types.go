@@ -67,10 +67,10 @@ const (
 	IPAddressClaimedCondition clusterv1.ConditionType = "IPAddressClaimed"
 
 	// IPAddressClaimsBeingCreatedReason (Severity=Info) documents that claims for the
-	// IP addresses required by the VSphereVM are being created.
+	// IP addresses required by the PacketMachine are being created.
 	IPAddressClaimsBeingCreatedReason = "IPAddressClaimsBeingCreated"
 
-	// WaitingForIPAddressReason (Severity=Info) documents that the VSphereVM is
+	// WaitingForIPAddressReason (Severity=Info) documents that the PacketMachine is
 	// currently waiting for an IP address to be provisioned.
 	WaitingForIPAddressReason = "WaitingForIPAddress"
 
