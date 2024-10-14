@@ -1149,6 +1149,7 @@ func (r *PacketMachineReconciler) reconcileDeletePacketMachineIPAddressClaims(ct
 				log.Info(fmt.Sprintf("Removing finalizer %s", infrav1.IPAddressClaimFinalizer), "IPAddressClaim", klog.KObj(ipAddrClaim))
 
 				if err := r.Client.Update(ctx, ipAddrClaim); err != nil {
+					log.Error(err, "failed to update IPAddressClaim", "IPAddressClaim", klog.KObj(ipAddrClaim))
 					return fmt.Errorf("failed to update IPAddressClaim %s, err: %v", klog.KObj(ipAddrClaim), err)
 				}
 			}
