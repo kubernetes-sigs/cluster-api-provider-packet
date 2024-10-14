@@ -879,11 +879,13 @@ func checkIfEventsContainNetworkConfigurationSuccess(eventsList *metal.EventList
 }
 
 func checkIfEventsContainNetworkConfigurationFailure(eventsList *metal.EventList) bool {
-	var networkConfigurationFailure *string = new(string)
-	*networkConfigurationFailure = "network_configuration_failure"
+	networkConfigurationFailure := "network_configuration_failed"
 
 	for _, event := range eventsList.Events {
-		if event.Body == networkConfigurationFailure {
+		if event.Body == nil {
+            continue
+        }
+		if *event.Body == networkConfigurationFailure {
 			return true
 		}
 	}
