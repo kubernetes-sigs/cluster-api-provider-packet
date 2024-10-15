@@ -139,6 +139,22 @@ spec:
                                       Netmask is the netmask for the network.
                                       eg: 255.255.255.248
                                     type: string
+                                  routes:
+                                    description: List of Routes to be configured on
+                                      the Packet Machine
+                                    items:
+                                      description: RouteSpec defines the static route
+                                        configuration for a PacketMachine.
+                                      properties:
+                                        destination:
+                                          type: string
+                                        gateway:
+                                          type: string
+                                      required:
+                                      - destination
+                                      - gateway
+                                      type: object
+                                    type: array
                                   vlanID:
                                     description: VLAN ID for the VLAN created on the
                                       EM Console
@@ -160,22 +176,6 @@ spec:
                         description: ProviderID is the unique identifier as specified
                           by the cloud provider.
                         type: string
-                      routes:
-                        description: List of Routes to be configured on the Packet
-                          Machine
-                        items:
-                          description: RouteSpec defines the static route configuration
-                            for a PacketMachine.
-                          properties:
-                            destination:
-                              type: string
-                            gateway:
-                              type: string
-                          required:
-                          - destination
-                          - gateway
-                          type: object
-                        type: array
                       sshKeys:
                         items:
                           type: string

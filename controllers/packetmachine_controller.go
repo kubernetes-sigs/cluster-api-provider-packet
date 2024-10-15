@@ -388,16 +388,10 @@ func (r *PacketMachineReconciler) reconcile(ctx context.Context, machineScope *s
 			return ctrl.Result{}, err
 		}
 
-		routesCfg, err := getRoutesCfg(machineScope.PacketMachine)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-
 		createDeviceReq := packet.CreateDeviceRequest{
 			MachineScope: machineScope,
 			ExtraTags:    packet.DefaultCreateTags(machineScope.Namespace(), machineScope.Machine.Name, machineScope.Cluster.Name),
 			IPAddresses:  ipAddrCfg,
-			Routes:       routesCfg,
 		}
 
 		// when a node is a control plane node we need the elastic IP
@@ -822,6 +816,15 @@ func getIPAddressCfg(ctx context.Context, client client.Client, machine *infrav1
 				// because the ref was set on the claim, it is expected this error should not occur
 				return nil, err
 			}
+
+			routes := make([]layer2.RouteSpec, 0)
+			for _, route := range network.Routes {
+				routes = append(routes, layer2.RouteSpec{
+					Destination: route.Destination,
+					Gateway:     route.Gateway,
+				})
+			}
+
 			ipaddrCfgs = append(ipaddrCfgs, packet.IPAddressCfg{
 				VXLAN:    network.VXLAN,
 				Address:  ipAddr.Spec.Address,
@@ -829,6 +832,7 @@ func getIPAddressCfg(ctx context.Context, client client.Client, machine *infrav1
 				PortName: port.Name,
 				Layer2:   port.Layer2,
 				Bonded:   port.Bonded,
+				Routes:   routes,
 			})
 			boundClaims++
 		}
@@ -842,23 +846,6 @@ func getIPAddressCfg(ctx context.Context, client client.Client, machine *infrav1
 	}
 
 	return ipaddrCfgs, nil
-}
-
-func getRoutesCfg(machine *infrav1.PacketMachine) ([]layer2.RouteSpec, error) {
-	routes := []layer2.RouteSpec{}
-
-	for _, route := range machine.Spec.Routes {
-		routes = append(routes, layer2.RouteSpec{
-			Destination: route.Destination,
-			Gateway:     route.Gateway,
-		})
-	}
-
-	if len(routes) == 0 {
-		return nil, nil
-	}
-
-	return routes, nil
 }
 
 func checkIfEventsContainNetworkConfigurationSuccess(eventsList *metal.EventList) bool {

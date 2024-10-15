@@ -57,8 +57,6 @@ const (
 	Layer2NetworkConfigurationConditionSuccess = "Layer2NetworkConfigurationSuccess"
 	Layer2NetworkConfigurationConditionFailed  = "Layer2NetworkConfigurationFailed"
 
-	
-
 )
 
 const (
@@ -121,9 +119,6 @@ type PacketMachineSpec struct {
 	// NetworkPorts is an optional set of configurations for configuring layer2 seetings in a machine.
 	// +optional
 	NetworkPorts []*Port `json:"ports,omitempty"`
-	// List of Routes to be configured on the Packet Machine
-	// +optional
-	Routes []*RouteSpec `json:"routes,omitempty"`
 }
 
 // Port defines the Layer2(VLAN) Configuration that needs to be done on a port (eg: bond0).
@@ -153,6 +148,9 @@ type Network struct {
 	// AddressType is the type of address to assign to the machine. It can be either Internal or External.
 	// kubebuilder:validation:Enum=Internal;External
 	AddressType string `json:"addressType,omitempty"`
+	// List of Routes to be configured on the Packet Machine
+	// +optional
+	Routes []*RouteSpec `json:"routes,omitempty"`
 }
 
 // RouteSpec defines the static route configuration for a PacketMachine.

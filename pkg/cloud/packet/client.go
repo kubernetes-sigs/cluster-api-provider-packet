@@ -108,7 +108,6 @@ type CreateDeviceRequest struct {
 	CPEMLBConfig         string
 	EMLBID               string
 	IPAddresses          []IPAddressCfg
-	Routes 			     []layer2.RouteSpec
 }
 
 type IPAddressCfg struct {
@@ -118,6 +117,7 @@ type IPAddressCfg struct {
 	PortName string
 	Layer2   bool
 	Bonded   bool
+	Routes   []layer2.RouteSpec
 }
 
 // NewDevice creates a new device.
@@ -184,11 +184,7 @@ func (p *Client) NewDevice(ctx context.Context, req CreateDeviceRequest) (*metal
 		layer2Config := layer2.NewConfig()
 
 		for _, ipAddr := range req.IPAddresses {
-			layer2Config.AddPortNetwork(ipAddr.PortName, ipAddr.VXLAN, ipAddr.Address, ipAddr.Netmask)
-		}
-
-		for _, route := range req.Routes {
-			layer2Config.AddRoute(route.Destination, route.Gateway)
+			layer2Config.AddPortNetwork(ipAddr.PortName, ipAddr.VXLAN, ipAddr.Address, ipAddr.Netmask, ipAddr.Routes)
 		}
 
 		layer2UserData, err = layer2Config.GetTemplate()

@@ -35,6 +35,9 @@ write_files:
         gateway {{ .Gateway }}
       {{- end }}
         vlan-raw-device {{ .PortName }}
+      {{- range .Routes }}
+        up ip route add {{ .Destination }} via {{ .Gateway }}
+      {{- end }}
 {{ end }}
       EOL
 
@@ -90,17 +93,6 @@ write_files:
       echo "Waiting for interfaces to be up..."
       sleep 5
 
-      # Add static routes
-      echo "Configuring static routes..."
-{{ range .Routes }}
-      if ip route add {{ .Destination }} via {{ .Gateway }}; then
-          echo "Added route: {{ .Destination }} via {{ .Gateway }}"
-      else
-          echo "Failed to add route: {{ .Destination }} via {{ .Gateway }}" >&2
-          send_user_state_event failed 1002 "network_configuration_failed"
-      fi
-{{ end }}
-
       # Verify network configuration
       verification_failed=false
 {{ range .VLANs }}
@@ -110,7 +102,6 @@ write_files:
         echo "Configuration for VLAN {{ .Vxlan }} on {{ .PortName }} with IP {{ .IPAddress }} failed" >&2
         verification_failed=true
       fi
-{{ end }}
 
       # Verify static routes
 {{ range .Routes }}
@@ -120,6 +111,7 @@ write_files:
         echo "Failed to add static route to {{ .Destination }} via {{ .Gateway }}" >&2
         verification_failed=true
       fi
+{{ end }}
 {{ end }}
 
       if [ "$verification_failed" = true ]; then
