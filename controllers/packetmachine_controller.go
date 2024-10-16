@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -886,6 +887,21 @@ func (r *PacketMachineReconciler) reconcilePortConfigurations(ctx context.Contex
 		return fmt.Errorf("failed to get device %s: %w", deviceID, err)
 	}
 
+	// Collect all desired VXLANs
+    desiredVXLANs := make(map[string][]int32)
+    for _, config := range desiredConfigs {
+        // fetch the port ID 
+		portID, err := getMetalPortID(config.PortName, device.NetworkPorts)
+		if portID == nil || err != nil {
+			return fmt.Errorf("failed to get port ID for %s: %w", config.PortName, err)
+		}
+		desiredVXLANs[*portID] = append(desiredVXLANs[*portID], int32(config.VXLAN))
+    }
+
+	if err := r.reconcileVXLAN(ctx, desiredVXLANs); err != nil {
+		return err
+	}
+
 	for _, desiredConfig := range desiredConfigs {
 		if err := r.reconcilePortConfig(ctx, device.NetworkPorts, desiredConfig); err != nil {
 			return fmt.Errorf("failed to reconcile port %s: %w", desiredConfig.PortName, err)
@@ -904,10 +920,6 @@ func (r *PacketMachineReconciler) reconcilePortConfig(ctx context.Context, netwo
 		return fmt.Errorf("failed to get port ID for %s: %w", desiredConfig.PortName, err)
 	}
 
-	if err := r.reconcileVXLAN(ctx, *portID, desiredConfig); err != nil {
-		return err
-	}
-
 	if err := r.reconcileLayer2AndBonding(ctx, *portID, desiredConfig); err != nil {
 		return err
 	}
@@ -916,38 +928,34 @@ func (r *PacketMachineReconciler) reconcilePortConfig(ctx context.Context, netwo
 	return nil
 }
 
-// reconcileVXLAN ensures the port is assigned to the correct VXLAN
-func (r *PacketMachineReconciler) reconcileVXLAN(ctx context.Context, portID string, desiredConfig packet.IPAddressCfg) error {
-	log := ctrl.LoggerFrom(ctx)
+func (r *PacketMachineReconciler) reconcileVXLAN(ctx context.Context, desiredConfig map[string][]int32) error {
+    log := ctrl.LoggerFrom(ctx)
 
-	currentAssignments, err := r.getCurrentVXLANAssignments(ctx, portID)
-	if err != nil {
-		return err
-	}
-
-	desiredVXLAN := int32(desiredConfig.VXLAN)
-	desiredVXLANStr := strconv.Itoa(desiredConfig.VXLAN)
-	desiredStateExists := false
-
-	for _, currentVXLAN := range currentAssignments {
-		if currentVXLAN == desiredVXLAN {
-			desiredStateExists = true
-			continue
-		}
-		if err := r.unassignVXLAN(ctx, portID, currentVXLAN); err != nil {
+    for portID, vxlanList := range desiredConfig {
+		currentVXLANs, err := r.getCurrentVXLANAssignments(ctx, portID)
+		if err != nil {
 			return err
 		}
-	}
 
-	if !desiredStateExists {
-		if err := r.assignVXLAN(ctx, portID, desiredVXLANStr); err != nil {
-			return err
+		for _, vxlan := range vxlanList {
+			vxlanStr := strconv.Itoa(int(vxlan))
+			if !slices.Contains(currentVXLANs, vxlan) {
+				if err := r.assignVXLAN(ctx, portID, vxlanStr); err != nil {
+					return err
+				}
+				log.Info("VXLAN assigned successfully", "port", portID, "vxlan", vxlanStr)
+			}
 		}
-		log.Info("Port assigned to VXLAN", "port", desiredConfig.PortName, "vxlan", desiredVXLAN)
-	} else {
-		log.Info("Port already assigned to desired VXLAN", "port", desiredConfig.PortName, "vxlan", desiredVXLAN)
-	}
 
+		for _, vxlan := range currentVXLANs {
+			if !slices.Contains(vxlanList, vxlan) {
+				if err := r.unassignVXLAN(ctx, portID, vxlan); err != nil {
+					return err
+				}
+				log.Info("VXLAN unassigned successfully", "port", portID, "vxlan", vxlan)
+			}
+		}
+	}
 	return nil
 }
 
