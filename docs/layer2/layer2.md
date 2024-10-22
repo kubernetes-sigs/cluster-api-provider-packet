@@ -672,14 +672,41 @@ API, it is safe to release the IP for use on another machine.
 
 2. If you want to use your own IP address range, and the VLANs are in the same metro, you can use the VRF Metal Gateway to connect the VLANs and allow CAPP to assign IP addresses from the specified range.
 
-
-#### Flavors
+3. The VXLAN tagged sub-interfaces are created on machines first and the IP addresses are assigned to them and after that, the VLANs are assigned to the ports using the EM API. This is because we don't have port ID information until the machine is created and since we user user-data script to create the sub-interfaces, we need to run the script during the machine is created.
 
 #### Validation
 
 ### Security Model
+- Following the original IPAM integration proposal, the `IPAddressClaim`,
+  `IPAddress`, and IP pool are required to be in the same namespace as the
+  `PacketMachine`.
+- For `IPAddressClaim` and `IPAddress` this is enforced by the lack of a
+  namespace field on the reference
+- The `addressesFromPools` field on the
+  `PacketMachineTemplate`/`PacketMachine` also lacks a namespace field on
+  the reference.
 
 ### Risks and Mitigations
+- Unresponsive IPAM providers can prevent successful creation of a cluster
+- Any issues with fulfilling the IPAddressClaim can prevent successful creation of a cluster
+  - This is partially by design i.e we don't want the cluster to be created if
+    it can't fulfill the ip address claim, but this is just added complexity
+    that a user has to be aware of.
+- Wrong IP address allocations (e.g. duplicates) can brick a cluster’s network
+- Incorrectly assigning IP address claims to the wrong device
+  - We assume the devices and pools in the PacketMachine spec are static. If a user
+    decides to change the spec at runtime, this will cause undefined behavior.
+- A user could cause an IP address to be allocated to another machine/device
+  while in use by deleting the IPAddressClaim.
+  - This can be mitigated by adding a finalizer similar to the
+    `kubernetes.io/pvc-protection` finalizer.
+
+- The user-data script for network configuration is not idempotent. If the
+  script causes errors, the machine will be in error state.
+
+- The user-data script fails to signal the controller if the network
+  configuration failed/passed. This can cause the controller to assume the machine is
+  in a good state when it is not. 
 
 ## Alternatives
 
@@ -689,9 +716,6 @@ limitations (see motivation) that users want to avoid.
 Considering the IPAM integration proposal has been accepted we didn't consider
 any alternative approaches to IPAM outside of what has been defined by the
 proposal.
-
-## Upgrade Strategy
-
 
 ## Additional Details
 
