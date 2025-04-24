@@ -4,18 +4,18 @@ aliases:
   - fabriziopandini
   - justinsb
   - neolit123
-  - timothysc
+  - vincepri
   cluster-api-admins:
-  - CecileRobertMichon
+  - fabriziopandini
+  - sbueringer
   - vincepri
   cluster-api-maintainers:
-  - CecileRobertMichon
+  - chrischdi
   - enxebre
   - fabriziopandini
   - sbueringer
   - vincepri
   cluster-api-packet-maintainers:
-  - cprivitere
   - deitch
   - detiber
   - displague
