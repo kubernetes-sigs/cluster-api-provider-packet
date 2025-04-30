@@ -1,5 +1,8 @@
 # Equinix Metal cluster-api Provider
 
+> [!CAUTION]
+> With the sunset of [Equinix Metal announced for June 2026](https://deploy.equinix.com/blog/sunsetting-equinix-metal/), the Equinix Metal Cluster API Provider has been deprecated and will no longer be maintained.
+
 [![GitHub release](https://img.shields.io/github/release/kubernetes-sigs/cluster-api-provider-packet/all.svg?style=flat-square)](https://github.com/kubernetes-sigs/cluster-api-provider-packet/releases)
 [![Continuous Integration](https://github.com/kubernetes-sigs/cluster-api-provider-packet/actions/workflows/ci.yaml/badge.svg)](https://github.com/kubernetes-sigs/cluster-api-provider-packet/actions/workflows/ci.yaml)
 [![GoDoc](https://godoc.org/sigs.k8s.io/cluster-api-provider-packet?status.svg)](https://pkg.go.dev/sigs.k8s.io/cluster-api-provider-packet?tab=overview)
